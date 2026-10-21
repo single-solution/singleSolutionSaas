@@ -5,8 +5,4 @@
  * as it is done, until the list is empty. Never add a file: build the screen from the kit instead.
  * @type {ReadonlyArray<{ file: string, uses: string[] }>}
  */
-export const KIT_ONLY_TODO = [
-	{ file: 'platform/src/console/admin/views/finance.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/admin/views/overview.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/admin/views/settings.js', uses: ['Disclosure'] },
-];
+export const KIT_ONLY_TODO = [];

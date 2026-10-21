@@ -85,15 +85,6 @@ const pressInDialog = async (label) => {
 	});
 };
 
-/** Open the Advanced block of the page. */
-const openAdvanced = async (/** @type {ParentNode} */ inside = document) => {
-	const bar = [...inside.querySelectorAll('button[aria-expanded]')].find((b) => b.textContent?.startsWith('Advanced'));
-	if (!bar) throw new Error('no Advanced block on the page');
-	await act(async () => {
-		/** @type {HTMLButtonElement} */ (bar).click();
-	});
-};
-
 /** Press Save changes of the floating save bar (it shows once a section has changes). */
 const saveChanges = async () => {
 	await press('Save changes');
@@ -458,16 +449,12 @@ describe('admin console interactions (jsdom)', () => {
 			);
 		};
 		await visitSettings();
-		const mailPart = /** @type {HTMLElement} */ (document.getElementById('mail'));
 		fill('SMTP host', 'smtp.example.com');
 		fill('Port', '587');
 		fill('User', 'mailer');
 		fill('Password', 'smtp secret');
 		fill('Sender name', 'Portal');
 		fill('Sender address', 'no-reply@example.com');
-		// the secure-connection switch is under Advanced
-		expect(mailPart.querySelector('[role="switch"]')).toBeNull();
-		await openAdvanced(mailPart);
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (byLabel(document, 'Secure connection from the start (SSL/TLS)')).click();
 		});
@@ -530,12 +517,11 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
 		fill('Session length (hours)', '24');
 		await act(async () => {
-			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
+			/** @type {HTMLElement} */ (byLabel(document, 'Require two-step for admins')).click();
 		});
 		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
-		// Encryption key: Re-seal after a key change (RT-14), under Advanced on Security
-		await openAdvanced(document.getElementById('security') ?? document);
+		// Encryption key: Re-seal after a key change (RT-14)
 		await press('Re-seal stored secrets');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsReseal() && c.status === 200));
 		await until(() => shows('ENCRYPTION_KEY_PREVIOUS can be removed'));

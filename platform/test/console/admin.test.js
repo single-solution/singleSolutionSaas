@@ -308,8 +308,8 @@ describe('admin console smoke', () => {
 			// the fields of every part are there at once
 			for (const field of ['Accent color', 'SMTP host', 'Session length (hours)', 'Grace period (days)'])
 				expect(text(settingsRaw)).toContain(field);
-			expect(text(settingsRaw)).toContain('Encryption key'); // the Advanced bar of Security, closed
-			expect(text(settingsRaw)).not.toContain('Re-seal stored secrets');
+			expect(text(settingsRaw)).toContain('Encryption key');
+			expect(text(settingsRaw)).toContain('Re-seal stored secrets');
 			expect(text(settingsRaw)).not.toContain('Save changes');
 			// My account: an inner sidebar (Your name first); the two-step section is a link
 			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain('Two-step sign-in');

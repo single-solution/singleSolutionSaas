@@ -15,7 +15,6 @@ import { useState } from 'react';
 import {
 	Button,
 	Callout,
-	Disclosure,
 	Form,
 	FormError,
 	Input,
@@ -206,14 +205,14 @@ function MailCard({ settings, onSaved }) {
 						error={errors.senderAddress}
 						required
 					/>
-					<Disclosure title={ADMIN.advanced}>
+					<div className="pt-2">
 						<Switch
 							label={ADMIN.mail.secure}
 							description={ADMIN.mail.secureHelp}
 							checked={form.secure}
 							onChange={(next) => set('secure', next)}
 						/>
-					</Disclosure>
+					</div>
 					<FormError problem={problem} fields={['host', 'port', 'user', 'password', 'senderName', 'senderAddress']} />
 					{testProblem ? <Callout tone="danger">{describeProblem(testProblem)}</Callout> : null}
 				</Form>
@@ -472,8 +471,7 @@ function EncryptionBlock() {
 		),
 	);
 	return (
-		<Disclosure title={ADMIN.advanced} description={ADMIN.settingsSections.encryption.title}>
-			<p className="text-sm text-muted">{ADMIN.settingsSections.encryption.help}</p>
+		<SettingsCard title={ADMIN.settingsSections.encryption.title} description={ADMIN.settingsSections.encryption.help}>
 			<div className="space-y-4">
 				<Button
 					loading={busy}
@@ -492,7 +490,7 @@ function EncryptionBlock() {
 				) : null}
 				<FormError problem={problem} fields={[]} />
 			</div>
-		</Disclosure>
+		</SettingsCard>
 	);
 }
 

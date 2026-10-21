@@ -9,18 +9,21 @@
  */
 import { useMemo, useState } from 'react';
 import {
+	ActionMenu,
 	BarChart,
 	Button,
 	Card,
-	DataTable,
 	Drawer,
 	EmptyState,
+	FiguresTable,
 	Form,
 	FormError,
 	Icon,
 	Input,
+	LocalTime,
 	Page,
 	Pagination,
+	Row,
 	Select,
 	Toolbar,
 	ButtonLink,
@@ -35,7 +38,7 @@ import {
 import { BILLING, MORE } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { BillingStats, DaysLeft, formatChartCredits, merchantPill, receiptColumns } from '../../views/billing.js';
+import { BillingStats, DaysLeft, formatChartCredits, merchantPill } from '../../views/billing.js';
 import { DateFields, periodFilter } from '../../views/range.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -165,19 +168,25 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
 		<div className="space-y-6">
 			{billing ? <BillingStats summary={billing} /> : null}
 			<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
-				<DataTable
-					className="max-h-[26rem]"
-					caption={BILLING.receiptsTitle}
-					rows={receipts}
-					rowKey={(r) => r.receiptId}
-					defaultSort={{ key: 'at', dir: 'desc' }}
-					empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
-					columns={receiptColumns({ receipts })}
-				/>
+				{receipts.length === 0 ? (
+					<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />
+				) : (
+					<div className="divide-y divide-line-soft max-h-[26rem] overflow-y-auto">
+						{receipts.map((r) => (
+							<Row
+								key={r.receiptId}
+								lead={{ icon: 'receipt', tone: 'neutral' }}
+								title={r.reference || r.method || BILLING.receiptsTitle}
+								meta={[r.method, r.reference, r.note].filter((x, i, a) => x && a.indexOf(x) === i)}
+								value={r.amountPaid || formatCredits(r.credits)}
+								time={<LocalTime value={r.at} />}
+							/>
+						))}
+					</div>
+				)}
 			</Card>
 			<Card title={BILLING.dayChargesTitle} subtitle={BILLING.chargesNote} padded={false}>
-				<DataTable
-					className="max-h-[26rem]"
+				<FiguresTable
 					caption={BILLING.dayChargesTitle}
 					rows={dayCharges}
 					rowKey={(d) => `${d.day}:${d.websiteId}:${d.productId}`}
@@ -186,11 +195,10 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
 					columns={[
 						{ key: 'day', header: BILLING.usageColumns.day, kind: 'date', sortable: true },
 						{ key: 'domain', header: BILLING.usageColumns.website, sortable: true },
-						{ key: 'product', header: BILLING.usageColumns.product, sortable: true, low: true },
+						{ key: 'product', header: BILLING.usageColumns.product, sortable: true },
 						{
 							key: 'lines',
 							header: BILLING.usageColumns.feature,
-							low: true,
 							render: (d) => d.lines.map((/** @type {any} */ l) => `${l.feature} ${l.hours} h`).join(', '),
 						},
 						{
@@ -362,51 +370,45 @@ function FinanceFrame({ props, part, toolbar, footer, children }) {
  * @param {any} props loader result of `loadBilling` plus `admin`
  */
 function AttentionPart(props) {
-	const nav = useNavigation();
 	const [adding, setAdding] = useState(/** @type {any} */ (null));
 	const canAdd = adminCan(props.admin, 'credits.add');
 	const rows = /** @type {any[]} */ (props.attention);
 	return (
 		<>
 			<FinanceFrame props={props} part="attention">
-				<DataTable
-					caption={BILLING.billingSections.attention.title}
-					rows={rows}
-					rowKey={(m) => m.merchantId}
-					rowLabel={(m) => String(m.merchantName ?? m.merchantId)}
-					onRowClick={(m) => nav.go(adminRoutes.merchantPart(m.merchantId, 'credits'))}
-					{...(canAdd
-						? {
-								rowMenu: (/** @type {any} */ m) => [{ label: BILLING.addCredits, onSelect: () => setAdding(m) }],
-							}
-						: {})}
-					empty={<EmptyState compact icon="check" kind="merchant" title={BILLING.noAttention} />}
-					columns={[
-						{
-							key: 'merchantName',
-							header: BILLING.receiptColumns.merchant,
-							rowHeader: true,
-							render: (m) => (
-								<TextLink as={Link} href={adminRoutes.merchantPart(m.merchantId, 'credits')}>
-									{m.merchantName ?? m.merchantId}
-								</TextLink>
-							),
-						},
-						{
-							key: 'status',
-							header: BILLING.statusColumn,
-							kind: 'status',
-							pill: (m) => merchantPill(m.status),
-						},
-						{
-							key: 'balance',
-							header: BILLING.balance,
-							kind: 'money',
-							render: (m) => formatCredits(m.balance),
-						},
-						{ key: 'daysLeft', header: BILLING.daysLeft, low: true, render: (m) => <DaysLeft summary={m} /> },
-					]}
-				/>
+				{rows.length === 0 ? (
+					<EmptyState compact icon="check" kind="merchant" title={BILLING.noAttention} />
+				) : (
+					<div className="divide-y divide-line-soft">
+						{rows.map((m) => {
+							const pill = merchantPill(m.status);
+							return (
+								<Row
+									key={m.merchantId}
+									linkAs={Link}
+									href={adminRoutes.merchantPart(m.merchantId, 'credits')}
+									lead={{ avatar: m.merchantName ?? m.merchantId }}
+									title={m.merchantName ?? m.merchantId}
+									meta={<DaysLeft summary={m} />}
+									status={{
+										tone: pill.status === 'active' ? 'success' : pill.status === 'error' ? 'danger' : 'warning',
+										label: pill.label,
+									}}
+									value={formatCredits(m.balance)}
+									trailing={
+										canAdd ? (
+											<ActionMenu
+												floating
+												label={`Actions for ${m.merchantName ?? m.merchantId}`}
+												items={[{ label: BILLING.addCredits, onSelect: () => setAdding(m) }]}
+											/>
+										) : null
+									}
+								/>
+							);
+						})}
+					</div>
+				)}
 			</FinanceFrame>
 			{adding ? (
 				<AddCreditsDialog
@@ -500,14 +502,24 @@ function ReceiptsPart(props) {
 				</Toolbar>
 			}
 			{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
-			<DataTable
-				caption={BILLING.receiptsTitle}
-				rows={paged.rows}
-				rowKey={(r) => r.receiptId}
-				defaultSort={{ key: 'at', dir: 'desc' }}
-				empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
-				columns={receiptColumns({ receipts, showMerchant: true })}
-			/>
+			{paged.rows.length === 0 ? (
+				<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />
+			) : (
+				<div className="divide-y divide-line-soft">
+					{paged.rows.map((r) => (
+						<Row
+							key={r.receiptId}
+							linkAs={Link}
+							href={r.merchantId ? adminRoutes.merchantPart(r.merchantId, 'credits') : undefined}
+							lead={{ icon: 'receipt', tone: 'neutral' }}
+							title={r.merchantName ?? r.merchantId ?? BILLING.receiptsTitle}
+							meta={[r.method, r.reference, r.note].filter(Boolean)}
+							value={formatCredits(r.credits)}
+							time={<LocalTime value={r.at} />}
+						/>
+					))}
+				</div>
+			)}
 		</FinanceFrame>
 	);
 }
@@ -576,39 +588,31 @@ function ChargesPart(props) {
 					<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />
 				</div>
 			)}
-			<DataTable
-				caption={BILLING.billingSections.charges.title}
-				rows={paged.rows}
-				rowKey={(r) => r.key}
-				empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
-				columns={[
-					{
-						key: 'label',
-						header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
-						rowHeader: true,
-						sortable: true,
-						render: (r) =>
-							filter.by === 'merchant' ? (
-								<TextLink as={Link} tone="plain" href={adminRoutes.merchantPart(r.key, 'credits')}>
-									{r.label}
-								</TextLink>
-							) : filter.by === 'product' && productsLinked ? (
-								<TextLink as={Link} tone="plain" href={adminRoutes.product(r.key)}>
-									{r.label}
-								</TextLink>
-							) : (
-								r.label
-							),
-					},
-					{
-						key: 'credits',
-						header: BILLING.usageColumns.credits,
-						kind: 'money',
-						sortable: true,
-						render: (r) => formatCredits(r.credits),
-					},
-				]}
-			/>
+			{paged.rows.length === 0 ? (
+				<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />
+			) : (
+				<div className="divide-y divide-line-soft">
+					{paged.rows.map((r) => (
+						<Row
+							key={r.key}
+							linkAs={Link}
+							href={
+								filter.by === 'merchant'
+									? adminRoutes.merchantPart(r.key, 'credits')
+									: filter.by === 'product' && productsLinked
+										? adminRoutes.product(r.key)
+										: undefined
+							}
+							lead={{
+								icon: filter.by === 'product' ? 'box' : filter.by === 'merchant' ? 'user' : 'calendar',
+								tone: 'neutral',
+							}}
+							title={r.label}
+							value={formatCredits(r.credits)}
+						/>
+					))}
+				</div>
+			)}
 		</FinanceFrame>
 	);
 }
