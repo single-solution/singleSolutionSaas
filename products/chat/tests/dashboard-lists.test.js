@@ -213,6 +213,17 @@ describe('Settings → Assistant', () => {
 					feature('language_lock', { allowedLanguages: ['en', 'ar'] }),
 				],
 			},
+			// Settings lists every feature with its switch: the features answer too
+			[`${BASE}/features`]: {
+				features: ['ai_replies', 'fallback_answers', 'language_lock'].map((key) => ({
+					key,
+					name: key,
+					description: '',
+					dependsOn: [],
+					millicreditsPerHour: 0,
+					on: true,
+				})),
+			},
 		});
 		const Settings = TABS.settings;
 		const { container } = render(
@@ -227,6 +238,9 @@ describe('Settings → Assistant', () => {
 				/>,
 			),
 		);
+		await settle();
+		// every feature has its row; the fallback answers are the page of their feature
+		click(/** @type {HTMLElement} */ (container.querySelector('[role="option"][data-ss-id="fallback_answers"]')));
 		await settle();
 		expect(container.textContent).toContain('Fallback answers');
 		const drawer = await openRow(container, 'Answer 1');

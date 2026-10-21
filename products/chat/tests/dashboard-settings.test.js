@@ -52,12 +52,21 @@ describe('Chat settings in the dashboard', () => {
 				/>,
 			),
 		);
-		// the feature is the heading; its groups are one view each under a tab strip, in `x-ui.order`, Advanced last
+		// the feature is the heading; its groups are cards in `x-ui.order`, and Advanced is open after them
 		expect(container.querySelector('h3')?.textContent).toBe('AI replies');
 		// two groups are two titled cards; the tab strip starts at three groups
 		expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
 		const fields = () => [...container.querySelectorAll('[data-field]')].map((f) => f.getAttribute('data-field'));
-		expect(fields()).toEqual(['style', 'dontKnow', 'onFailure', 'bubbles', 'tableBubble', 'showAiLabel', 'neverDisclose']);
+		expect(fields()).toEqual([
+			'style',
+			'dontKnow',
+			'onFailure',
+			'bubbles',
+			'tableBubble',
+			'showAiLabel',
+			'neverDisclose',
+			'extraBotPhrases',
+		]);
 		// on/off settings are toggles, not checkboxes
 		expect(container.querySelectorAll('[role="switch"]')).toHaveLength(3);
 		expect(container.querySelector('input[type="checkbox"]')).toBeNull();

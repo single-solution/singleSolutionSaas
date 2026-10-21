@@ -177,7 +177,7 @@ describe('the role prices editor', () => {
 });
 
 describe('Settings → Role pricing', () => {
-	it('lists the editor under Role pricing while the feature is on, and nothing while it is off', async () => {
+	it('lists the editor under Role pricing while the feature is on; while it is off its page says how to switch it on', async () => {
 		/** @param {boolean} on */
 		const answer = (on) => ({
 			features: ['catalog', 'checkout', 'role_pricing'].map((key) => ({
@@ -209,7 +209,22 @@ describe('Settings → Role pricing', () => {
 				vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init) =>
 					path === `/v1/dashboard/websites/${WEBSITE}/settings`
 						? new Response(JSON.stringify(answer(on)), { status: 200 })
-						: original(path, init),
+						: path === `/v1/dashboard/websites/${WEBSITE}/features`
+							? // Settings lists every feature with its switch: the features answer too
+								new Response(
+									JSON.stringify({
+										features: answer(on).features.map((feature) => ({
+											key: feature.key,
+											name: feature.name,
+											description: '',
+											dependsOn: [],
+											millicreditsPerHour: 0,
+											on: feature.on,
+										})),
+									}),
+									{ status: 200 },
+								)
+							: original(path, init),
 				),
 			);
 		stub(true);
@@ -223,7 +238,11 @@ describe('Settings → Role pricing', () => {
 		stub(false);
 		const off = render(inDashboard(<Settings {...props} />));
 		await settle();
-		expect(off.container.querySelector('[role="option"][data-ss-id="role_pricing"]')).toBeNull();
+		// the feature has its row; its page has no editor, only how to switch it on
+		click(/** @type {HTMLElement} */ (off.container.querySelector('[role="option"][data-ss-id="role_pricing"]')));
+		await settle();
+		expect(off.container.textContent).toContain('Switch on role_pricing to set it up.');
+		expect(off.container.textContent).not.toContain('Role prices');
 		expect(rowNames(off.container)).toEqual([]);
 	});
 });

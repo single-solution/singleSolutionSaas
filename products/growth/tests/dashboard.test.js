@@ -97,11 +97,25 @@ const serve = (on) =>
 							? { value: LISTS[/** @type {keyof typeof LISTS} */ (path.slice(`${base}/lists/`.length))].defaults() }
 							: path === `${base}/settings`
 								? settingsAnswer(on)
-								: path === `${base}/texts`
-									? { texts: [] }
-									: path === `${base}/format`
-										? { format: FORMAT }
-										: null;
+								: path === `${base}/features`
+									? // Settings lists every feature with its switch: the features answer too (the shared groups are no features)
+										{
+											features: settingsAnswer(on)
+												.features.filter((feature) => manifest.features.some((own) => own.key === feature.key))
+												.map((feature) => ({
+													key: feature.key,
+													name: feature.name,
+													description: '',
+													dependsOn: [],
+													millicreditsPerHour: 0,
+													on: feature.on,
+												})),
+										}
+									: path === `${base}/texts`
+										? { texts: [] }
+										: path === `${base}/format`
+											? { format: FORMAT }
+											: null;
 			return new Response(JSON.stringify(body), { status: body ? 200 : 404 });
 		}),
 	);
