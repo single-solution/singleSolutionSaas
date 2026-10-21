@@ -3,8 +3,9 @@
  * The fallback answers editor in the browser (jsdom) on a faked dashboard API (PLAN 0.8.10 C3): Settings → Assistant
  * shows it with Language lock's languages; it adds, edits and saves answers with one PUT from the Save bar, refuses what
  * the server's check would (each field says why, nothing is sent; a comparison answer needs its keywords, C18) and names
- * the shop tools an answer's placeholders need while they are off. The shared list editor is a table: a click on a row
- * opens the entry in a drawer that edits the draft only, the row menu moves and removes, Add stops at the limit.
+ * the shop tools an answer's placeholders need while they are off. The shared list editor is a column of rich rows: a
+ * click on a row opens the entry's fields under it (a long editor in a drawer) that edit the draft only, the row menu
+ * moves and removes, Add stops at the limit and an empty list is an empty state with the one Add action.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +13,7 @@ import { byText, cleanup, click, keydown, render, type } from '@ss/ui/testing';
 import { FallbackAnswersEditor, PageRulesEditor, RedactionPatternsEditor, TeamsEditor } from '../app/dashboard/lists.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { checkFallbackAnswers } from '../core/fallback.js';
-import { closeDrawer, drawerOf, inDashboard, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import { closeEditor, editorOf, factsOf, inDashboard, openRow, rowMenu, rowNames, rowOf } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -74,15 +75,15 @@ const button = (root, text) => byText(root, text, 'button');
 /** The Save bar's Save list button, or null while there is nothing to save. */
 const saveButton = () => [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Save list') ?? null;
 
-/** Add an entry: it opens in the drawer. @param {HTMLElement} root */
+/** Add an entry: it opens in its editor. @param {HTMLElement} root */
 const add = async (root) => {
 	await act(async () => click(button(root, 'Add')));
-	return drawerOf();
+	return editorOf();
 };
 
-/** Close the drawer if it is open, save with the Save bar and let it answer. */
+/** Close the editor if it is open, save with the Save bar and let it answer. */
 const save = async () => {
-	if (drawerOf()) await closeDrawer();
+	if (editorOf()) await closeEditor();
 	await act(async () => click(/** @type {HTMLElement} */ (saveButton())));
 	await settle();
 };
@@ -104,21 +105,21 @@ describe('the fallback answers editor (C3)', () => {
 		await settle();
 		// the saved answer is a row: its language, keywords and text
 		expect(rowNames(container)).toEqual(['Answer 1']);
-		const cells = container.querySelector('tbody')?.textContent ?? '';
-		expect(cells).toContain('Any language');
-		expect(cells).toContain('deal, offer');
+		const facts = factsOf(rowOf(container, 'Answer 1')).meta;
+		expect(facts).toContain('Any language');
+		expect(facts).toContain('deal, offer');
 		const first = await openRow(container, 'Answer 1');
 		expect(field(first, 'Keywords (one per line)').value).toBe('deal\noffer');
 		expect(field(first, 'Answer').value).toBe(DEALS.text);
 		expect(optionsOf(field(first, 'Language'))).toEqual(['Any language', 'English (en)', 'French (fr)']);
 		expect(first.textContent).not.toContain('Skipped while these are off');
-		await closeDrawer();
+		await closeEditor();
 		// nothing changed: the floating Save bar is not on screen
 		expect(saveButton()).toBeNull();
 
-		// a new answer opens in the drawer: nothing written yet, so the list is not saved
+		// a new answer opens in place under its row: nothing written yet, so the list is not saved
 		const drawer = await add(container);
-		expect(drawer.querySelector('h2')?.textContent).toBe('Answer 2');
+		expect(rowNames(container)).toEqual(['Answer 1', 'Answer 2']);
 		expect(drawer.textContent).toContain('Write the answer (up to 2000 characters).');
 		expect(/** @type {HTMLButtonElement} */ (saveButton()).disabled).toBe(true);
 		type(field(drawer, 'Answer', 0), '  Popular this week:\n{top_products}  ');
@@ -132,9 +133,9 @@ describe('the fallback answers editor (C3)', () => {
 		expect(/** @type {HTMLButtonElement} */ (saveButton()).disabled).toBe(true);
 		type(field(drawer, 'Keywords (one per line)', 0), ' best \n\nbestseller');
 		expect(drawer.textContent).not.toContain('Up to 30 keywords');
-		// Done closes the drawer; nothing is sent until the Save bar
-		await closeDrawer();
-		expect(drawerOf()).toBeNull();
+		// Done closes the editor; nothing is sent until the Save bar
+		await closeEditor();
+		expect(editorOf()).toBeNull();
 		expect(saved).toEqual([]);
 
 		await save();
@@ -166,7 +167,7 @@ describe('the fallback answers editor (C3)', () => {
 		await settle();
 		const added = await add(container);
 		type(field(added, 'Answer', 0), 'Hello!');
-		await closeDrawer();
+		await closeEditor();
 		// move the new one up with its row menu, then look at the first
 		await rowMenu(container, 'Answer 2', 'Move up');
 		const first = await openRow(container, 'Answer 1');
@@ -185,11 +186,11 @@ describe('the fallback answers editor (C3)', () => {
 		);
 		const again = render(inDashboard(<FallbackAnswersEditor websiteId="web_2" languages={['en']} on={() => true} />));
 		await settle();
-		expect(again.container.querySelector('tbody')?.textContent).toContain('ur-Latn');
+		expect(factsOf(rowOf(again.container, 'Answer 1')).meta).toContain('ur-Latn');
 		const saved1 = await openRow(again.container, 'Answer 1');
 		expect(field(saved1, 'Language').value).toBe('ur-Latn');
 		expect(optionsOf(field(saved1, 'Language'))).toContain('English (en)');
-		await closeDrawer();
+		await closeEditor();
 		await rowMenu(again.container, 'Answer 1', 'Remove');
 		expect(again.container.textContent).toContain('Nothing yet.');
 	});
@@ -295,20 +296,22 @@ describe('the teams editor (C12)', () => {
 		const drawer = await add(container);
 		type(field(drawer, 'Name'), 'Wholesale');
 		expect(drawer.textContent).toContain('list 1 to 100 members by email address or user id.');
+		// the row says the team cannot be saved yet with its dot
+		expect(factsOf(rowOf(container, 'Wholesale')).status).toBe('Needs a fix before it can be saved');
 		expect(/** @type {HTMLButtonElement} */ (saveButton()).disabled).toBe(true);
 		type(field(drawer, 'Members (one per line: email address or user id)'), 'ana@shop.example.com\nusr_lee');
 		type(field(drawer, 'Pages (one per line: paths such as /wholesale/**)'), '/wholesale/**');
 		await save();
 		// the saved team is a row with its member count
 		expect(rowNames(container)).toEqual(['Wholesale']);
-		expect(container.querySelector('tbody')?.textContent).toContain('2');
+		expect(factsOf(rowOf(container, 'Wholesale')).value).toBe('Members: 2');
 		expect(puts).toEqual([
 			[{ name: 'Wholesale', members: ['ana@shop.example.com', 'usr_lee'], languages: [], pages: ['/wholesale/**'] }],
 		]);
 	});
 });
 
-describe('the shared list editor table', () => {
+describe('the shared list editor', () => {
 	const PATH = `${BASE}/lists/page_rules`;
 	const RULES = [
 		{ path: '/pricing', delay: 10, message: 'Questions about pricing?' },
@@ -338,7 +341,7 @@ describe('the shared list editor table', () => {
 		return { release: () => waiting.splice(0).forEach((go) => go()) };
 	};
 
-	it('shows a skeleton table while the list loads, then a row per entry with its columns', async () => {
+	it('shows a row skeleton while the list loads, then a row per entry with its facts', async () => {
 		const api = serveRules(RULES, true);
 		const { container } = render(inDashboard(<PageRulesEditor websiteId={WEBSITE} />));
 		await settle();
@@ -351,11 +354,11 @@ describe('the shared list editor table', () => {
 		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
 		// a row is the page path with its delay and message
 		expect(rowNames(container)).toEqual(['/pricing', '/blog/**']);
-		expect(container.querySelector('tbody')?.textContent).toContain('Questions about pricing?');
+		expect(factsOf(rowOf(container, '/pricing'))).toEqual({ meta: 'Questions about pricing?', value: '10s', status: '' });
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Add')).disabled).toBe(false);
 	});
 
-	it('edits an entry in the drawer without saving, and saves it with the Save bar only', async () => {
+	it('edits an entry in place without saving, and saves it with the Save bar only', async () => {
 		serveRules(RULES);
 		const { container } = render(inDashboard(<PageRulesEditor websiteId={WEBSITE} />));
 		await settle();
@@ -363,13 +366,15 @@ describe('the shared list editor table', () => {
 		expect(saveButton()).toBeNull();
 		expect(container.querySelector('[data-entry]')).toBeNull();
 		const drawer = await openRow(container, '/pricing');
-		expect(drawer.querySelector('h2')?.textContent).toBe('/pricing');
+		// a few fields open in place under their row, not in a drawer
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(container.contains(drawer)).toBe(true);
 		type(field(drawer, 'Message'), 'Need a hand with pricing?');
-		// Done closes the drawer; the draft is not saved
-		await closeDrawer();
-		expect(drawerOf()).toBeNull();
+		// Done closes the fields; the draft is not saved
+		await closeEditor();
+		expect(editorOf()).toBeNull();
 		expect(saved).toEqual([]);
-		expect(container.querySelector('tbody')?.textContent).toContain('Need a hand with pricing?');
+		expect(factsOf(rowOf(container, '/pricing')).meta).toBe('Need a hand with pricing?');
 		await save();
 		expect(saved).toEqual([[{ ...RULES[0], message: 'Need a hand with pricing?' }, RULES[1]]]);
 		expect(container.textContent).toContain('Saved');
@@ -413,6 +418,10 @@ describe('the shared list editor table', () => {
 		await settle();
 		expect(empty.container.textContent).toContain('Nothing yet.');
 		expect(empty.container.querySelector('h2')).toBeNull();
+		// the empty state carries the one Add action
+		expect(empty.container.querySelectorAll('button')).toHaveLength(1);
 		expect(/** @type {HTMLButtonElement} */ (button(empty.container, 'Add')).disabled).toBe(false);
+		await act(async () => click(button(empty.container, 'Add')));
+		expect(rowNames(empty.container)).toEqual(['/']);
 	});
 });

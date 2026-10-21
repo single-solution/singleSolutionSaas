@@ -3,7 +3,7 @@
  * The merchant's own lists in Settings (jsdom, on a faked dashboard API): office hours by weekday with minutes and
  * dated exceptions (C9); page types with their nudges, seeded with the four shop ones (C6); the file types visitors may
  * send with a cap each (C11); Book-a-slot's questions and services (C10); tags, topics and priorities (C7). Each editor
- * is a table (a row menu moves and removes an entry; a click on a row opens its fields in a drawer), adds, changes,
+ * is a column of rich rows (a row menu moves and removes an entry; a click on a row opens its fields under it), adds, changes,
  * moves and removes entries and saves the whole list with one PUT from the Save bar, checked as the server checks it.
  */
 import { act } from 'react';
@@ -19,7 +19,7 @@ import {
 	UploadTypesEditor,
 } from '../app/dashboard/lists.js';
 import { LISTS } from '../adapters/lists.js';
-import { closeDrawer, drawerOf, inDashboard, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import { closeEditor, editorOf, factsOf, inDashboard, openRow, rowMenu, rowNames, rowOf, rowsOf } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -88,25 +88,24 @@ const button = (root, text) => {
 const optionsOf = (select) => [.../** @type {HTMLSelectElement} */ (/** @type {unknown} */ (select)).options].map((o) => o.text);
 
 /**
- * Open the `index`-th row's entry in the drawer.
+ * Open the `index`-th row's entry in its editor.
  * @param {HTMLElement} root
  * @param {number} index
  */
 const openAt = async (root, index) => {
-	const cell = /** @type {HTMLElement} */ (root.querySelectorAll('tbody tr')[index]?.querySelector('th, td'));
-	await act(async () => click(cell));
-	return drawerOf();
+	await act(async () => click(/** @type {HTMLElement} */ (rowsOf(root)[index])));
+	return editorOf();
 };
 
-/** Add an entry: it opens in the drawer. @param {HTMLElement} root */
+/** Add an entry: it opens in its editor. @param {HTMLElement} root */
 const add = async (root) => {
 	await act(async () => click(button(root, 'Add')));
-	return drawerOf();
+	return editorOf();
 };
 
-/** Close the drawer, save the list with the Save bar and let it answer. */
+/** Close the editor, save the list with the Save bar and let it answer. */
 const save = async () => {
-	if (drawerOf()) await closeDrawer();
+	if (editorOf()) await closeEditor();
 	await act(async () => click(button(document.body, 'Save list')));
 	await settle();
 };
@@ -123,8 +122,7 @@ describe('office hours and their exceptions (C9)', () => {
 		await settle();
 		// a row is a weekday with its opening and closing time
 		expect(rowNames(container)).toEqual(['Monday']);
-		expect(container.querySelector('tbody')?.textContent).toContain('09:30');
-		expect(container.querySelector('tbody')?.textContent).toContain('17:45');
+		expect(factsOf(rowOf(container, 'Monday')).value).toBe('09:30–17:45');
 		const first = await openRow(container, 'Monday');
 		expect(optionsOf(field(first, 'Day'))).toEqual([
 			'Monday',
@@ -136,7 +134,7 @@ describe('office hours and their exceptions (C9)', () => {
 			'Sunday',
 		]);
 		expect(field(first, 'Opens').value).toBe('09:30');
-		await closeDrawer();
+		await closeEditor();
 		const second = await add(container);
 		type(field(second, 'Day'), '7');
 		type(field(second, 'Opens'), '22:00');
@@ -166,16 +164,17 @@ describe('office hours and their exceptions (C9)', () => {
 		type(field(holiday, 'Date'), '2026-12-25');
 		type(field(holiday, 'Name'), ' Holiday ');
 		expect(holiday.textContent).toContain('Closed all day.');
-		await closeDrawer();
+		await closeEditor();
 		const eve = await add(container);
 		type(field(eve, 'Date'), '2026-12-24');
 		// the second date's own window
 		await act(async () => click(button(eve, 'Add window')));
 		type(field(eve, 'Closes'), '12:30');
-		await closeDrawer();
+		await closeEditor();
 		// a row is the holiday's name (else its date) with its date and hours
 		expect(rowNames(container)).toEqual(['Holiday', '2026-12-24']);
-		expect(container.querySelector('tbody')?.textContent).toContain('09:00–12:30');
+		expect(factsOf(rowOf(container, '2026-12-24'))).toEqual({ meta: '2026-12-24', value: '09:00–12:30', status: '' });
+		expect(factsOf(rowOf(container, 'Holiday')).value).toBe('Closed all day.');
 		await save();
 		expect(saved.office_exceptions).toEqual([
 			[
@@ -194,15 +193,15 @@ describe('page types (C6)', () => {
 		expect(rowNames(container)).toEqual(['Product page', 'Category page', 'Deals page', 'Cart']);
 		const cart = await openRow(container, 'Cart');
 		type(field(cart, 'Name'), 'Basket');
-		await closeDrawer();
+		await closeEditor();
 		const product = await openRow(container, 'Product page');
 		type(field(product, 'Idle nudge'), 'Still deciding on {product}?');
-		await closeDrawer();
+		await closeEditor();
 		const menu = await add(container);
 		type(field(menu, 'Key'), 'menu');
 		type(field(menu, 'Name'), 'Menu');
 		type(field(menu, 'Path pattern'), '/menu/**');
-		await closeDrawer();
+		await closeEditor();
 		// the deals page goes, the menu moves up one
 		await rowMenu(container, 'Deals page', 'Remove');
 		await rowMenu(container, 'Menu', 'Move up');
@@ -235,7 +234,7 @@ describe('upload types (C11)', () => {
 		const types = [];
 		for (const index of [0, 1, 2, 3, 4]) {
 			types.push(field(await openAt(container, index), 'Type').value);
-			await closeDrawer();
+			await closeEditor();
 		}
 		expect(types).toEqual(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']);
 		const added = await add(container);
@@ -263,7 +262,7 @@ describe('booking questions and services (C10)', () => {
 		expect(rowNames(questions)).toEqual(['Name', 'Email', 'Phone']);
 		const name = await openRow(questions, 'Name');
 		expect(field(name, 'Required').checked).toBe(true);
-		await closeDrawer();
+		await closeEditor();
 		const seating = await add(questions);
 		type(field(seating, 'Key'), 'seating');
 		type(field(seating, 'Question'), 'Seating');

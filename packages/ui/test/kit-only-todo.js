@@ -23,7 +23,6 @@ export const KIT_ONLY_TODO = [
 	{ file: 'platform/src/console/views/website-settings.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/views/website.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/views/websites.js', uses: ['DataTable'] },
-	{ file: 'products/chat/app/dashboard/lists.js', uses: ['DataTable'] },
 	{ file: 'products/ecommerce/app/dashboard/grades.js', uses: ['DataTable'] },
 	{ file: 'products/ecommerce/app/dashboard/item-types.js', uses: ['DataTable'] },
 	{ file: 'products/ecommerce/app/dashboard/lists.js', uses: ['DataTable'] },
