@@ -233,6 +233,21 @@ export function SaveOutcome({ result, local = [], format = problemLines, title }
 	);
 }
 
+/** The edits of features' settings without one setting (a feature left with none is gone too). @param {Record<string, Record<string, unknown>>} all @param {string} feature @param {string} name */
+export const withoutField = (all, feature, name) => {
+	const left = Object.fromEntries(Object.entries(all[feature] ?? {}).filter(([key]) => key !== name));
+	const rest = Object.fromEntries(Object.entries(all).filter(([key]) => key !== feature));
+	return Object.keys(left).length > 0 ? { ...rest, [feature]: left } : rest;
+};
+
+/** Two sets of edits as one: what is typed after `before` wins. @param {Record<string, Record<string, unknown>>} before @param {Record<string, Record<string, unknown>>} now */
+export const mergeEdits = (before, now) => {
+	/** @type {Record<string, Record<string, unknown>>} */
+	const all = { ...before };
+	for (const [feature, entry] of Object.entries(now)) all[feature] = { ...all[feature], ...entry };
+	return all;
+};
+
 /**
  * Settings forms of the features that have settings (none: nothing), a website's or the global defaults: each feature
  * is a titled group of cards (`x-ui.group` makes the cards, a feature without groups is one card) and one sticky
@@ -254,7 +269,10 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 	/** @param {string} feature @param {string} name */
 	const reset = async (feature, name) => {
 		const key = saveUrl(`${feature}.${name}`);
-		setResult({ feature, answer: resetBody ? await call('PUT', key, { value: null }) : await call('DELETE', key) });
+		const answer = resetBody ? await call('PUT', key, { value: null }) : await call('DELETE', key);
+		setResult({ feature, answer });
+		// the setting is the default now: an edit of it that was not saved goes too (else Save would put it back)
+		if (answer.ok) setEdits((all) => withoutField(all, feature, name));
 		reload();
 	};
 	const save = async () => {
@@ -314,8 +332,10 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 				disabled={blocked}
 				onSave={save}
 				onDiscard={() => {
+					const before = edits;
 					setEdits({});
 					setResult(null);
+					return () => setEdits((now) => mergeEdits(before, now));
 				}}
 				message={texts.settings.unsaved}
 				saveLabel={texts.settings.saveChanges}

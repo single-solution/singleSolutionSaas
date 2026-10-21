@@ -18,7 +18,7 @@ import { ADVANCED_GROUP, shapeOf } from './schema.js';
 import { call, fill } from './dashboard-api.js';
 import { humanize } from './format.js';
 import { describeProblem, problemCode } from './problems.js';
-import { Outcome, hasSettings } from './dashboard-parts.js';
+import { Outcome, hasSettings, mergeEdits, withoutField } from './dashboard-parts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-page.js').Section} Section */
@@ -70,7 +70,10 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 		/** @param {string} feature @param {string} name */
 		reset: async (feature, name) => {
 			const key = saveUrl(`${feature}.${name}`);
-			setResult({ feature, answer: resetBody ? await call('PUT', key, { value: null }) : await call('DELETE', key) });
+			const answer = resetBody ? await call('PUT', key, { value: null }) : await call('DELETE', key);
+			setResult({ feature, answer });
+			// the setting is the default now: an edit of it that was not saved goes too (else Save would put it back)
+			if (answer.ok) setEdits((all) => withoutField(all, feature, name));
 			reload();
 		},
 		save: async () => {
@@ -93,9 +96,12 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 			setEdits(left);
 			reload();
 		},
+		/** Drops every edit at once; the function it returns brings them back (the page offers it as Undo). */
 		discard: () => {
+			const before = edits;
 			setEdits({});
 			setResult(null);
+			return () => setEdits((now) => mergeEdits(before, now));
 		},
 	};
 }
@@ -367,10 +373,16 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 			setErrors(refused);
 			reload();
 		},
+		/** Drops every edit at once; the function it returns brings them back (the page offers it as Undo). */
 		discard: () => {
+			const before = { edits, errors };
 			setEdits({});
 			setErrors({});
 			setResult(null);
+			return () => {
+				setEdits((now) => ({ ...before.edits, ...now }));
+				setErrors((now) => ({ ...before.errors, ...now }));
+			};
 		},
 	};
 }

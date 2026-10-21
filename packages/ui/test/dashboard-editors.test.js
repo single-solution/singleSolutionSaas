@@ -158,3 +158,61 @@ describe('text that is not valid JSON is never saved (189)', () => {
 		expect(buttonsOf(container, 'Save changes')).toHaveLength(0);
 	});
 });
+
+describe('Reset to default drops that setting\'s unsaved edit (180)', () => {
+	it('shows the default, closes the bar when it was the only edit, and Save puts nothing back', async () => {
+		const id = freshSite();
+		const { container } = await openSettings(id);
+		const field = /** @type {HTMLElement} */ (container.querySelector('[data-field="greeting"]'));
+		type(/** @type {HTMLInputElement} */ (field.querySelector('input')), 'Mine');
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(1);
+		await act(async () => buttonsOf(field, 'Reset')[0]?.click());
+		await settle();
+		expect(requests.filter((r) => r.method === 'DELETE')).toHaveLength(1);
+		expect(/** @type {HTMLInputElement} */ (field.querySelector('input')).value).toBe('Hello');
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(0);
+		expect(requests.filter((r) => r.method === 'PUT')).toEqual([]);
+	});
+
+	it('keeps the other edits of the page', async () => {
+		const id = freshSite();
+		const { container } = await openSettings(id);
+		type(byLabel(container, 'Flags'), '[false]');
+		type(byLabel(container, 'Greeting'), 'Mine');
+		const field = /** @type {HTMLElement} */ (container.querySelector('[data-field="greeting"]'));
+		await act(async () => buttonsOf(field, 'Reset')[0]?.click());
+		await settle();
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(1);
+		expect(JSON.parse(byLabel(container, 'Flags').value)).toEqual([false]);
+	});
+});
+
+describe('Discard can be undone (KP-1a left over)', () => {
+	/** The toasts on the page. */
+	const toasts = () => /** @type {HTMLElement} */ (document.querySelector('[aria-live="polite"]'));
+
+	it('Discard drops the edits, the toast "Changes discarded" brings them back with Undo', async () => {
+		const id = freshSite();
+		const { container } = await openSettings(id);
+		type(byLabel(container, 'Greeting'), 'Mine');
+		type(byLabel(container, 'Flags'), '[false]');
+		await act(async () => buttonsOf(container, 'Discard')[0]?.click());
+		expect(byLabel(container, 'Greeting').value).toBe('Hi');
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(0);
+		expect(toasts().textContent).toContain('Changes discarded');
+		await act(async () => buttonsOf(toasts(), 'Undo')[0]?.click());
+		expect(byLabel(container, 'Greeting').value).toBe('Mine');
+		expect(JSON.parse(byLabel(container, 'Flags').value)).toEqual([false]);
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(1);
+	});
+
+	it('an edit made after Discard stays when Undo brings the others back', async () => {
+		const id = freshSite();
+		const { container } = await openSettings(id);
+		type(byLabel(container, 'Greeting'), 'Mine');
+		await act(async () => buttonsOf(container, 'Discard')[0]?.click());
+		type(byLabel(container, 'Greeting'), 'Newer');
+		await act(async () => buttonsOf(toasts(), 'Undo')[0]?.click());
+		expect(byLabel(container, 'Greeting').value).toBe('Newer');
+	});
+});

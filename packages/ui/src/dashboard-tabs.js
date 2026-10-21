@@ -505,8 +505,12 @@ function DefaultsPanel({ data, reload, notice }) {
 			if (words.dirty) await words.save();
 		},
 		discard: () => {
-			settings.discard();
-			words.discard();
+			const undoSettings = settings.discard();
+			const undoWords = words.discard();
+			return () => {
+				undoSettings();
+				undoWords();
+			};
 		},
 	};
 	const sections = [
@@ -621,8 +625,10 @@ export function PricesTab() {
 							saveLabel={texts.save}
 							discardLabel={texts.settings.discard}
 							onDiscard={() => {
+								const before = draft;
 								setDraft({});
 								setResult(null);
+								return () => setDraft((now) => ({ ...before, ...now }));
 							}}
 							onSave={async () => {
 								if (parsed.some((entry) => !entry.credits.ok)) return;
