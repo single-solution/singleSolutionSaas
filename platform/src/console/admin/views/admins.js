@@ -1,49 +1,40 @@
 'use client';
 /**
- * Admins (PLAN 0.8.2; Owner only; layout contract 2026-10-17): the Admins page is a table of the admins (search, a
- * role filter; per row the name, email, role, a status pill — Invited gray —, two-step and the last sign-in) with
- * **Invite** (email + role in a drawer; the invite is emailed or its link copied). A row opens the admin's page: a
- * header (name, Active / Invited, the role; Resend invite and Copy invite link until the invite is accepted, Change
- * role and Turn off two-step, Correct invite email and Remove in the More menu) and its parts in the inner navigation,
- * each its own address: Details (the details and what the role can do) and Recent activity (the entries this admin
- * made, paged). The last Owner cannot be removed or demoted and no one removes themselves (the API refuses; the page
- * explains).
+ * Admins (PLAN 0.8.2; Owner only; flat layout 2026-10-21): the Admins page is a ListColumn of rich rows beside the
+ * selected admin's page (or the first admin on wide screens). All sections open on one page: Details (the details and
+ * what the role can do) and Recent activity (timeline of entries with Show more paging).
  * @module
  */
-import { useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
 	Button,
 	Callout,
 	Card,
 	CodeBlock,
-	DataTable,
 	Dialog,
 	Drawer,
 	EmptyState,
 	Form,
 	FormError,
-	Icon,
 	Input,
 	KeyValueList,
+	ListColumn,
 	LocalTime,
 	Page,
-	Pagination,
 	RadioGroup,
-	Toolbar,
+	Row,
 	describeProblem,
 	fieldErrors,
-	usePaged,
 	useToast,
 } from '@ss/ui';
 import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { apiConfirm, apiFetch, usePagedList, useResource } from '../../client.js';
+import { apiConfirm, apiFetch, useResource } from '../../client.js';
 import { ConfirmChange, confirmationErrors } from '../../views/confirm-change.js';
 import { ActivityTable } from '../../views/login-settings.js';
-import { useListPages } from '../../views/paging.js';
-import { ADMIN_PARTS, adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem } from './common.js';
+import { adminApi, adminRoutes } from '../paths.js';
+import { AdminProblem, adminCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -68,6 +59,67 @@ const statusPill = (admin) =>
 
 /** @param {string} role */
 const roleName = (role) => ADMIN.roles[/** @type {'owner'} */ (role)] ?? role;
+
+/** True on phone viewports (< 768 px). */
+function usePhone() {
+	const [phone, setPhone] = useState(false);
+	useEffect(() => {
+		if (typeof window === 'undefined' || !window.matchMedia) return;
+		const mql = window.matchMedia('(max-width: 767px)');
+		setPhone(mql.matches);
+		const handler = (/** @type {MediaQueryListEvent} */ e) => setPhone(e.matches);
+		mql.addEventListener('change', handler);
+		return () => mql.removeEventListener('change', handler);
+	}, []);
+	return phone;
+}
+
+/**
+ * Activity entries of an admin with cursor paging.
+ * @param {{ items?: any[], nextCursor?: string | null } | undefined} initial
+ * @param {string} adminId
+ */
+function useActivityList(initial, adminId) {
+	const [items, setItems] = useState(/** @type {any[]} */ (initial?.items ?? []));
+	const [cursor, setCursor] = useState(/** @type {string | null} */ (initial?.nextCursor ?? null));
+	const [loading, setLoading] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+
+	useEffect(() => {
+		if (initial !== undefined) return;
+		let cancelled = false;
+		setLoading(true);
+		setProblem(null);
+		apiFetch(adminApi.activity({ adminId })).then((result) => {
+			if (cancelled) return;
+			setLoading(false);
+			if (!result.ok) setProblem(result.problem);
+			else {
+				setItems(result.data?.items ?? []);
+				setCursor(result.data?.nextCursor ?? null);
+			}
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [adminId, initial]);
+
+	const more = async () => {
+		if (!cursor || loading) return;
+		setLoading(true);
+		setProblem(null);
+		const result = await apiFetch(adminApi.activity({ adminId, cursor }));
+		setLoading(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		setItems((prev) => [...prev, ...(result.data?.items ?? [])]);
+		setCursor(result.data?.nextCursor ?? null);
+	};
+
+	return { items, cursor, loading, problem, more };
+}
 
 /**
  * The invite link, shown once.
@@ -97,6 +149,7 @@ function InviteDrawer({ open, onClose, onInvited }) {
 	const [asking, setAsking] = useState(/** @type {null | { copy: boolean }} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const formId = useId();
+
 	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
 	const send = async (confirmation) => {
 		const copy = asking?.copy ?? false;
@@ -115,6 +168,7 @@ function InviteDrawer({ open, onClose, onInvited }) {
 		}
 		return result;
 	};
+
 	return (
 		<>
 			<Drawer
@@ -158,117 +212,20 @@ function InviteDrawer({ open, onClose, onInvited }) {
 }
 
 /**
- * The Admins list: a table with search and a role filter; Invite opens the invite drawer.
- * @param {{ props: any }} input
+ * An admin's page: all sections open on one page beside the list of admins.
+ * @param {{
+ *   current: any,
+ *   me: any,
+ *   list?: any,
+ *   activityInitial?: any,
+ *   onReload: () => Promise<any>,
+ *   onInvite?: () => void,
+ * }} props
  */
-function AdminsPage({ props }) {
+function AdminPageView({ current, me, list, activityInitial, onReload, onInvite }) {
 	const toast = useToast();
 	const nav = useNavigation();
-	const { data, reload } = useResource(adminApi.admins(), { items: props.items });
-	const [inviting, setInviting] = useState(false);
-	const [link, setLink] = useState(/** @type {string | null} */ (null));
-	const [role, setRole] = useState('');
-	const me = props.me;
-	const items = /** @type {any[]} */ (data.items ?? []);
-	const paged = usePaged(role ? items.filter((a) => a.role === role) : items, {
-		pageSize: 50,
-		text: (a) => `${a.name ?? ''} ${a.email}`,
-	});
-	/** @param {any} invite @param {boolean} copy */
-	const invited = async (invite, copy) => {
-		setInviting(false);
-		if (copy) setLink(invite?.link ?? null);
-		else toast.show({ title: invite?.mailed ? ADMIN.inviteMailed : ADMIN.inviteNotMailed });
-		await reload();
-	};
-	return (
-		<>
-			<Page
-				flush
-				linkAs={Link}
-				crumbs={[{ label: ADMIN.adminsTitle }]}
-				info={ADMIN.adminsInfo}
-				actions={{ primary: { label: ADMIN.invite, icon: 'plus', onClick: () => setInviting(true) } }}
-				toolbar={
-					<Toolbar
-						label={ADMIN.adminsTitle}
-						search={{
-							value: paged.query,
-							label: ADMIN.searchAdmins,
-							placeholder: ADMIN.searchAdmins,
-							onSearch: paged.setQuery,
-						}}
-						filters={[
-							{
-								id: 'role',
-								label: ADMIN.role,
-								allLabel: MORE.allRoles,
-								value: role,
-								onChange: setRole,
-								options: [...ROLE_OPTIONS],
-							},
-						]}
-						range={MORE.count(paged.found.length)}
-					/>
-				}
-				{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
-				<DataTable
-					caption={ADMIN.adminsTitle}
-					rows={paged.rows}
-					rowKey={(a) => String(a.adminId)}
-					rowLabel={(a) => a.name ?? a.email}
-					onRowClick={(a) => nav.go(adminRoutes.admin(a.adminId))}
-					empty={<EmptyState compact icon="shield" kind="admin" title={ADMIN.noAdmins} />}
-					columns={[
-						{
-							key: 'name',
-							header: ADMIN.adminColumns.name,
-							rowHeader: true,
-							render: (a) => (
-								<Link href={adminRoutes.admin(a.adminId)} className="font-medium text-fg hover:underline">
-									{a.adminId === me?.adminId ? `${a.name ?? a.email} (${ADMIN.you})` : (a.name ?? a.email)}
-								</Link>
-							),
-						},
-						{ key: 'email', header: ADMIN.adminColumns.email, render: (a) => a.email },
-						{ key: 'role', header: ADMIN.adminColumns.role, render: (a) => roleName(a.role) },
-						{ key: 'status', header: ADMIN.columns.status, kind: 'status', pill: (a) => statusPill(a) },
-						{
-							key: 'twoStep',
-							header: ADMIN.twoStepColumn,
-							low: true,
-							render: (a) => (a.twoStep?.enabled ? MORE.twoStepOn(a.twoStep.recoveryCodesLeft ?? 0) : TWO_STEP.off),
-						},
-						{
-							key: 'lastSignIn',
-							header: ADMIN.columns.lastSignIn,
-							kind: 'date',
-							low: true,
-							render: (a) => (a.lastSignInAt ? <LocalTime value={a.lastSignInAt} /> : MORE.never),
-						},
-					]}
-				/>
-			</Page>
-			<InviteDrawer
-				open={inviting}
-				onClose={() => setInviting(false)}
-				onInvited={(invite, copy) => void invited(invite, copy)}
-			/>
-			<InviteLink link={link} onClose={() => setLink(null)} />
-		</>
-	);
-}
-
-/**
- * An admin's page: the header and one part of it at a time, each part its own address.
- * @param {{ props: any, adminId: string, section: string }} input
- */
-function AdminPage({ props, adminId, section }) {
-	const toast = useToast();
-	const nav = useNavigation();
-	const { data, reload } = useResource(adminApi.admins(), { items: props.items });
 	const [dialog, setDialog] = useState(/** @type {null | 'email' | 'role' | 'twoStep' | 'remove' | 'copy'} */ (null));
-	// the password dialog over the email or role drawer (the other changes open it straight away)
 	const [asking, setAsking] = useState(false);
 	const [email, setEmail] = useState('');
 	const [role, setRole] = useState('support');
@@ -276,27 +233,19 @@ function AdminPage({ props, adminId, section }) {
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const emailForm = useId();
 	const roleForm = useId();
-	const activity = usePagedList((cursor) => adminApi.activity({ adminId, cursor }), props.activity);
-	const activityPages = useListPages(activity);
-	const me = props.me;
-	const items = /** @type {any[]} */ (data.items ?? []);
-	const current = items.find((a) => a.adminId === adminId) ?? null;
-	const part = ADMIN_PARTS.includes(section) ? section : 'details';
-	const adminsCrumb = { label: ADMIN.adminsTitle, href: adminRoutes.admins() };
-	if (!current)
-		return (
-			<Page linkAs={Link} crumbs={[adminsCrumb, { label: ADMIN.adminTitle }]} error={ADMIN.adminGone}>
-				{null}
-			</Page>
-		);
-	const title = current.name ?? current.email;
 
-	// mailing the invite again needs no password (the link is not shown); copying it, and every other change here, does
+	const adminId = String(current.adminId);
+	const activity = useActivityList(activityInitial, adminId);
+	const title = current.name ?? current.email;
+	const self = adminId === me?.adminId;
+	const adminsCrumb = { label: ADMIN.adminsTitle, href: adminRoutes.admins() };
+
 	const resend = async () => {
 		const result = await apiFetch(adminApi.adminInvite(adminId), { method: 'POST', body: { copy: false } });
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 		else toast.show({ title: result.data?.mailed ? ADMIN.inviteMailed : ADMIN.inviteNotMailed });
 	};
+
 	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
 	const send = async (confirmation) => {
 		setProblem(null);
@@ -319,13 +268,15 @@ function AdminPage({ props, adminId, section }) {
 		}
 		return result;
 	};
+
 	const done = async () => {
 		const removed = dialog === 'remove';
 		setAsking(false);
 		setDialog(null);
 		if (removed) nav.go(adminRoutes.admins());
-		else await reload();
+		else await onReload();
 	};
+
 	/** @param {'email' | 'role' | 'twoStep' | 'remove' | 'copy'} kind */
 	const open = (kind) => {
 		setProblem(null);
@@ -334,7 +285,6 @@ function AdminPage({ props, adminId, section }) {
 		setDialog(kind);
 	};
 
-	const self = adminId === me?.adminId;
 	/** @type {Array<{ label: string, onSelect: () => void, danger?: boolean }>} */
 	const actionList = [
 		...(current.status === 'invited'
@@ -352,89 +302,97 @@ function AdminPage({ props, adminId, section }) {
 					{ label: ADMIN.remove, onSelect: () => open('remove'), danger: true },
 				]),
 	];
-	// the first two actions are buttons; the rest (Remove always) sit in the More menu
 	const buttons = actionList.filter((a) => !a.danger).slice(0, 2);
 	const more = actionList.filter((a) => !buttons.includes(a));
-	const bodies = {
-		details: (
-			<div className="space-y-4">
-				<Card title={MORE.detailsTitle}>
-					<KeyValueList
-						columns={3}
-						items={[
-							{ label: ADMIN.adminColumns.email, value: self ? `${current.email} · ${ADMIN.you}` : current.email },
-							{ label: ADMIN.adminColumns.role, value: roleName(current.role) },
-							{
-								label: ADMIN.twoStepColumn,
-								value: current.twoStep?.enabled ? MORE.twoStepOn(current.twoStep.recoveryCodesLeft ?? 0) : TWO_STEP.off,
-							},
-							{
-								label: ADMIN.columns.lastSignIn,
-								value: current.lastSignInAt ? <LocalTime value={current.lastSignInAt} /> : MORE.never,
-							},
-							{ label: MORE.added, value: <LocalTime value={current.createdAt} /> },
-						]}
+
+	const sections = [
+		{
+			id: 'details',
+			label: MORE.detailsTitle,
+			body: (
+				<div className="space-y-4">
+					<Card title={MORE.detailsTitle}>
+						<KeyValueList
+							columns={3}
+							items={[
+								{ label: ADMIN.adminColumns.email, value: self ? `${current.email} · ${ADMIN.you}` : current.email },
+								{ label: ADMIN.adminColumns.role, value: roleName(current.role) },
+								{
+									label: ADMIN.twoStepColumn,
+									value: current.twoStep?.enabled
+										? MORE.twoStepOn(current.twoStep.recoveryCodesLeft ?? 0)
+										: TWO_STEP.off,
+								},
+								{
+									label: ADMIN.columns.lastSignIn,
+									value: current.lastSignInAt ? <LocalTime value={current.lastSignInAt} /> : MORE.never,
+								},
+								{ label: MORE.added, value: <LocalTime value={current.createdAt} /> },
+							]}
+						/>
+					</Card>
+					<Card title={MORE.rightsTitle} subtitle={roleName(current.role)}>
+						<ul className="list-disc space-y-1.5 pl-5 text-sm text-fg marker:text-primary">
+							{(MORE.rights[/** @type {'owner'} */ (current.role)] ?? []).map((line) => (
+								<li key={line}>{line}</li>
+							))}
+						</ul>
+					</Card>
+				</div>
+			),
+		},
+		{
+			id: 'activity',
+			label: ADMIN.recentActivity,
+			body: (
+				<Card title={ADMIN.recentActivity}>
+					{activity.problem ? (
+						<div className="mb-4">
+							<Callout tone="danger">{describeProblem(activity.problem)}</Callout>
+						</div>
+					) : null}
+					<ActivityTable
+						items={activity.items}
+						caption={ADMIN.activityTitle}
+						empty={MORE.noActivity}
+						showMerchant
+						details
+						filterHref={(q) => adminRoutes.activity(q)}
 					/>
+					{activity.cursor ? (
+						<div className="flex justify-center pt-3">
+							<Button variant="secondary" size="sm" loading={activity.loading} onClick={() => void activity.more()}>
+								{MORE.showMore}
+							</Button>
+						</div>
+					) : null}
 				</Card>
-				<Card title={MORE.rightsTitle} subtitle={roleName(current.role)}>
-					<ul className="list-disc space-y-1.5 pl-5 text-sm text-fg marker:text-primary">
-						{(MORE.rights[/** @type {'owner'} */ (current.role)] ?? []).map((line) => (
-							<li key={line}>{line}</li>
-						))}
-					</ul>
-				</Card>
-			</div>
-		),
-		activity: (
-			<>
-				{activity.problem ? (
-					<div className="p-4">
-						<Callout tone="danger">{describeProblem(activity.problem)}</Callout>
-					</div>
-				) : null}
-				<ActivityTable
-					items={activityPages.rows}
-					caption={ADMIN.activityTitle}
-					empty={MORE.noActivity}
-					showMerchant
-					details
-					filterHref={(q) => adminRoutes.activity(q)}
-				/>
-			</>
-		),
-	};
+			),
+		},
+	];
+
 	return (
 		<>
 			<Page
+				flush
 				linkAs={Link}
-				flush={part === 'activity'}
-				bodyKey={part}
+				list={list ?? undefined}
 				crumbs={[adminsCrumb, { label: title }]}
 				status={[statusPill(current)]}
-				facts={[{ label: ADMIN.adminColumns.role, value: roleName(current.role) }]}
+				facts={[
+					{ label: ADMIN.adminColumns.role, value: roleName(current.role) },
+					...(current.lastSignInAt
+						? [{ label: ADMIN.columns.lastSignIn, value: <LocalTime value={current.lastSignInAt} /> }]
+						: []),
+				]}
 				info={ADMIN.adminInfo}
 				actions={{
+					...(onInvite ? { primary: { label: ADMIN.invite, icon: 'plus', onClick: onInvite } } : {}),
 					...(buttons.length > 0 ? { secondary: buttons.map((a) => ({ label: a.label, onClick: a.onSelect })) } : {}),
-					more: [
-						...more,
-						...(part === 'activity'
-							? [{ label: MORE.openInActivity, onSelect: () => nav.go(adminRoutes.activity({ adminId })) }]
-							: []),
-					],
+					more: [...more, { label: MORE.openInActivity, onSelect: () => nav.go(adminRoutes.activity({ adminId })) }],
 				}}
-				nav={{
-					value: part,
-					label: ADMIN.adminParts,
-					items: [
-						{ id: 'details', label: MORE.detailsTitle },
-						{ id: 'activity', label: ADMIN.recentActivity },
-					].map((item) => ({ ...item, href: adminRoutes.adminPart(adminId, item.id) })),
-				}}
-				{...(part === 'activity' && activityPages.pagination
-					? { footer: <Pagination {...activityPages.pagination} /> }
-					: {})}>
-				{bodies[/** @type {keyof typeof bodies} */ (part)]}
-			</Page>
+				sections={sections}
+			/>
 			<Drawer
 				open={dialog === 'email'}
 				onClose={() => setDialog(null)}
@@ -517,13 +475,159 @@ function AdminPage({ props, adminId, section }) {
 }
 
 /**
- * The Admins pages: the list, or (with `selectedId`) one admin's page and its `section`.
- * @param {any} props loader result of `loadAdmins` (the list) or `loadAdmin` (an admin's page, with `activity` on the
- *   Activity part) plus `selectedId` and `section`
+ * Admins screen: ListColumn on left, selected admin page on right.
+ * @param {{
+ *   items: any[],
+ *   me: any,
+ *   admin?: any,
+ *   selectedId?: string | null,
+ *   fromList?: boolean,
+ *   activity?: any,
+ *   reload: () => Promise<any>,
+ * }} props
+ */
+function AdminsScreen({ items, me, admin, selectedId: explicitId, fromList, activity, reload }) {
+	const toast = useToast();
+	const nav = useNavigation();
+	const phone = usePhone();
+	const [inviting, setInviting] = useState(false);
+	const [link, setLink] = useState(/** @type {string | null} */ (null));
+	const [query, setQuery] = useState('');
+	const [roleFilter, setRoleFilter] = useState('all');
+
+	const canManage = adminCan(admin ?? me, 'admins.manage');
+	const adminsCrumb = { label: ADMIN.adminsTitle, href: adminRoutes.admins() };
+
+	const filteredItems = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		return items.filter((a) => {
+			if (roleFilter !== 'all' && a.role !== roleFilter) return false;
+			if (!q) return true;
+			const name = (a.name ?? '').toLowerCase();
+			const email = (a.email ?? '').toLowerCase();
+			return name.includes(q) || email.includes(q);
+		});
+	}, [items, query, roleFilter]);
+
+	const selectedId = explicitId ?? (fromList ? (phone ? null : items[0]?.adminId ? String(items[0].adminId) : null) : null);
+	const current = selectedId ? (items.find((a) => String(a.adminId) === String(selectedId)) ?? null) : null;
+
+	const onInvited = async (/** @type {any} */ invite, /** @type {boolean} */ copy) => {
+		setInviting(false);
+		if (copy) setLink(invite?.link ?? null);
+		else toast.show({ title: invite?.mailed ? ADMIN.inviteMailed : ADMIN.inviteNotMailed });
+		await reload();
+	};
+
+	const listColumn = (
+		<ListColumn
+			label={ADMIN.adminsTitle}
+			items={filteredItems}
+			idOf={(a) => String(a.adminId)}
+			selected={selectedId}
+			onBack={() => nav.go(adminRoutes.admins())}
+			search={{
+				value: query,
+				placeholder: ADMIN.searchAdmins,
+				onChange: setQuery,
+			}}
+			filters={{
+				value: roleFilter,
+				onChange: setRoleFilter,
+				options: [{ id: 'all', label: MORE.allRoles }, ...ROLE_OPTIONS.map((r) => ({ id: r.value, label: r.label }))],
+			}}
+			rowOf={(a) => ({
+				lead: { avatar: a.name ?? a.email },
+				title: a.adminId === me?.adminId ? `${a.name ?? a.email} (${ADMIN.you})` : (a.name ?? a.email),
+				status:
+					a.status === 'invited'
+						? { tone: /** @type {const} */ ('accent'), label: ADMIN.invited }
+						: a.twoStep?.enabled
+							? {
+									tone: /** @type {const} */ ('success'),
+									label: `Two-step on · ${a.twoStep.recoveryCodesLeft ?? 0} codes`,
+								}
+							: { tone: /** @type {const} */ ('neutral'), label: 'Two-step off' },
+				meta: [roleName(a.role)].filter(Boolean),
+				time: a.lastSignInAt ? <LocalTime value={a.lastSignInAt} /> : null,
+				href: adminRoutes.admin(a.adminId),
+				linkAs: Link,
+			})}
+			empty={{
+				icon: 'shield',
+				kind: 'admin',
+				title: ADMIN.noAdmins,
+			}}
+		/>
+	);
+
+	if (selectedId && !current) {
+		return (
+			<Page linkAs={Link} crumbs={[adminsCrumb, { label: ADMIN.adminTitle }]} error={ADMIN.adminGone}>
+				{null}
+			</Page>
+		);
+	}
+
+	if (current) {
+		return (
+			<>
+				<AdminPageView
+					current={current}
+					me={me}
+					list={listColumn}
+					activityInitial={activity}
+					onReload={reload}
+					onInvite={canManage ? () => setInviting(true) : undefined}
+				/>
+				<InviteDrawer open={inviting} onClose={() => setInviting(false)} onInvited={onInvited} />
+				<InviteLink link={link} onClose={() => setLink(null)} />
+			</>
+		);
+	}
+
+	return (
+		<>
+			<Page
+				flush
+				crumbs={[{ label: ADMIN.adminsTitle }]}
+				info={ADMIN.adminsInfo}
+				linkAs={Link}
+				list={items.length > 0 ? listColumn : undefined}
+				actions={canManage ? { primary: { label: ADMIN.invite, icon: 'plus', onClick: () => setInviting(true) } } : {}}>
+				{items.length === 0 ? <EmptyState compact icon="shield" kind="admin" title={ADMIN.noAdmins} /> : <></>}
+			</Page>
+			<InviteDrawer open={inviting} onClose={() => setInviting(false)} onInvited={onInvited} />
+			<InviteLink link={link} onClose={() => setLink(null)} />
+		</>
+	);
+}
+
+/**
+ * The Admins view: the list beside the selected admin's page.
+ * @param {any} props loader result of `loadAdmins` or `loadAdmin`
  */
 export function AdminsView(props) {
-	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
-	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
-	if (selectedId) return <AdminPage key={selectedId} props={props} adminId={selectedId} section={props.section ?? 'details'} />;
-	return <AdminsPage props={props} />;
+	if (props.ok === false) return <AdminProblem problem={props.problem} />;
+	const { data, reload } = useResource(adminApi.admins(), { items: props.items ?? [] });
+	const items = /** @type {any[]} */ (data.items ?? props.items ?? []);
+	const me = props.me ?? props.admin;
+	const selectedId =
+		typeof props.selectedId === 'string'
+			? props.selectedId
+			: typeof props.detail?.adminId === 'string'
+				? props.detail.adminId
+				: null;
+
+	return (
+		<AdminsScreen
+			items={items}
+			me={me}
+			admin={props.admin ?? me}
+			selectedId={selectedId}
+			fromList={Boolean(props.fromList)}
+			activity={props.activity}
+			reload={reload}
+		/>
+	);
 }

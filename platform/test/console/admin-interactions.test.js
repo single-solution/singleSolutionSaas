@@ -605,6 +605,8 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		await press('Copy invite link');
+		await pressInDialog('Cancel');
+		await press('Copy invite link');
 		await confirmWithPassword('Copy invite link');
 		await until(() => shows('Copy this link now.'));
 		await act(async () => {
@@ -628,6 +630,8 @@ describe('admin console interactions (jsdom)', () => {
 		await settle(2);
 		// the role drawer and its password dialog are gone before the menu opens the next one
 		await until(() => !document.querySelector('[role="dialog"]'));
+		await choose('Remove');
+		await pressInDialog('Cancel');
 		await choose('Remove');
 		await confirmWithPassword('Remove');
 		await until(() =>

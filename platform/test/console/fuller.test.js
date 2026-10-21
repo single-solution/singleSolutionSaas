@@ -203,15 +203,15 @@ describe('fuller Portal screens (jsdom)', () => {
 			const products = await admin.loadProducts(ownerBrowser.api, {});
 			if (!products.ok) throw new Error('products');
 			withToasts(<ProductsView {...products} admin={owner} />);
-			await pressMenu('Sort', 'Credits this month');
-			await pressMenu('Sort', 'Websites');
+			await press('Active');
+			await press('All');
 			cleanup();
 			const oneProduct = await admin.loadProduct(ownerBrowser.api, String(products.items[0]?.productId));
 			if (!oneProduct.ok) throw new Error('product');
 			const baseUrl = String(oneProduct.product.baseUrl);
 			withToasts(<ProductsView detail={oneProduct} section="features" admin={owner} />);
 			expect(shows('Notes inbox')).toBe(true);
-			expect(document.querySelector(`a[href$="/connection"]`)).not.toBeNull();
+			expect(document.querySelector('#connection')).not.toBeNull();
 			cleanup();
 			withToasts(<ProductsView detail={oneProduct} section="connection" admin={owner} />);
 			expect(shows('Version 5') && shows(`${baseUrl}/docs`)).toBe(true);
@@ -282,20 +282,20 @@ describe('fuller Portal screens (jsdom)', () => {
 			await world.adminOf('support');
 			const admins = await admin.loadAdmins(ownerBrowser.api, owner);
 			withToasts(<AdminsView {...admins} />);
-			// the list is a table; the role filter keeps one role
+			// the list is rows; the role filter keeps one role
 			expect(shows('support admin')).toBe(true);
-			await pressMenu('Role', 'Owner');
+			await press('Owner');
 			expect(shows('support admin')).toBe(false);
-			await pressMenu('Role', 'Support');
+			await press('Support');
 			expect(shows('support admin')).toBe(true);
 			cleanup();
 			// one admin's page: the details and what the role can do, then the Activity part
 			const own = await admin.loadAdmin(ownerBrowser.api, owner, owner.adminId);
 			withToasts(<AdminsView {...own} selectedId={owner.adminId} />);
 			expect(shows('What this role can do') && shows('Everything in the Portal')).toBe(true);
-			expect(document.querySelector(`nav a[href="/admin/admins/${owner.adminId}/activity"]`)).not.toBeNull();
+			expect(document.querySelector('#activity')).not.toBeNull();
 			cleanup();
-			const ownActivity = await admin.loadAdmin(ownerBrowser.api, owner, owner.adminId, 'activity');
+			const ownActivity = await admin.loadAdmin(ownerBrowser.api, owner, owner.adminId);
 			withToasts(<AdminsView {...ownActivity} selectedId={owner.adminId} section="activity" />);
 			expect(document.querySelectorAll('[data-ss-row]').length).toBeGreaterThan(0);
 			await pressMenu('More actions', 'Open in Activity');

@@ -87,6 +87,10 @@ describe('admin Products (jsdom)', () => {
 
 			await press('Add product');
 			expect(shows('New products start inactive.')).toBe(true);
+			await pressDialog('Cancel');
+			await until(() => !shows('New products start inactive.'));
+			await press('Add product');
+			expect(shows('New products start inactive.')).toBe(true);
 			await pressDialog('Connect');
 			expect(shows('Enter the product URL.') && shows('Enter the connect secret.')).toBe(true);
 			// a secret too short, then a refused one
@@ -149,9 +153,10 @@ describe('admin Products (jsdom)', () => {
 			/** @param {Record<string, unknown>} [over] the product's loader result, changed */
 			const screen = (over = {}) => <ProductsView detail={{ ...loaded, ...over }} admin={owner} />;
 			withToasts(screen());
-			expect(document.querySelector('nav[aria-label="Product sections"] a[aria-current="page"]')?.textContent).toContain(
-				'Websites using it',
-			);
+			expect(shows('Websites using it')).toBe(true);
+			expect(document.querySelector('#websites')).not.toBeNull();
+			expect(document.querySelector('#features')).not.toBeNull();
+			expect(document.querySelector('#connection')).not.toBeNull();
 			expect(shows('Earned this month') && shows('Websites')).toBe(true);
 
 			// Open as admin: Defaults, no website picked
@@ -172,6 +177,10 @@ describe('admin Products (jsdom)', () => {
 			await until(() => shows('The product is active'));
 
 			// Reconnect (in the header's More menu): the secret is required; a wrong one is refused; the same id reconnects
+			await pressMenu('More actions', 'Reconnect');
+			expect(shows('New product URL (optional)')).toBe(true);
+			await pressDialog('Cancel');
+			await until(() => !shows('New product URL (optional)'));
 			await pressMenu('More actions', 'Reconnect');
 			expect(shows('New product URL (optional)')).toBe(true);
 			await pressDialog('Reconnect');
