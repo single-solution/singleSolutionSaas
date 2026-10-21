@@ -584,7 +584,7 @@ export function PricesTab() {
 							id: `prices-${slug(category.title)}`,
 							label: category.title,
 							group: texts.prices.hourly,
-							...(changed > 0 ? { badge: changed } : {}),
+							...(changed > 0 ? { badge: changed, changed: true } : {}),
 							content: (
 								<SettingsCard wide>
 									<SettingList>

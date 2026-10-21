@@ -1433,7 +1433,7 @@ describe('standard tabs', () => {
 		type(byLabel(container, 'Notes'), '1.5');
 		expect(container.textContent).toContain('You have unsaved prices');
 		// the category with a price not saved yet says how many in the sidebar
-		expect(navLinks(container)).toEqual(['Writing1', 'Reading', TEXTS.reseal.title, 'Recent changes']);
+		expect(navLinks(container)).toEqual(['WritingChanged1', 'Reading', TEXTS.reseal.title, 'Recent changes']);
 		openSection(container, 'prices-reading');
 		expect(crumbsOf(container)).toEqual(['Notes', 'Prices', 'Reading']);
 		type(byLabel(container, 'Inbox'), 'lots');

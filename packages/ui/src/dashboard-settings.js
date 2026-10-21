@@ -307,6 +307,7 @@ export function featureSections({ features, editor, savedSource, dash, notice, e
 				id: key,
 				label: feature.name,
 				group: category.title,
+				...(Object.keys(editor.edits[key] ?? {}).length > 0 ? { changed: true } : {}),
 				...(own.off ? {} : { info: description }),
 				...own.row,
 			};
@@ -514,6 +515,7 @@ export function textSections({ items, editor, savedSource, dash, group }) {
 		id: `text-${entry.id || 'other'}`,
 		label: entry.label,
 		...(group ? { group } : {}),
+		...(entry.items.some((text) => text.key in editor.edits) ? { changed: true } : {}),
 		meta: [
 			entry.items.length === 1 ? T.countOne : fill(T.count, { count: entry.items.length }),
 			fill(T.changed, { count: entry.items.filter((text) => isChanged(text, savedSource)).length }),

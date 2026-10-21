@@ -15,7 +15,12 @@ afterEach(() => {
 	window.history.replaceState(null, '', '/');
 });
 
-const MANIFEST = { features: [{ key: 'notes', name: 'Notes', description: 'Keep notes.', dependsOn: [] }] };
+const MANIFEST = {
+	features: [
+		{ key: 'notes', name: 'Notes', description: 'Keep notes.', dependsOn: [] },
+		{ key: 'inbox', name: 'Inbox', description: 'Read them.', dependsOn: [] },
+	],
+};
 const TEXTS = dashboardTexts({ title: 'Notes' });
 const SCHEMA = {
 	type: 'object',
@@ -24,7 +29,10 @@ const SCHEMA = {
 		flags: { type: 'array', title: 'Flags', items: { type: 'boolean' } },
 	},
 };
-const CATALOG = [{ key: 'notes', name: 'Notes', description: 'Keep notes.', dependsOn: [], millicreditsPerHour: 1000, on: true }];
+const CATALOG = [
+	{ key: 'notes', name: 'Notes', description: 'Keep notes.', dependsOn: [], millicreditsPerHour: 1000, on: true },
+	{ key: 'inbox', name: 'Inbox', description: 'Read them.', dependsOn: [], millicreditsPerHour: 500, on: true },
+];
 
 /** What the fake product holds for the settings of the website, changed by the saves. */
 let saved = { greeting: 'Hi', flags: [true] };
@@ -301,5 +309,28 @@ describe('after Save the old texts and prices never flash either (179)', () => {
 		await act(async () => held[0]?.());
 		await settle();
 		expect(byLabel(container, 'Notes').value).toBe('2');
+	});
+});
+
+describe('rows with unsaved changes are marked (KP-1a left over)', () => {
+	/** The rows of the list that carry the word "Changed". @param {ParentNode} root */
+	const markedRows = (root) =>
+		[...root.querySelectorAll('[role="option"]')]
+			.filter((row) => row.querySelector('[data-ss-changed]'))
+			.map((row) => row.getAttribute('data-ss-id'));
+
+	it('Settings: the row of a feature with edits says Changed, in words, until Save or Discard', async () => {
+		const id = freshSite();
+		const { container } = await openSettings(id);
+		expect(markedRows(container)).toEqual([]);
+		type(byLabel(container, 'Greeting'), 'Mine');
+		expect(markedRows(container)).toEqual(['notes']);
+		expect(container.querySelector('[role="option"][data-ss-id="notes"]')?.textContent).toContain('Changed');
+		await act(async () => buttonsOf(container, 'Discard')[0]?.click());
+		expect(markedRows(container)).toEqual([]);
+		type(byLabel(container, 'Greeting'), 'Again');
+		await act(async () => buttonsOf(container, 'Save changes')[0]?.click());
+		await settle();
+		expect(markedRows(container)).toEqual([]);
 	});
 });

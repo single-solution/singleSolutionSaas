@@ -42,13 +42,14 @@ import { TOOLBAR_TEXTS } from './Toolbar.js';
  * `statusLabel`) the dot after it, `badge` the value at the right, `meta` the muted line under the title (a string, or
  * several joined with " · "), `locked` a lock at the end (the page is still opened: it explains what the feature
  * does); `trailing` is a control at the very end (a switch: a click on it never opens the row) and `warning` a line
- * in its color in place of `meta` (what blocks the thing); `group` lists it under that chip of the list. What the open view says about itself goes in the page's header:
+ * in its color in place of `meta` (what blocks the thing); `changed`: the view has unsaved changes (its row says
+ * "Changed" in words); `group` lists it under that chip of the list. What the open view says about itself goes in the page's header:
  * `info` (the old description, behind the (i)), `facts`, `pills` and `actions`; `flush` gives its body no padding (a
  * table uses all of it); `toolbar` and `footer` are the ones of this view (a search above its table, the pages below
  * it), shown while it is open. A section with parts takes these from itself, else from its first part.
  * @typedef {Omit<BaseSpec, 'children'> & { info?: ReactNode, facts?: PageFact[], pills?: PageStatus[],
  *   actions?: PageActions, toolbar?: ReactNode, footer?: ReactNode, flush?: boolean, locked?: boolean,
- *   meta?: string | string[], trailing?: ReactNode, warning?: NonNullable<RowLook['warning']>, children?: Section[] }} Section
+ *   changed?: boolean, meta?: string | string[], trailing?: ReactNode, warning?: NonNullable<RowLook['warning']>, children?: Section[] }} Section
  */
 
 /** The frame of the dashboard around a tab; none when a tab is drawn on its own. */
@@ -237,6 +238,7 @@ const ROW_TONES = { attention: 'warning', warning: 'warning', success: 'success'
 const rowOf = (spec, { locked, open }) => ({
 	...(spec.icon ? { lead: { icon: spec.icon } } : {}),
 	title: spec.label,
+	...(spec.changed ? { changed: true } : {}),
 	...(spec.status ? { status: { tone: ROW_TONES[spec.status] ?? 'neutral', label: spec.statusLabel ?? '' } } : {}),
 	...(spec.badge !== undefined && spec.badge !== null ? { value: spec.badge } : {}),
 	...(spec.meta && spec.meta.length > 0 ? { meta: spec.meta } : {}),
