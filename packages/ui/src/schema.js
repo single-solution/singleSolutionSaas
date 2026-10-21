@@ -6,7 +6,7 @@
  *
  * `x-ui`: `widget` (switch|number|text|textarea|select|segmented|radio|url|email|checkboxes|tags; one that does not fit
  * the type is ignored), `group` (the card the setting is shown in; settings without one share the feature's own card),
- * `advanced` (the setting sits in the collapsed Advanced block; so does every setting of a group named Advanced),
+ * `advanced` (the setting sits in the Advanced section at the end of the page; so does every setting of a group named Advanced),
  * `order` (a whole number: the settings with an `order` come first, ascending), `placeholder`, `labels` (`country`, or each choice's own words: labels are data, fixed-choices
  * audit K3), `suggestions` (values a text or a list of texts offers while the merchant may type their own), `generate`
  * (a text gets a Generate button that fills in a new random key of that many characters), `defaultFrom` (the setting
@@ -63,7 +63,7 @@ import { humanize } from './format.js';
  * @property {boolean} wide spans the whole row of the field grid
  * @property {number | null} order the setting's `x-ui.order`
  * @property {boolean} grouped whether the setting names its own `x-ui.group`
- * @property {boolean} advanced the setting belongs in the collapsed Advanced block (`x-ui.advanced`, or a group named
+ * @property {boolean} advanced the setting belongs in the Advanced section (`x-ui.advanced`, or a group named
  *   Advanced)
  */
 

@@ -285,7 +285,7 @@ describe('a product dashboard Overview', () => {
 		expect(suspended.text).toContain('until the merchant is resumed in the Portal');
 	});
 
-	it('with no feature on, says so and opens Features; the setup starts there', () => {
+	it('with no feature on, says so and opens Settings, where the features are; the setup starts there', () => {
 		const data = answer({
 			featuresOn: [],
 			checklist: { connections: [], widget: null, website: { version: 3, requires: [], missing: [] } },
@@ -305,7 +305,7 @@ describe('a product dashboard Overview', () => {
 				'button',
 			),
 		);
-		expect(open.mock.calls).toEqual([['features'], ['features']]);
+		expect(open.mock.calls).toEqual([['settings'], ['settings']]);
 	});
 
 	it('prints UTC on the server and in the first render', () => {

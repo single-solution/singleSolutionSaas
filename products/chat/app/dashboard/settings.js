@@ -144,7 +144,7 @@ const extrasOf = (websiteId) => ({
 	moderation: <RedactionPatternsEditor websiteId={websiteId} off={false} />,
 });
 
-/** @param {import('@ss/ui/dashboard').TabProps} props */
+/** @param {import('@ss/ui/dashboard').TabProps & { warnings?: (on: string[]) => string[] }} props */
 export function SettingsTab(props) {
 	return <SharedSettingsTab {...props} notice={aiLabelNotice} extras={extrasOf(String(props.websiteId))} />;
 }

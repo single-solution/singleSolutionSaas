@@ -6,29 +6,31 @@
  * settings lists and notices, connection forms and hints, developer sections) or replaces a tab with its own, built
  * from the shared pieces.
  *
- * Every tab with more than a couple of cards has an inner sidebar and shows ONE view at a time (owner 2026-10-16: no
- * long scrolls): Features by category, Settings by feature (grouped by category), Texts by screen or widget,
- * Connections one per connection, Developers and Prices by section. The look, the Format and the business facts are not
+ * Every tab with more than a couple of cards is a list of rich rows beside the page, which shows the picked row
+ * (owner 2026-10-21): Settings has every feature (grouped by category, with its switch; there is no Features tab),
+ * Texts a screen or widget, Connections one per connection, Developers and Prices a section. The look, the Format and the business facts are not
  * here: they are the Portal's Website settings, and what a product needs of them shows on its Overview.
  * @module
  */
 import { useState } from 'react';
-import { Button, ButtonLink } from './Button.js';
+import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Callout, Card, EmptyState, ManagedNote, StatusPill, TextLink } from './display.js';
+import { Card, EmptyState, ManagedNote, TextLink } from './display.js';
 import { DataTable } from './DataTable.js';
 import { SaveBar, SettingList, SettingsCard } from './blocks.js';
-import { Input, Switch } from './fields.js';
+import { Input } from './fields.js';
+import { NextStep } from './NextStep.js';
 import { ConfirmDialog } from './overlay.js';
 import { ChangesTable, OverviewSkeleton, ProductOverview } from './overview.js';
 import { usePaged } from './paged.js';
 import { Pagination } from './Pagination.js';
 import { Toolbar } from './Toolbar.js';
-import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
+import { formatCreditsPerHour, parseCredits } from './format.js';
 import { useDisplayLocale } from './time.js';
 import { call, fill, useLoad } from './dashboard-api.js';
+import { featureLooks, useFeatureSwitches } from './dashboard-features.js';
 import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
-import { Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
+import { Outcome, ResealCard, toneOf, useDashboard } from './dashboard-parts.js';
 import {
 	SettingsBar,
 	TextsTable,
@@ -115,260 +117,47 @@ export function OverviewTab(props) {
 }
 
 /**
- * Features: a page whose inner navigation lists the categories (most used first, each with how many are on, a dot when
- * a feature that is on needs a connection, a lock when a merchant has none on); the sub-page is one category's features
- * as a table with their price, what each needs and its switch; admins switch them (switching one off switches off the
- * features that need it) and confirm the new hourly cost. `warnings` gives the product's warnings for the features
- * picked (shown above the table and in the confirmation).
- * @param {TabProps & { warnings?: (on: string[]) => string[] }} props
+ * Settings (owner 2026-10-21: the Features tab is folded in): the list beside the page has a row for EVERY feature,
+ * grouped by category (the chips), with its switch for Owner and Support (switching one off switches off the features
+ * that need it, after a confirmation with the new hourly cost), its price, how many settings the website changed and
+ * what blocks it. The page of a feature that is on is its settings, all open, with one save bar; the page of one
+ * that is off says what it is and how to switch it on (a merchant is told to ask support). The product adds under a
+ * feature (`extras`: a node under its settings, or `{ items }`, views of their own such as list editors), its own
+ * `sections` after the features (not tied to a feature), a `notice` above a feature's cards and its `warnings` for
+ * the features that are on (rules between features, shown in the confirmation of a switch and above the page).
+ * @param {TabProps & { sections?: SectionSpec[], notice?: SettingsNotice, extras?: Record<string, FeatureExtra>,
+ *   warnings?: (on: string[]) => string[] }} props
  */
-export function FeaturesTab({ websiteId, merchantId, who, portal, support, warnings, open, brand }) {
-	const { texts, namesOf, byCategory } = useDashboard();
-	const locale = useDisplayLocale();
-	const F = texts.features;
-	const base = `/v1/dashboard/websites/${websiteId}`;
-	const { answer, reload } = useLoad(`${base}/features`);
-	const connections = useLoad(`${base}/connections`);
-	const [picked, setPicked] = useState(/** @type {string[] | null} */ (null));
-	const [confirming, setConfirming] = useState(false);
-	const [busy, setBusy] = useState(false);
-	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
-	const admin = who.kind === 'admin';
-	return (
-		<LoadedPage answer={answer} tab="features" withNav>
-			{(data) => {
-				/** @type {Feature[]} */
-				const features = data.features;
-				const saved = features.filter((feature) => feature.on).map((feature) => feature.key);
-				const on = picked ?? saved;
-				const turnedOff = saved.filter((key) => !on.includes(key));
-				const changed = on.length !== saved.length || on.some((key) => !saved.includes(key));
-				const cost = features.reduce((sum, feature) => sum + (on.includes(feature.key) ? feature.millicreditsPerHour : 0), 0);
-				/** @type {Connection[]} */
-				const links = connections.answer?.ok ? connections.answer.data.connections : [];
-				const warned = warnings ? warnings(on) : [];
-				const byKey = new Map(features.map((feature) => [feature.key, feature]));
-				/** @param {Feature} feature */
-				const brokenOf = (feature) =>
-					feature.on ? links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected') : [];
-				/** @param {Feature} feature @param {boolean} checked */
-				const toggle = (feature, checked) => {
-					const off = withDependents(features, on, feature.key);
-					setPicked(checked ? [...on, feature.key] : on.filter((key) => !off.has(key)));
-				};
-				const helpOf = fill(F.lockedHelp, { portal: brand || 'Single Solution' });
-				/** @type {import('./DataTable.js').DataColumn<Feature>[]} */
-				const columns = [
-					{ key: 'name', header: F.columns.feature, sortable: true },
-					{
-						key: 'description',
-						header: F.columns.description,
-						low: true,
-						wrap: true,
-						className: 'min-w-64 max-w-md text-muted',
-					},
-					{ key: 'needs', header: F.columns.needs, low: true, render: (feature) => namesOf(feature.dependsOn) },
-					{
-						key: 'millicreditsPerHour',
-						header: F.columns.price,
-						kind: 'money',
-						sortable: true,
-						render: (feature) => formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
-					},
-					{
-						key: 'docs',
-						header: F.docs,
-						low: true,
-						render: (feature) => <TextLink href={`/docs#feature-${feature.key}`}>{F.docs}</TextLink>,
-					},
-					{
-						key: 'status',
-						header: F.columns.status,
-						kind: 'status',
-						render: (feature) => {
-							// a merchant cannot switch features: an off one shows clearly as locked, with who can
-							if (!admin && !feature.on)
-								return (
-									<StatusPill status="locked" title={helpOf}>
-										{F.locked}
-									</StatusPill>
-								);
-							const broken = brokenOf(feature);
-							if (broken.length === 0) return null;
-							return (
-								<span className="flex items-center gap-2">
-									<StatusPill
-										status="setup"
-										title={broken.map((link) => fill(F.notWorking, { connection: link.label })).join(' · ')}>
-										{F.needsSetup}
-									</StatusPill>
-									{broken.map((link) =>
-										link.managed ? (
-											// the database, the storage and the links are set in the Portal
-											<ButtonLink
-												key={link.name}
-												size="sm"
-												variant="secondary"
-												title={fill(F.notWorking, { connection: link.label })}
-												href={websiteSettingsUrl({
-													portal,
-													admin,
-													websiteId,
-													merchantId,
-													section: link.kind === 'link' ? 'links' : 'connections',
-												})}>
-												{`${F.connect} ${link.label}`}
-											</ButtonLink>
-										) : (
-											<Button
-												key={link.name}
-												size="sm"
-												variant="secondary"
-												title={fill(F.notWorking, { connection: link.label })}
-												// the Connections tab opens on this connection
-												onClick={() => open?.('connections', `connection-${link.name}`)}>
-												{`${F.connect} ${link.label}`}
-											</Button>
-										),
-									)}
-								</span>
-							);
-						},
-					},
-					{
-						key: 'on',
-						header: F.on,
-						kind: 'status',
-						align: 'right',
-						render: (feature) => {
-							const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
-							return (
-								<Switch
-									size="sm"
-									hideLabel
-									label={feature.name}
-									checked={on.includes(feature.key)}
-									locked={!admin}
-									lockedLabel={F.locked}
-									disabled={missing.length > 0 && !on.includes(feature.key)}
-									onChange={(next) => toggle(feature, next)}
-								/>
-							);
-						},
-					},
-				];
-				const notices =
-					admin && warned.length === 0 && !result ? null : (
-						<div className="shrink-0 space-y-3 p-4 sm:p-6 sm:pb-3">
-							{admin ? null : <Callout tone="info">{fill(F.contact, { contact: supportContact(support) })}</Callout>}
-							{warned.map((warning) => (
-								<Callout key={warning} tone="warning">
-									{warning}
-								</Callout>
-							))}
-							<Outcome result={result} />
-						</div>
-					);
-				const sections = byCategory(features.map((feature) => feature.key)).map((category) => {
-					const list = category.keys.map((key) => /** @type {Feature} */ (byKey.get(key)));
-					const count = list.filter((feature) => on.includes(feature.key)).length;
-					const numbers = `${count}/${list.length}`;
-					return {
-						id: `category-${slug(category.title)}`,
-						label: category.title,
-						badge: numbers,
-						...(list.some((feature) => brokenOf(feature).length > 0)
-							? { status: /** @type {const} */ ('attention'), statusLabel: F.needsSetup }
-							: {}),
-						// a merchant with none of a category on: its features are locked
-						...(!admin && count === 0 ? { locked: true } : {}),
-						flush: true,
-						info: fill(F.countOn, { on: count, total: list.length }),
-						facts: [
-							{ label: F.on, value: numbers },
-							{ label: F.cost, value: formatCreditsPerHour(cost, { locale }) },
-						],
-						content: (
-							<>
-								{notices}
-								<DataTable
-									caption={fill(F.caption, { category: category.title })}
-									columns={columns}
-									rows={list}
-									rowKey={(feature) => feature.key}
-									rowLabel={(feature) => feature.name}
-								/>
-							</>
-						),
-					};
-				});
-				return (
-					<>
-						<SectionsPage tab="features" sections={sections} label={texts.tabs.features} />
-						{admin ? (
-							<SaveBar
-								show={changed}
-								onSave={() => setConfirming(true)}
-								onDiscard={() => setPicked(null)}
-								message={F.unsaved}
-								saveLabel={texts.save}
-							/>
-						) : null}
-						<ConfirmDialog
-							open={confirming}
-							busy={busy}
-							title={F.confirmTitle}
-							confirmLabel={texts.save}
-							cancelLabel={texts.cancel}
-							onClose={() => setConfirming(false)}
-							onConfirm={async () => {
-								setBusy(true);
-								const next = await call('PUT', `${base}/features`, { on });
-								setBusy(false);
-								setConfirming(false);
-								setResult(next);
-								if (next.ok) {
-									setPicked(null);
-									reload();
-								}
-							}}>
-							<p>{fill(F.confirmCost, { cost: formatCreditsPerHour(cost, { locale }) })}</p>
-							{turnedOff.length > 0 ? <p>{fill(F.alsoOff, { features: namesOf(turnedOff) })}</p> : null}
-							{warned.map((warning) => (
-								<p key={warning}>{warning}</p>
-							))}
-						</ConfirmDialog>
-					</>
-				);
-			}}
-		</LoadedPage>
-	);
-}
-
-/**
- * Settings: the inner sidebar lists the switched-on features that have settings, grouped by category (a feature that
- * is off, or whose needs are off, is not listed); the view is that feature's settings as cards by group (a feature with
- * many groups lists them as sub-items, its Advanced settings last). The product adds under a feature (`extras`: a node
- * under its settings, or `{ items }`, views of their own such as list editors) and its own `sections` after the features
- * (not tied to a feature), and a `notice` above a feature's cards.
- * @param {TabProps & { sections?: SectionSpec[], notice?: SettingsNotice, extras?: Record<string, FeatureExtra> }} props
- */
-export function SettingsTab({ websiteId, merchantId, who, portal, sections, notice, extras }) {
+export function SettingsTab({ websiteId, merchantId, who, portal, support, open, sections, notice, extras, warnings }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
+	const catalog = useLoad(`${base}/features`);
+	const connections = useLoad(`${base}/connections`);
 	return (
-		<LoadedPage answer={settings.answer} tab="settings" withNav>
+		<LoadedPage answer={bothOf(settings.answer, catalog.answer)} tab="settings" withNav>
 			{(data) => (
 				<SettingsPanel
-					features={data.features}
+					features={data.settings}
+					catalog={data.catalog}
+					links={connections.answer?.ok ? connections.answer.data.connections : []}
 					base={base}
-					reload={settings.reload}
+					who={who}
+					support={support}
+					portal={portal}
+					websiteId={websiteId}
+					merchantId={merchantId ?? null}
+					open={open}
+					reload={() => {
+						settings.reload();
+						catalog.reload();
+					}}
 					portalLink={(section) =>
 						websiteSettingsUrl({ portal, admin: who.kind === 'admin', websiteId, merchantId, section })
 					}
 					{...(sections ? { sections } : {})}
 					{...(notice ? { notice } : {})}
 					{...(extras ? { extras } : {})}
+					{...(warnings ? { warnings } : {})}
 				/>
 			)}
 		</LoadedPage>
@@ -376,29 +165,90 @@ export function SettingsTab({ websiteId, merchantId, who, portal, sections, noti
 }
 
 /**
- * @param {{ features: FeatureSettings[], base: string, reload: () => void, sections?: SectionSpec[],
- *   notice?: SettingsNotice, extras?: Record<string, FeatureExtra>, portalLink: (section: string) => string }} props
+ * The settings and the features of a website as one answer: the features when both are there, the first problem when
+ * one failed (with its Try again), nothing while one is still loading.
+ * @param {Answer | null} settings
+ * @param {Answer | null} catalog
+ * @returns {Answer | null}
  */
-function SettingsPanel({ features, base, reload, sections = [], notice, extras, portalLink }) {
+const bothOf = (settings, catalog) => {
+	if (settings && !settings.ok) return settings;
+	if (catalog && !catalog.ok) return catalog;
+	if (!settings || !catalog) return null;
+	return { ok: true, data: { settings: settings.data.features, catalog: catalog.data.features } };
+};
+
+/**
+ * @param {{ features: FeatureSettings[], catalog: Feature[], links: Connection[], base: string, who: Who,
+ *   support: TabProps['support'], portal: string, websiteId: string | null, merchantId: string | null,
+ *   open?: TabProps['open'], reload: () => void, sections?: SectionSpec[], notice?: SettingsNotice,
+ *   extras?: Record<string, FeatureExtra>, warnings?: (on: string[]) => string[],
+ *   portalLink: (section: string) => string }} props `features`: the settings of the features that have some (a
+ *   merchant's: only of those that are on); `catalog`: every feature
+ */
+function SettingsPanel({
+	features,
+	catalog,
+	links,
+	base,
+	who,
+	support,
+	portal,
+	websiteId,
+	merchantId,
+	open,
+	reload,
+	sections = [],
+	notice,
+	extras,
+	warnings,
+	portalLink,
+}) {
 	const dash = useDashboard();
+	const locale = useDisplayLocale();
+	const F = dash.texts.features;
 	const editor = useSettingsEditor({
 		saveUrl: (key) => `${base}/settings/${encodeURIComponent(key)}`,
 		resetBody: false,
 		reload,
 	});
+	const switches = useFeatureSwitches({ base, catalog, ...(warnings ? { warnings } : {}), reload });
+	// every feature of the product, with its settings when it has some
+	const all = [
+		...catalog.map((feature) => ({
+			...(features.find((entry) => entry.key === feature.key) ?? { schema: null, values: {} }),
+			key: feature.key,
+			name: feature.name,
+			on: Boolean(feature.on),
+		})),
+		...features.filter((entry) => !catalog.some((feature) => feature.key === entry.key)),
+	];
 	const list = [
 		...featureSections({
-			features,
+			features: all,
 			editor,
 			savedSource: 'website',
 			dash,
-			hideOff: true,
 			portalLink,
+			look: featureLooks({
+				catalog,
+				links,
+				who,
+				dash,
+				locale,
+				ask: switches.ask,
+				support,
+				portal,
+				merchantId,
+				websiteId,
+				...(open ? { open } : {}),
+			}),
 			...(notice ? { notice } : {}),
 			...(extras ? { extras } : {}),
 		}),
 		...sections,
 	];
+	const on = catalog.filter((feature) => feature.on).length;
 	return (
 		<>
 			<SectionsPage
@@ -406,9 +256,25 @@ function SettingsPanel({ features, base, reload, sections = [], notice, extras, 
 				label={dash.texts.tabs.settings}
 				sections={list}
 				searchLabel={dash.texts.settings.navSearch}
+				facts={[
+					{ label: F.on, value: on },
+					{ label: F.off, value: catalog.length - on },
+					{ label: F.cost, value: formatCreditsPerHour(switches.cost, { locale }) },
+				]}
+				{...(switches.warned.length > 0
+					? {
+							toolbar: (
+								<NextStep tone="warning" icon="alert" className="min-w-0 flex-1">
+									{switches.warned.join(' ')}
+								</NextStep>
+							),
+						}
+					: {})}
 				empty={<EmptyState icon="sliders" title={dash.texts.settings.nothingOn} />}
 			/>
 			<SettingsBar editor={editor} texts={dash.texts} />
+			<Outcome result={switches.result} />
+			{switches.dialog}
 		</>
 	);
 }

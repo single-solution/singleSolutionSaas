@@ -143,7 +143,7 @@ export function useSetupSteps({ overview, websiteId, open, settings: given }, re
 			done = requirement.done ? requirement.done(value, context) : isFilled(value);
 		} else continue;
 		const detail = requirement.detail?.(value, context);
-		const tab = requirement.tab ?? (requirement.oneOf ? 'features' : 'settings');
+		const tab = requirement.tab ?? 'settings';
 		steps.push({
 			key: requirement.key,
 			label: requirement.label,

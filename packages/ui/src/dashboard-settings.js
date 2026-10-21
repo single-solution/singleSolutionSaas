@@ -1,8 +1,8 @@
 'use client';
 /**
  * The views of the settings tabs, a list of rich rows beside the page (owner 2026-10-21): the section lists of Settings
- * (a row per feature, grouped by category; all of a feature's settings are on its one page, its groups as cards, then
- * Advanced), Texts (a row per screen or widget, each a table whose text opens in a drawer) and Defaults (both). Each
+ * (a row per feature, grouped by category; all of a feature's settings are on its one page, its groups as cards, its
+ * lists, then Advanced, all open), Texts (a row per screen or widget, each a table whose text opens in a drawer) and Defaults (both). Each
  * comes as an editor hook (the unsaved edits and the saves) and a function that builds the sections of a
  * {@link SectionsPage} from it; a view says what it is for in the (i) of its page, not in a heading of its own
  * (layout contract R2).
@@ -16,6 +16,7 @@ import { SoftBreaks, StatusPill, TextLink } from './display.js';
 import { Input } from './fields.js';
 import { Drawer } from './overlay.js';
 import { SchemaForm } from './SchemaForm.js';
+import { ADVANCED_GROUP, shapeOf } from './schema.js';
 import { call, fill } from './dashboard-api.js';
 import { humanize } from './format.js';
 import { Outcome, hasSettings } from './dashboard-parts.js';
@@ -119,10 +120,12 @@ export function SettingsBar({ editor, texts }) {
 /**
  * One feature's settings (all its groups, or just `group`) with the edits laid over its saved values.
  * @param {{ feature: FeatureSettings, features: FeatureSettings[], editor: SettingsEditor, savedSource: string,
- *   notice?: SettingsNotice, group?: string, texts: Dashboard['texts'], portalLink?: PortalLink }} props the `notice`
- *   is shown above the cards; `portalLink` makes the link of a value the Portal's website settings give
+ *   notice?: SettingsNotice, group?: string, withAdvanced?: boolean, texts: Dashboard['texts'],
+ *   portalLink?: PortalLink }} props the `notice` is shown above the cards; `withAdvanced={false}` leaves out the
+ *   Advanced section (it is shown apart, last); `portalLink` makes the link of a value the Portal's website settings
+ *   give
  */
-function FeatureForm({ feature, features, editor, savedSource, notice, group, texts, portalLink }) {
+function FeatureForm({ feature, features, editor, savedSource, notice, group, withAdvanced = true, texts, portalLink }) {
 	const changed = editor.edits[feature.key] ?? {};
 	const values = Object.fromEntries(
 		Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
@@ -155,12 +158,13 @@ function FeatureForm({ feature, features, editor, savedSource, notice, group, te
 			inherited={inherited}
 			tabs={false}
 			{...(group !== undefined ? { group } : {})}
+			withAdvanced={withAdvanced}
 			advancedTexts={{ title: texts.settings.advanced, description: texts.settings.advancedHelp }}
 			generateText={texts.settings.generate}
 			onReset={(name) => void editor.reset(feature.key, name)}
 			onChange={(name, value) => editor.change(feature.key, name, value)}
-			before={notice ? notice(feature.key, values, features) : null}
-			after={editor.result?.feature === feature.key ? <Outcome result={editor.result.answer} /> : null}
+			before={notice && group === undefined ? notice(feature.key, values, features) : null}
+			after={editor.result?.feature === feature.key && group === undefined ? <Outcome result={editor.result.answer} /> : null}
 		/>
 	);
 }
@@ -174,78 +178,107 @@ const hasItems = (extra) =>
 	typeof extra === 'object' && extra !== null && !('$$typeof' in extra) && 'items' in extra && Array.isArray(extra.items);
 
 /**
- * The sections of the features' settings: one row per feature (listed under its category chip). All the groups of a
- * feature's settings are on its one page (a card each, then Advanced); a feature with lists of its own has them as
- * parts of the same page, stacked under their headings. A website's page hides the features that are off or whose
- * needs are off (`hideOff`); the Owner's defaults show them all.
+ * How a website's Settings draws one feature: the look of its row (`row`: its switch, status, meta, warning, and the
+ * (i) text of its page when that says more than the description), `lead` above its page (a notice that a connection
+ * does not work), and `off`: the feature is off, so its page is only `lead` (its description and what to do to switch
+ * it on) and none of its settings or lists is drawn.
+ * @typedef {{ row?: Partial<Section>, lead?: ReactNode, off?: boolean }} FeatureLook
+ */
+
+/**
+ * The sections of the features' settings: one row per feature (listed under its category chip). All of a feature's
+ * settings are on its one page, open: a card for each group, then the lists of its own as parts under their headings,
+ * and Advanced last. The Owner's defaults list the features that have settings; a website's Settings (`look`) lists
+ * them all, each as `look` draws it.
  * @param {{ features: FeatureSettings[], editor: SettingsEditor, savedSource: string, dash: Dashboard,
- *   hideOff?: boolean, notice?: SettingsNotice, extras?: Record<string, FeatureExtra>, portalLink?: PortalLink }} options
+ *   notice?: SettingsNotice, extras?: Record<string, FeatureExtra>, portalLink?: PortalLink,
+ *   look?: (feature: FeatureSettings) => FeatureLook }} options
  *   `portalLink`: the address of a section of the website's Website settings in the Portal; with it a setting that
  *   starts from them (`x-ui.defaultFrom`) says so and links there (not on the Owner's global defaults)
  * @returns {Section[]}
  */
-export function featureSections({ features, editor, savedSource, dash, hideOff = false, notice, extras = {}, portalLink }) {
+export function featureSections({ features, editor, savedSource, dash, notice, extras = {}, portalLink, look }) {
 	const { texts } = dash;
 	const S = texts.settings;
-	const on = new Set(features.filter((feature) => feature.on !== false).map((feature) => feature.key));
-	const shown = features.filter((feature) => {
-		if (hideOff && (feature.on === false || dash.needsOf(feature.key).some((key) => !on.has(key)))) return false;
-		return hasSettings(feature) || extras[feature.key] !== undefined;
-	});
+	const shown = look ? features : features.filter((feature) => hasSettings(feature) || extras[feature.key] !== undefined);
 	const byKey = new Map(shown.map((feature) => [feature.key, feature]));
 	return dash.byCategory(shown.map((feature) => feature.key)).flatMap((category) =>
 		category.keys.flatMap((key) => {
 			const feature = /** @type {FeatureSettings} */ (byKey.get(key));
-			const extra = extras[key];
-			const form = (
+			const own = look?.(feature) ?? {};
+			// a feature that is off has no settings page: only what it says about itself
+			const extra = own.off ? undefined : extras[key];
+			const description = dash.describe(key);
+			const viewId = `${key}.${slug(S.settingsView)}`;
+			/** @param {string} [group] @param {boolean} [withAdvanced] */
+			const formOf = (group, withAdvanced) => (
 				<FeatureForm
 					feature={feature}
 					features={features}
 					editor={editor}
 					savedSource={savedSource}
 					texts={texts}
+					{...(group !== undefined ? { group } : {})}
+					{...(withAdvanced === false ? { withAdvanced } : {})}
 					{...(portalLink ? { portalLink } : {})}
 					{...(notice ? { notice } : {})}
 				/>
 			);
-			const description = dash.describe(key);
+			const shape = hasSettings(feature) && !own.off ? shapeOf(feature.schema) : { groups: [], advanced: false };
+			const node = extra !== undefined && !hasItems(extra) ? extra : null;
+			// Advanced is the last part of the page, after the lists (a form of only Advanced settings draws it itself)
+			const split = shape.groups.length > 0 && shape.advanced;
 			/** @type {Section[]} */
 			const views = [];
-			if (hasSettings(feature))
-				views.push({
-					id: `${key}.${slug(S.settingsView)}`,
-					label: S.settingsView,
-					info: description,
-					content: (
-						<>
-							{form}
-							{extra !== undefined && !hasItems(extra) ? extra : null}
-						</>
-					),
-				});
-			else if (extra !== undefined && !hasItems(extra))
-				views.push({ id: `${key}.${slug(S.settingsView)}`, label: S.settingsView, info: description, content: extra });
 			/** @type {Section[]} */
 			const beside = [];
-			if (hasItems(extra))
-				for (const item of extra.items)
-					(item.top ? beside : views).push({
-						id: `${key}.${item.id}`,
-						label: item.label,
-						...(item.top ? { group: category.title } : {}),
-						content: item.content,
+			if (own.off) views.push({ id: viewId, label: S.settingsView, content: own.lead });
+			else {
+				if (shape.groups.length > 0 || shape.advanced || node !== null)
+					views.push({
+						id: viewId,
+						label: S.settingsView,
+						content: (
+							<>
+								{shape.groups.length > 0 || shape.advanced ? formOf(undefined, !split) : null}
+								{node}
+							</>
+						),
 					});
+				if (hasItems(extra))
+					for (const item of extra.items)
+						(item.top ? beside : views).push({
+							id: `${key}.${item.id}`,
+							label: item.label,
+							...(item.top ? { group: category.title } : {}),
+							content: item.content,
+						});
+				if (split) views.push({ id: `${key}.${slug(S.advanced)}`, label: S.advanced, content: formOf(ADVANCED_GROUP) });
+				// a website's feature that is on but has nothing to set still has its page
+				if (views.length === 0 && look)
+					views.push({ id: viewId, label: S.settingsView, content: <p className="text-sm text-muted">{S.none}</p> });
+				const first = views[0];
+				if (own.lead && first)
+					views[0] = {
+						...first,
+						content: (
+							<>
+								{own.lead}
+								{first.content}
+							</>
+						),
+					};
+			}
+			if (views.length === 0) return beside;
+			const row = {
+				id: key,
+				label: feature.name,
+				group: category.title,
+				...(own.off ? {} : { info: description }),
+				...own.row,
+			};
 			const only = views.length === 1 ? views[0] : undefined;
-			return [
-				...(views.length === 0
-					? []
-					: [
-							only
-								? { ...only, id: key, label: feature.name, group: category.title }
-								: { id: key, label: feature.name, group: category.title, children: views },
-						]),
-				...beside,
-			];
+			return [only ? { ...only, ...row } : { ...row, children: views }, ...beside];
 		}),
 	);
 }

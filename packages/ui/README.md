@@ -188,7 +188,8 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   takes the whole row (`SettingsCard wide`).
 - `Disclosure` (collapsed by default; `forceOpen`), `PillTabs` (a form control, never navigation),
   `Paged` (search from 8 items and Previous / Next pages).
-- `SchemaForm`: settings with `x-ui.advanced` (or in a group named Advanced) are in a collapsed Advanced block; from three
+- `SchemaForm`: settings with `x-ui.advanced` (or in a group named Advanced) are in an Advanced section, open, after the
+  cards (`withAdvanced={false}` leaves it out for a page that draws it as its own part); from three
   groups on only one group shows, under a tab strip (`tabs={false}` lists the cards; `group="Name"` shows one group).
 - Controls on native inputs: `Switch` (`role="switch"`), `Checkbox` / `CheckboxInput` (`indeterminate`), `RadioGroup`
   (`cards`: title plus `description`; arrow keys), `SegmentedControl` (up to about four short choices), `Input` with
@@ -285,7 +286,7 @@ button), a setup checklist, the key numbers and the latest activity as a timelin
   (or lacking what the manifest's `websiteSettings.requires` asks for, one item per section with a link to it in the
   Portal) are "Needs you" items and setup steps on their own; the product adds its own `needs`, `steps`, `numbers` (`Stat` tiles) and
   sections (`children`). Red items come first; the sentence names the most urgent one. `open(tab)` shows a dashboard
-  section (Features, Settings, Connections or Developers); credits send merchants to support and admins to the Portal.
+  section (Settings, Connections or Developers); credits send merchants to support and admins to the Portal.
   `OverviewSkeleton` is its loading state; `RecentChanges` is the timeline card also shown under Defaults and Prices.
 
 ## Product dashboard
@@ -293,7 +294,7 @@ button), a setup checklist, the key numbers and the latest activity as a timelin
 `@ss/ui/dashboard` (client only) is the dashboard of every product (PLAN.md 0.4.3), one implementation for all: a
 product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} texts={TEXTS} tabs={TABS} />`.
 
-- `ProductDashboard` loads the session, then shows the sidebar (Overview, Features, Settings, Connections, Developers;
+- `ProductDashboard` loads the session, then shows the sidebar (Overview, Settings, Connections, Developers;
   Defaults and Prices for Owners), the website switcher (merchant names for admins), the `Admin view` banner and Back
   to Portal; sections and websites switch inside the page and the address follows (Back and Forward work). `tabs`
   puts a product's own section in a standard tab's place (`{ settings: ChatSettings }`) or adds a tab
@@ -312,8 +313,9 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   `Drawer`; the loading states are the matching skeletons (`OverviewSkeleton` is built from `StatGridSkeleton` and
   `SettingsCardSkeleton`).
 - Standard tabs, each taking the product's parts as props: `OverviewTab` (`useMore(overview, props)`, a hook that
-  returns the product's `needs`, `steps`, `numbers` and `children`), `FeaturesTab` (`warnings(on)`), `SettingsTab`
-  (`sections` first, `notice(key, values, features)` on a feature's card, `featureCards(features)` beside the forms),
+  returns the product's `needs`, `steps`, `numbers` and `children`), `SettingsTab`
+  (every feature is a row with its switch, so there is no Features tab; `warnings(on)` for the rules between features,
+  `sections` after the features, `notice(key, values, features)` on a feature's card, `featureCards(features)` beside the forms),
   `ConnectionsTab` (`form(item, save)` for a connection's own form, `hint(name)`; each connection is a sub-page with
   its status dot, Test sits in the header and Remove in the header's More menu, which asks first), `DevelopersTab` (the product's `sections` instead of the widget script, `children` under More; the
   website id and tokens are in the Portal),

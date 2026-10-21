@@ -10,8 +10,8 @@
  * card a setting belongs to (settings without one share the feature's own card) and `order` (a whole number from 0)
  * sorts the settings, those with an `order` first, ascending. Choice labels are data (fixed-choices audit K3): `labels` is `country` (ISO codes shown by
  * name) or a map of each choice to its words; `suggestions` are values a text (or a list of texts) offers while the
- * merchant may type their own. `advanced: true` puts a setting in the collapsed Advanced block at the end of the
- * feature's cards (so does a group named `Advanced`): for settings most merchants never change. List items have `type` and may add `minimum`, `maximum`, `maxLength`, `pattern`, `enum`
+ * merchant may type their own. `advanced: true` puts a setting in the Advanced section at the end of the
+ * feature's page (so does a group named `Advanced`): for settings most merchants never change. List items have `type` and may add `minimum`, `maximum`, `maxLength`, `pattern`, `enum`
  * and `format`.
  * Nothing else is allowed.
  * @module
@@ -108,7 +108,7 @@ export const settingsMetaSchema = deepFreeze({
 						defaultFrom: { type: 'string', pattern: '^[a-z][A-Za-z]*(?:\\.[A-Za-z][A-Za-z0-9]*)+$', maxLength: 64 },
 						// spans the whole row of the form's field grid (`false` keeps a list or long text in one cell)
 						wide: { type: 'boolean' },
-						// shown inside the collapsed Advanced block (for settings most merchants never change)
+						// shown in the Advanced section (for settings most merchants never change)
 						advanced: { type: 'boolean' },
 					},
 				},

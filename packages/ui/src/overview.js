@@ -339,7 +339,7 @@ export function ChangesTable({ items }) {
 
 /**
  * The dashboard sections an Overview's buttons open (and, for a deeper link, the section of its inner sidebar).
- * @typedef {'features' | 'settings' | 'connections' | 'developers'} OverviewTab
+ * @typedef {'settings' | 'connections' | 'developers'} OverviewTab
  */
 
 /** Values of the website's settings that read better than their path does. */
@@ -501,7 +501,7 @@ export function ProductOverview({
 			tone: 'warning',
 			title: N.noFeatures.title,
 			effect: fillText(N.noFeatures.effect, { domain }),
-			action: go(N.noFeatures.action, 'features'),
+			action: go(N.noFeatures.action, 'settings'),
 		});
 	for (const connection of data.checklist.connections) {
 		if (connection.status === 'connected') continue;
@@ -589,7 +589,7 @@ export function ProductOverview({
 			why: fillText(S.featuresWhy, { domain }),
 			actionLabel: S.featuresAction,
 			done: on.length > 0,
-			onSelect: () => open('features'),
+			onSelect: () => open('settings'),
 		},
 		...data.checklist.connections.map((connection) => ({
 			key: `connection-${connection.name}`,

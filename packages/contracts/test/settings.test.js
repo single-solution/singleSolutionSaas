@@ -77,7 +77,7 @@ describe('checkSettingsSchema', () => {
 			value.properties.pages['x-ui'] = { wide };
 			expect(checkSettingsSchema(value)).toEqual([]);
 		}
-		// `advanced` puts a setting in the collapsed Advanced block
+		// `advanced` puts a setting in the Advanced section
 		for (const advanced of [true, false]) {
 			const value = schema();
 			value.properties.pages['x-ui'] = { advanced, group: 'Limits' };

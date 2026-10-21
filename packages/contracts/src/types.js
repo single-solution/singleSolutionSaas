@@ -46,7 +46,7 @@
  * @property {SettingItem} [items]
  * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, labels?: 'country', wide?: boolean, advanced?: boolean, generate?: number, defaultFrom?: string }} [x-ui]
  *   `labels: 'country'` shows ISO country codes by their names; `wide` sets whether it spans the whole row; `advanced`
- *   puts it in the collapsed Advanced block; `generate` gives a text a Generate button that fills in a random key of
+ *   puts it in the Advanced section; `generate` gives a text a Generate button that fills in a random key of
  *   that many characters; `defaultFrom` is a value of the website's settings in the Portal (`region.language`) the
  *   setting takes until the merchant changes it
  */

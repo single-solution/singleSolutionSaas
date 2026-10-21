@@ -441,7 +441,7 @@ describe('SchemaForm', () => {
 				},
 			});
 
-		it('puts x-ui.advanced settings and an Advanced group in a collapsed Advanced block that opens on click', () => {
+		it('puts x-ui.advanced settings and an Advanced group in an open Advanced section after the cards, with its heading', () => {
 			const schema = /** @type {any} */ ({
 				type: 'object',
 				properties: {
@@ -451,25 +451,28 @@ describe('SchemaForm', () => {
 				},
 			});
 			const { container } = render(<Harness schema={schema} initial={defaults(schema)} title="Mail" />);
-			expect(container.querySelector('[data-field="name"]')).not.toBeNull();
-			expect(container.querySelector('[data-field="retries"]')).toBeNull();
-			expect(container.querySelector('[data-field="salt"]')).toBeNull();
-			const toggle = /** @type {HTMLElement} */ (container.querySelector('button[aria-expanded]'));
-			expect(toggle.getAttribute('aria-expanded')).toBe('false');
-			click(toggle);
-			expect(toggle.getAttribute('aria-expanded')).toBe('true');
-			expect(container.querySelector('[data-field="retries"]')).not.toBeNull();
-			expect(container.querySelector('[data-field="salt"]')).not.toBeNull();
-			click(toggle);
-			expect(container.querySelector('[data-field="retries"]')).toBeNull();
+			// no closed box: everything is on the page at once
+			expect(container.querySelector('button[aria-expanded]')).toBeNull();
+			for (const name of ['name', 'retries', 'salt']) expect(container.querySelector(`[data-field="${name}"]`)).not.toBeNull();
+			const section = /** @type {HTMLElement} */ (container.querySelector('section[aria-labelledby$="-advanced-title"]'));
+			expect(section.querySelector('h3')?.textContent).toBe('Advanced');
+			expect(section.querySelector('[data-field="retries"]')).not.toBeNull();
+			expect(section.querySelector('[data-field="name"]')).toBeNull();
+			// it is the last thing of the form
+			expect(container.firstElementChild?.lastElementChild).toBe(section);
+			// a page that shows it apart leaves it out
+			const apart = render(<Harness schema={schema} initial={defaults(schema)} title="Mail" withAdvanced={false} />);
+			expect(apart.container.querySelector('[data-field="name"]')).not.toBeNull();
+			expect(apart.container.querySelector('[data-field="retries"]')).toBeNull();
+			expect(apart.container.textContent).not.toContain('Advanced');
 		});
 
-		it('opens the Advanced block by itself when a setting inside has an error', () => {
+		it('shows the errors of the Advanced settings where they are', () => {
 			const schema = many();
 			const { container } = render(
 				<Harness schema={schema} initial={defaults(schema)} tabs={false} errors={{ timeout: 'Too long.' }} />,
 			);
-			expect(container.querySelector('[data-field="timeout"]')).not.toBeNull();
+			expect(container.querySelector('[data-field="timeout"]')?.textContent).toContain('Too long.');
 		});
 
 		it('shows one group at a time from three groups on, Advanced as the last tab', () => {

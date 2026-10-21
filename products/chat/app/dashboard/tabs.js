@@ -7,16 +7,7 @@
  * @module
  */
 import { Button, CodeBlock, Section } from '@ss/ui';
-import {
-	ConnectionsTab,
-	DefaultsTab,
-	DevelopersTab,
-	FeaturesTab,
-	OverviewTab,
-	useLoad,
-	useSetupSteps,
-	wantsSettings,
-} from '@ss/ui/dashboard';
+import { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, useLoad, useSetupSteps, wantsSettings } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { AiForm, FORMS } from './forms.js';
@@ -94,8 +85,8 @@ function Overview(props) {
 }
 
 /** @param {TabProps} props */
-function Features(props) {
-	return <FeaturesTab {...props} warnings={ruleWarnings} />;
+function Settings(props) {
+	return <SettingsTab {...props} warnings={ruleWarnings} />;
 }
 
 /** @param {TabProps} props */
@@ -153,8 +144,7 @@ function Defaults(props) {
 /** Chat's tabs in place of the standard ones (Prices is the standard tab). */
 export const TABS = Object.freeze({
 	overview: Overview,
-	features: Features,
-	settings: SettingsTab,
+	settings: Settings,
 	connections: Connections,
 	developers: Developers,
 	defaults: Defaults,

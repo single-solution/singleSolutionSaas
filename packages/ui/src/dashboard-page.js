@@ -41,13 +41,14 @@ import { TOOLBAR_TEXTS } from './Toolbar.js';
  * draws every part stacked under its label, all open). The row: `icon` leads, `label` is the title, `status` (with
  * `statusLabel`) the dot after it, `badge` the value at the right, `meta` the muted line under the title (a string, or
  * several joined with " · "), `locked` a lock at the end (the page is still opened: it explains what the feature
- * does); `group` lists it under that chip of the list. What the open view says about itself goes in the page's header:
+ * does); `trailing` is a control at the very end (a switch: a click on it never opens the row) and `warning` a line
+ * in its color in place of `meta` (what blocks the thing); `group` lists it under that chip of the list. What the open view says about itself goes in the page's header:
  * `info` (the old description, behind the (i)), `facts`, `pills` and `actions`; `flush` gives its body no padding (a
  * table uses all of it); `toolbar` and `footer` are the ones of this view (a search above its table, the pages below
  * it), shown while it is open. A section with parts takes these from itself, else from its first part.
  * @typedef {Omit<BaseSpec, 'children'> & { info?: ReactNode, facts?: PageFact[], pills?: PageStatus[],
  *   actions?: PageActions, toolbar?: ReactNode, footer?: ReactNode, flush?: boolean, locked?: boolean,
- *   meta?: string | string[], children?: Section[] }} Section
+ *   meta?: string | string[], trailing?: ReactNode, warning?: NonNullable<RowLook['warning']>, children?: Section[] }} Section
  */
 
 /** The frame of the dashboard around a tab; none when a tab is drawn on its own. */
@@ -227,8 +228,8 @@ const ROW_TONES = { attention: 'warning', warning: 'warning', success: 'success'
 
 /**
  * One section as a row of the list: its icon leads, its label is the title with the status dot after it, the badge is
- * the value (the count), `meta` the muted line; a lock sits at the end (the page is still opened: it explains what the
- * feature does, and clicking the lock opens it too).
+ * the value (the count), `meta` the muted line (`warning` in its place); a control (`trailing`) or a lock sits at the
+ * end (the page is still opened: it explains what the feature does, and clicking the lock opens it too).
  * @param {Section} spec
  * @param {{ locked: string, open: (id: string) => void }} how `locked`: the words a screen reader says for the lock
  * @returns {RowLook}
@@ -239,15 +240,18 @@ const rowOf = (spec, { locked, open }) => ({
 	...(spec.status ? { status: { tone: ROW_TONES[spec.status] ?? 'neutral', label: spec.statusLabel ?? '' } } : {}),
 	...(spec.badge !== undefined && spec.badge !== null ? { value: spec.badge } : {}),
 	...(spec.meta && spec.meta.length > 0 ? { meta: spec.meta } : {}),
-	...(spec.locked
-		? {
-				trailing: (
-					<span className="flex text-subtle" onClick={() => open(spec.id)}>
-						<Icon name="lock" size={14} title={locked} />
-					</span>
-				),
-			}
-		: {}),
+	...(spec.warning ? { warning: spec.warning } : {}),
+	...(spec.trailing
+		? { trailing: spec.trailing }
+		: spec.locked
+			? {
+					trailing: (
+						<span className="flex text-subtle" onClick={() => open(spec.id)}>
+							<Icon name="lock" size={14} title={locked} />
+						</span>
+					),
+				}
+			: {}),
 });
 
 /**

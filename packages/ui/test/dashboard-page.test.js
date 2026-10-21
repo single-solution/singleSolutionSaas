@@ -78,10 +78,10 @@ describe('the crumbs of a tab', () => {
 
 	it('are Product > Section > sub-page, each a link to the frame address', () => {
 		const frame = { hrefOf: (/** @type {string} */ tab) => `?websiteId=w1&view=${tab}`, home: '?websiteId=w1&view=overview' };
-		const { container } = render(inDashboard(<Crumbs tab="features" rest={[{ label: 'Catalog' }]} />, frame));
+		const { container } = render(inDashboard(<Crumbs tab="texts" rest={[{ label: 'Catalog' }]} />, frame));
 		expect(JSON.parse(container.querySelector('[data-crumbs]')?.textContent ?? '[]')).toEqual([
 			{ label: 'Notes', href: '?websiteId=w1&view=overview' },
-			{ label: 'Features', href: '?websiteId=w1&view=features' },
+			{ label: 'Texts', href: '?websiteId=w1&view=texts' },
 			{ label: 'Catalog' },
 		]);
 	});
@@ -446,13 +446,13 @@ describe('LoadedPage', () => {
 	it("draws the page skeleton with the crumbs and the tab's own skeleton while the answer is not there", () => {
 		const { container } = render(
 			inDashboard(
-				<LoadedPage answer={null} tab="features" skeleton={<p>my skeleton</p>}>
+				<LoadedPage answer={null} tab="texts" skeleton={<p>my skeleton</p>}>
 					{() => <p>never</p>}
 				</LoadedPage>,
 			),
 		);
 		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
-		expect(crumbsOf(container)).toEqual(['Notes', 'Features']);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Texts']);
 		expect(byText(container, 'my skeleton')).toBeTruthy();
 		expect(container.textContent).not.toContain('never');
 	});
@@ -462,12 +462,12 @@ describe('LoadedPage', () => {
 		const answer = { ok: false, problem: { status: 500, code: 'internal_error' }, retry };
 		const { container } = render(
 			inDashboard(
-				<LoadedPage answer={/** @type {any} */ (answer)} tab="features">
+				<LoadedPage answer={/** @type {any} */ (answer)} tab="texts">
 					{() => <p>never</p>}
 				</LoadedPage>,
 			),
 		);
-		expect(crumbsOf(container)).toEqual(['Notes', 'Features']);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Texts']);
 		expect(container.textContent).toContain(TEXTS.failed);
 		click(byText(container, TEXTS.tryAgain, 'button'));
 		expect(retry).toHaveBeenCalledTimes(1);
@@ -477,7 +477,7 @@ describe('LoadedPage', () => {
 		const answer = { ok: true, data: { name: 'Ready' } };
 		const { container } = render(
 			inDashboard(
-				<LoadedPage answer={/** @type {any} */ (answer)} tab="features">
+				<LoadedPage answer={/** @type {any} */ (answer)} tab="texts">
 					{(/** @type {{ name: string }} */ data) => <p>{data.name}</p>}
 				</LoadedPage>,
 			),

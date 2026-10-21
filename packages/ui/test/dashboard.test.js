@@ -10,7 +10,6 @@ import {
 	DashboardProvider,
 	DefaultsTab,
 	DevelopersTab,
-	FeaturesTab,
 	Loaded,
 	OverviewTab,
 	Outcome,
@@ -516,181 +515,210 @@ describe('standard tabs', () => {
 		expect(plain.container.textContent).not.toContain('own part');
 	});
 
-	it('Features: a Page with a table of features; admins switch a feature off with the ones that need it, see warnings and confirm the cost', async () => {
+	/** The settings of the features of the sample product, for the Settings tab (a merchant gets only the ones that are on). */
+	const settingsOf = (/** @type {string[]} */ keys = ['notes', 'inbox', 'alerts']) => ({
+		features: keys.map((key) => {
+			const feature = /** @type {(typeof FEATURES)[number]} */ (FEATURES.find((entry) => entry.key === key));
+			return {
+				key,
+				name: feature.name,
+				on: feature.on,
+				schema: SCHEMA,
+				values: { greeting: { value: key === 'notes' ? 'Hi' : '', source: key === 'notes' ? 'website' : 'default' } },
+			};
+		}),
+	});
+	const LINKS = {
+		connections: [{ name: 'database', label: 'Database', neededBy: ['inbox'], status: 'test_failed' }],
+	};
+	/** The switches in the rows of the list, in order. @param {ParentNode} root */
+	const switchesOf = (root) =>
+		/** @type {HTMLButtonElement[]} */ ([...root.querySelectorAll('[role="option"] [role="switch"]')]);
+	/** The row of a feature in the list. @param {ParentNode} root @param {string} id */
+	const rowOf = (root, id) => /** @type {HTMLElement} */ (root.querySelector(`[role="option"][data-ss-id="${id}"]`));
+
+	it('Settings: a row for every feature with its price and switch; an Owner switches one after a confirmation with the cost, what goes off with it and the warnings', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
+			[`GET ${base}/settings`]: ok(settingsOf()),
 			[`GET ${base}/features`]: ok({ features: FEATURES }),
-			[`GET ${base}/connections`]: ok({
-				connections: [{ name: 'database', label: 'Database', neededBy: ['inbox'], status: 'test_failed' }],
-			}),
+			[`GET ${base}/connections`]: ok(LINKS),
 			[`PUT ${base}/features`]: ok({}),
 		});
+		const open = vi.fn();
 		const { container } = render(
 			inDashboard(
-				<FeaturesTab {...tabProps(id)} warnings={(on) => (on.includes('notes') ? [] : ['Nothing starts a note.'])} />,
+				<SettingsTab
+					{...tabProps(id, { open })}
+					warnings={(on) => (on.includes('notes') ? [] : ['Nothing starts a note.'])}
+				/>,
+				[
+					{ title: 'Writing', features: ['notes'] },
+					{ title: 'Reading', features: ['inbox', 'alerts'] },
+				],
 			),
 		);
-		// the page skeleton first, with the crumbs
 		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
 		await settle();
-		// a page: Notes > Features, the title only in the header, the key numbers beside it, no heading in the body
-		expect(container.querySelector('[data-ss-page]')).not.toBeNull();
-		expect(container.querySelector('h1')?.textContent).toBe('Features');
-		expect(container.querySelectorAll('h2, h3')).toHaveLength(0);
+		// every feature has a row, on or off, under its category; the key numbers are beside the page
+		expect([...container.querySelectorAll('[role="option"]')].map((row) => row.getAttribute('data-ss-id'))).toEqual([
+			'notes',
+			'inbox',
+			'alerts',
+		]);
+		expect([...container.querySelectorAll('button[aria-pressed]')].map((chip) => chip.textContent)).toEqual([
+			'All3',
+			'Writing1',
+			'Reading2',
+		]);
 		const facts = container.querySelector('[aria-label="Key numbers"]')?.textContent ?? '';
-		expect(facts).toContain('2/3');
+		expect(facts).toContain('On2');
+		expect(facts).toContain('Off1');
 		expect(facts).toContain('1.5 credits/h');
-		// the features are a table
-		const table = /** @type {HTMLTableElement} */ (container.querySelector('table'));
-		expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(
-			expect.arrayContaining(['Feature', 'Needs', 'Price', 'Status', 'On']),
-		);
-		const rows = [...table.querySelectorAll('tbody tr')];
-		expect(rows).toHaveLength(3);
-		expect(rows[1]?.textContent).toContain('0.5 credits/h');
-		expect(rows[1]?.textContent).toContain('Notes');
-		expect(rows[1]?.querySelector('a[href="/docs#feature-inbox"]')).not.toBeNull();
-		// a feature whose connection fails shows an amber Needs setup pill (the reason as its tooltip) and Connect
-		const pill = /** @type {HTMLElement} */ (
-			[...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup')
-		);
-		expect(pill.getAttribute('title')).toBe('Not working: connect Database');
-		expect(pill.className).toContain('bg-attention-soft');
-		expect(container.querySelector('.text-danger')).toBeNull();
-		expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Connect Database')).toBe(true);
-		const boxes = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('[role="switch"]')]);
-		const checks = () => boxes.map((box) => box.getAttribute('aria-checked') === 'true');
+		expect(container.querySelectorAll('table')).toHaveLength(0);
+		// a row says the price and how many settings the website changed
+		expect(rowOf(container, 'notes').textContent).toContain('1 changed');
+		expect(rowOf(container, 'alerts').textContent).toContain('0.25 credits/h');
+		expect(rowOf(container, 'alerts').textContent).not.toContain('changed');
+		// a feature whose connection fails says so in its row (the reason in place of the price) and on its page
+		expect(rowOf(container, 'inbox').textContent).toContain('Not working: connect Database');
+		expect(rowOf(container, 'notes').textContent).not.toContain('Not working');
+		openSection(container, 'inbox');
+		expect(container.querySelector('#section-inbox')?.textContent).toContain('Not working: connect Database');
+		click(byText(container.querySelector('#section-inbox') ?? container, 'Connect Database', 'button'));
+		expect(open).toHaveBeenCalledWith('connections', 'connection-database');
+		openSection(container, 'notes');
+		const checks = () => switchesOf(container).map((box) => box.getAttribute('aria-checked') === 'true');
 		expect(checks()).toEqual([true, true, false]);
-		// Alerts needs Inbox (on): it can be switched on; the Save bar shows only once something changed
-		expect(boxes[2]?.disabled).toBe(false);
-		expect(container.textContent).not.toContain('You changed the features');
-		click(/** @type {HTMLElement} */ (boxes[2]));
-		click(/** @type {HTMLElement} */ (boxes[0]));
-		expect(checks()).toEqual([false, false, false]);
-		expect(container.textContent).toContain('Nothing starts a note.');
-		// the numbers follow the picks
-		expect(container.querySelector('[aria-label="Key numbers"]')?.textContent).toContain('0/3');
-		click(button('Save'));
-		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		// Alerts needs Inbox (on): it can be switched on; a click on the switch does not open the page
+		expect(switchesOf(container)[2]?.disabled).toBe(false);
+		expect(container.querySelector('h1')?.textContent).toBe('Notes');
+		click(/** @type {HTMLElement} */ (switchesOf(container)[2]));
+		expect(container.querySelector('h1')?.textContent).toBe('Notes');
+		let dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		expect(dialog.textContent).toContain('Switch on Alerts?');
+		expect(dialog.textContent).toContain('New hourly cost: 1.75 credits/h');
+		expect(dialog.textContent).not.toContain('Also turned off');
+		click(byText(dialog, 'Cancel', 'button'));
+		await settle();
+		expect(requests.some((request) => request.method === 'PUT')).toBe(false);
+		// nothing changes until the confirmation
+		expect(checks()).toEqual([true, true, false]);
+		// switching Notes off switches off the feature that needs it, and the product's warning is in the confirmation
+		click(/** @type {HTMLElement} */ (switchesOf(container)[0]));
+		dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		expect(dialog.textContent).toContain('Switch off Notes?');
 		expect(dialog.textContent).toContain('New hourly cost: 0 credits/h');
-		expect(dialog.textContent).toContain('Also turned off: Notes, Inbox');
+		expect(dialog.textContent).toContain('Also turned off: Inbox');
 		expect(dialog.textContent).toContain('Nothing starts a note.');
-		await act(async () => byText(dialog, 'Save', 'button').click());
+		await act(async () => byText(dialog, 'Switch off', 'button').click());
 		await settle();
 		expect(requests.find((request) => request.method === 'PUT')).toEqual({
 			method: 'PUT',
 			path: `${base}/features`,
 			body: { on: [] },
 		});
-		expect(container.textContent).toContain('Saved');
-		// merchants read them only, and are told whom to contact; an off feature is Locked
-		cleanup();
-		const merchant = render(
-			inDashboard(<FeaturesTab {...tabProps(id, { who: { kind: 'merchant', id: 'm1', name: 'Sam' } })} />),
-		);
-		await settle();
-		expect(merchant.container.textContent).toContain('To change features, contact help@example.com (Email).');
-		expect(
-			[...merchant.container.querySelectorAll('[role="switch"]')].every(
-				(box) => /** @type {HTMLButtonElement} */ (box).disabled,
-			),
-		).toBe(true);
-		const help = 'span[title="Ask your Single Solution admin to switch it on."]';
-		expect(merchant.container.querySelectorAll(help)).toHaveLength(1);
-		expect(merchant.container.querySelector(`tbody tr:nth-child(3) ${help}`)?.textContent).toBe('Locked');
-		expect(merchant.container.textContent).not.toContain('Save');
+		// the lists were read again after the save
+		expect(requests.filter((request) => request.path === `${base}/features`)).toHaveLength(3);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
 	});
 
-	it('Features: the categories are the list beside the page with how many are on, a dot for a broken connection and a lock; one category at a time, each its own address', async () => {
+	it('Settings: a feature that is off has a page that says what it is and how to switch it on; one that needs another is blocked', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
-		serve({
-			[`GET ${base}/features`]: ok({ features: FEATURES }),
-			[`GET ${base}/connections`]: ok({
-				connections: [{ name: 'database', label: 'Database', neededBy: ['inbox'], status: 'test_failed' }],
-			}),
-		});
-		const categories = [
-			{ title: 'Writing', features: ['notes'] },
-			{ title: 'Reading', features: ['inbox'] },
-			{ title: 'Telling', features: ['alerts'] },
+		const catalog = [
+			...FEATURES,
+			{
+				key: 'digest',
+				name: 'Digest',
+				description: 'A daily mail.',
+				dependsOn: ['alerts'],
+				millicreditsPerHour: 100,
+				on: false,
+			},
 		];
-		const { container } = render(inDashboard(<FeaturesTab {...tabProps(id)} />, categories));
+		serve({
+			[`GET ${base}/settings`]: ok(settingsOf()),
+			[`GET ${base}/features`]: ok({ features: catalog }),
+			[`GET ${base}/connections`]: ok({ connections: [] }),
+			[`PUT ${base}/features`]: ok({}),
+		});
+		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
 		await settle();
-		const link = (/** @type {string} */ name) =>
-			/** @type {HTMLElement} */ (container.querySelector(`[role="option"][data-ss-id="category-${name}"]`));
-		expect(navLinks(container)).toEqual(['Writing1/1', 'ReadingNeeds setup1/1', 'Telling0/1']);
-		// the crumbs end in the open category, whose own numbers are in the header
-		expect(
-			[...container.querySelectorAll('nav[aria-label="Breadcrumb"] li')].map((li) => li.textContent).filter(Boolean),
-		).toEqual(['Notes', 'Features', 'Writing']);
-		expect(container.querySelector('h1')?.textContent).toBe('Writing');
-		expect(container.querySelector('[aria-label="Key numbers"]')?.textContent).toContain('1/1');
-		expect(container.querySelectorAll('table')).toHaveLength(1);
-		expect(container.textContent).not.toContain('Read them.');
-		openSection(container, 'category-reading');
-		expect(window.location.hash).toBe('#category-reading');
-		expect(container.textContent).toContain('Read them.');
-		expect(container.querySelector('h1')?.textContent).toBe('Reading');
-		expect(container.querySelectorAll('#section-category-reading [role="switch"]')).toHaveLength(1);
-		expect(link('reading').textContent).toContain('Needs setup');
-		// a merchant's category with nothing on is locked
-		cleanup();
-		const merchant = render(
-			inDashboard(<FeaturesTab {...tabProps(id, { who: { kind: 'merchant', id: 'm1', name: 'Sam' } })} />, categories),
-		);
+		// Digest needs Alerts, which is off: its switch is off the table and its row says why
+		expect(switchesOf(container)[3]?.disabled).toBe(true);
+		expect(rowOf(container, 'digest').textContent).toContain('Needs Alerts to be on');
+		openSection(container, 'digest');
+		expect(container.querySelector('h1')?.textContent).toBe('Digest');
+		expect(container.textContent).toContain('A daily mail.');
+		expect(container.textContent).toContain('Needs Alerts to be on');
+		expect(buttonsOf(container, 'Switch on')).toHaveLength(0);
+		// Alerts can be switched on: its page says so, with the button that asks the same as the switch
+		openSection(container, 'alerts');
+		expect(window.location.hash).toBe('#alerts');
+		expect(container.querySelector('h1')?.textContent).toBe('Alerts');
+		expect(container.textContent).toContain('Be told.');
+		expect(container.textContent).toContain('Switch on Alerts to set it up.');
+		// its settings are not drawn
+		expect(container.querySelector('#section-alerts')?.textContent).not.toContain('Greeting');
+		click(byText(container.querySelector('#section-alerts') ?? container, 'Switch on', 'button'));
+		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		expect(dialog.textContent).toContain('Switch on Alerts?');
+		await act(async () => byText(dialog, 'Switch on', 'button').click());
 		await settle();
-		expect(merchant.container.querySelector('[role="option"][data-ss-id="category-telling"]')?.textContent).toContain('Locked');
-		expect(merchant.container.querySelector('[role="option"][data-ss-id="category-writing"]')?.textContent).not.toContain(
-			'Locked',
-		);
-		// features in no category are listed under More
-		cleanup();
-		const rest = render(inDashboard(<FeaturesTab {...tabProps(id)} />, [{ title: 'Writing', features: ['notes'] }]));
-		await settle();
-		expect(navLinks(rest.container)).toEqual(['Writing1/1', 'MoreNeeds setup1/2']);
+		expect(requests.find((request) => request.method === 'PUT')?.body).toEqual({ on: ['notes', 'inbox', 'alerts'] });
 	});
 
-	it('Features: a failed save keeps the picks and shows the problem; Cancel closes', async () => {
+	it('Settings: a failed switch shows the problem and keeps the features as they were', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
+			[`GET ${base}/settings`]: ok(settingsOf(['notes'])),
 			[`GET ${base}/features`]: ok({ features: FEATURES.map((feature) => ({ ...feature, on: false })) }),
-			[`GET ${base}/connections`]: { status: 500 },
 			[`PUT ${base}/features`]: { status: 409, body: { status: 409, code: 'product_rule', title: 'No credits' } },
 		});
-		const { container } = render(inDashboard(<FeaturesTab {...tabProps(id)} />));
+		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
 		await settle();
-		const boxes = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('[role="switch"]')]);
-		// Inbox needs Notes, which is off
-		expect(boxes[1]?.disabled).toBe(true);
-		click(/** @type {HTMLElement} */ (boxes[0]));
-		click(button('Save'));
-		click(byText(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Cancel', 'button'));
-		await settle();
-		expect(document.querySelector('[role="dialog"]')).toBeNull();
-		click(button('Save'));
+		// no connections answer (a failed read is no reason to hide the features)
+		expect(switchesOf(container).map((box) => box.disabled)).toEqual([false, true, true]);
+		click(/** @type {HTMLElement} */ (switchesOf(container)[0]));
 		await act(async () =>
-			byText(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Save', 'button').click(),
+			byText(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Switch on', 'button').click(),
 		);
 		await settle();
-		expect(container.textContent).toContain('No credits');
-		expect(boxes[0]?.getAttribute('aria-checked')).toBe('true');
+		expect(document.body.textContent).toContain('No credits');
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(switchesOf(container)[0]?.getAttribute('aria-checked')).toBe('false');
 	});
 
-	it('Features: says what went wrong in the page, with Try again', async () => {
+	it('Settings: a merchant sees the switches locked, which features are on, and is told to ask support', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
-		serve({ [`GET ${base}/features`]: { status: 500, body: { status: 500, code: 'internal_error' } } });
-		const { container } = render(inDashboard(<FeaturesTab {...tabProps(id)} />));
+		serve({
+			// a merchant's settings are only the features that are on
+			[`GET ${base}/settings`]: ok(settingsOf(['notes', 'inbox'])),
+			[`GET ${base}/features`]: ok({ features: FEATURES }),
+			[`GET ${base}/connections`]: ok(LINKS),
+		});
+		const { container } = render(
+			inDashboard(<SettingsTab {...tabProps(id, { who: { kind: 'merchant', id: 'm1', name: 'Sam' } })} />),
+		);
 		await settle();
-		expect(container.querySelector('h1')?.textContent).toBe('Features');
-		expect(container.textContent).toContain('Try again');
-		expect(container.querySelector('table')).toBeNull();
+		expect(switchesOf(container).every((box) => box.disabled)).toBe(true);
+		expect(container.querySelectorAll('[role="option"]')).toHaveLength(3);
+		expect(rowOf(container, 'notes').textContent).toContain('On');
+		expect(rowOf(container, 'alerts').textContent).toContain('Off');
+		expect(rowOf(container, 'inbox').textContent).toContain('Not working: connect Database');
+		openSection(container, 'alerts');
+		expect(container.textContent).toContain('Ask support to switch it on: help@example.com (Email).');
+		expect(buttonsOf(container, 'Switch on')).toHaveLength(0);
+		// a click on a locked switch asks nothing
+		click(/** @type {HTMLElement} */ (switchesOf(container)[2]));
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
 	});
 
-	it('Settings: the features that are on, by category, a row each with the notice, the extras and all the groups on its one page', async () => {
+	it('Settings: a feature that is on has its settings all open on one page: the groups, the notice and extras of the product, and Advanced last, with one save bar', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		const GROUPED = {
@@ -721,7 +749,7 @@ describe('standard tabs', () => {
 							Object.keys(GROUPED.properties).map((name) => [name, { value: '', source: 'default' }]),
 						),
 					},
-					// off: not listed; its needs are off: not listed either
+					// off: it has a row and a page, but its settings are not drawn
 					{
 						key: 'alerts',
 						name: 'Alerts',
@@ -729,15 +757,9 @@ describe('standard tabs', () => {
 						schema: SCHEMA,
 						values: { greeting: { value: '', source: 'default' } },
 					},
-					{
-						key: 'digest',
-						name: 'Digest',
-						on: true,
-						schema: SCHEMA,
-						values: { greeting: { value: '', source: 'default' } },
-					},
 				],
 			}),
+			[`GET ${base}/features`]: ok({ features: FEATURES }),
 			[`PUT ${base}/settings/notes.greeting`]: ok({}),
 		});
 		const { container } = render(
@@ -758,17 +780,17 @@ describe('standard tabs', () => {
 				/>,
 				[
 					{ title: 'Writing', features: ['notes'] },
-					{ title: 'Reading', features: ['inbox', 'alerts', 'digest'] },
+					{ title: 'Reading', features: ['inbox', 'alerts'] },
 				],
 			),
 		);
 		await settle();
-		// the list has a row for each feature that is on and whose needs are on (Alerts is off, Digest needs it), with the
-		// categories as its filter chips
-		const ALL = ['Notes', 'Inbox', 'Beside', 'Own section'];
-		expect(navLinks(container)).toEqual(ALL);
+		// the list has a row for each feature, on or off, with the categories as its filter chips
+		const ALL = ['notes', 'inbox', 'inbox.beside', 'alerts', 'own'];
+		const idsOf = () => [...container.querySelectorAll('[role="option"]')].map((row) => row.getAttribute('data-ss-id'));
+		expect(idsOf()).toEqual(ALL);
 		const chips = [...container.querySelectorAll('button[aria-pressed]')].map((chip) => chip.textContent);
-		expect(chips).toEqual(['All4', 'Writing1', 'Reading2', 'Lists1']);
+		expect(chips).toEqual(['All5', 'Writing1', 'Reading3', 'Lists1']);
 		// one view: Notes, with the notice and its extra; Inbox is not on the page yet
 		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'Notes']);
 		expect(container.querySelector('h1')?.textContent).toBe('Notes');
@@ -789,17 +811,26 @@ describe('standard tabs', () => {
 		// list editor is one more part of the page under its heading
 		openSection(container, 'inbox');
 		// a view marked `top` is listed beside the feature, not under it
-		expect(navLinks(container)).toEqual(ALL);
-		for (const name of ['subject', 'sender', 'limit'])
+		expect(idsOf()).toEqual(ALL);
+		for (const name of ['subject', 'sender', 'limit', 'salt'])
 			expect(/** @type {HTMLElement} */ (container.querySelector(`[data-field="${name}"]`)).closest('[hidden]')).toBeNull();
-		// Advanced is the kit's block at the end of the page, opened by its bar
-		expect(container.querySelector('[data-field="salt"]')).toBeNull();
-		click(/** @type {HTMLElement} */ (container.querySelector('#section-inbox button[aria-expanded="false"]')));
-		expect(container.querySelector('[data-field="salt"]')).not.toBeNull();
+		// Advanced is open too, the last part of the page, headed "Advanced" (no closed box)
+		expect(container.querySelector('#section-inbox [aria-expanded]')).toBeNull();
 		expect([...container.querySelectorAll('#section-inbox > section > h2')].map((heading) => heading.textContent)).toEqual([
 			'Settings',
 			'Rules',
+			'Advanced',
 		]);
+		expect(
+			container
+				.querySelector('#section-inbox > section:last-of-type')
+				?.contains(container.querySelector('[data-field="salt"]')),
+		).toBe(true);
+		expect(
+			container
+				.querySelector('#section-inbox > section:first-of-type')
+				?.contains(container.querySelector('[data-field="salt"]')),
+		).toBe(false);
 		expect(container.textContent).toContain('rules list');
 		// the crumbs name the feature; its address is its own, and an old address of one of its groups opens it too
 		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'Inbox']);
@@ -842,6 +873,7 @@ describe('standard tabs', () => {
 					},
 				],
 			}),
+			[`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES.slice(0, 1) }),
 		});
 		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
 		await settle();
@@ -867,29 +899,53 @@ describe('standard tabs', () => {
 		);
 	});
 
-	it('Settings: says so when no feature with settings is on', async () => {
+	it('Settings: says so when the product has no feature yet; a feature without settings has a page that says so', async () => {
 		const id = freshSite();
 		serve({
-			[`GET /v1/dashboard/websites/${id}/settings`]: ok({
-				features: [{ key: 'notes', name: 'Notes', on: false, schema: SCHEMA, values: {} }],
-			}),
+			[`GET /v1/dashboard/websites/${id}/settings`]: ok({ features: [] }),
+			[`GET /v1/dashboard/websites/${id}/features`]: ok({ features: [] }),
 		});
 		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
 		await settle();
 		expect(container.textContent).toContain(TEXTS.settings.nothingOn);
-		expect(container.querySelector('nav[aria-label="Settings"]')).toBeNull();
+		expect(container.querySelector('[role="option"]')).toBeNull();
 		expect(container.querySelector('h1')?.textContent).toBe('Settings');
+		cleanup();
+		// a feature that is on and has nothing to set
+		const other = freshSite();
+		serve({
+			[`GET /v1/dashboard/websites/${other}/settings`]: ok({ features: [] }),
+			[`GET /v1/dashboard/websites/${other}/features`]: ok({ features: FEATURES.slice(0, 1) }),
+		});
+		const plain = render(inDashboard(<SettingsTab {...tabProps(other)} />));
+		await settle();
+		// one feature is the whole page: no list beside it
+		expect(plain.container.querySelector('[role="option"]')).toBeNull();
+		expect(plain.container.querySelector('h1')?.textContent).toBe('Settings');
+		expect(plain.container.textContent).toContain(TEXTS.settings.none);
 	});
 
-	it('Settings: shows the page skeleton while it loads and the problem in the page, with Try again, when it fails', async () => {
+	it('Settings: shows the page skeleton while it loads and the problem in the page, with Try again, when the settings or the features fail', async () => {
 		const id = freshSite();
-		serve({ [`GET /v1/dashboard/websites/${id}/settings`]: { status: 500, body: { status: 500, code: 'internal_error' } } });
+		serve({
+			[`GET /v1/dashboard/websites/${id}/settings`]: { status: 500, body: { status: 500, code: 'internal_error' } },
+			[`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }),
+		});
 		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
 		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
 		expect(container.querySelector('h1')?.textContent).toBe('Settings');
 		await settle();
 		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
 		expect(container.textContent).toContain('Try again');
+		cleanup();
+		const other = freshSite();
+		serve({
+			[`GET /v1/dashboard/websites/${other}/settings`]: ok({ features: [] }),
+			[`GET /v1/dashboard/websites/${other}/features`]: { status: 500, body: { status: 500, code: 'internal_error' } },
+		});
+		const second = render(inDashboard(<SettingsTab {...tabProps(other)} />));
+		await settle();
+		expect(second.container.textContent).toContain('Try again');
 	});
 
 	it('Texts: a list of screens and widgets with how many were changed, each screen a table, a text edited in a drawer', async () => {
@@ -1435,7 +1491,7 @@ describe('ProductDashboard', () => {
 		expect(second.container.textContent).toContain('Down');
 	});
 
-	it('a merchant gets the seven website tabs, picks a website, and switches sections inside the page', async () => {
+	it('a merchant gets the five website tabs, picks a website, and switches sections inside the page', async () => {
 		/** @type {Array<{ props: TabProps, tab: string }>} */
 		const seen = [];
 		/** @param {string} tab */
@@ -1455,7 +1511,7 @@ describe('ProductDashboard', () => {
 		const tabs = { overview: probe('overview'), settings: probe('settings') };
 		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={tabs} />);
 		await settle();
-		expect(sidebar()).toEqual(['Overview', 'Features', 'Settings', 'Texts', 'Connections', 'Developers']);
+		expect(sidebar()).toEqual(['Overview', 'Settings', 'Texts', 'Connections', 'Developers']);
 		expect(document.body.textContent).toContain(TEXTS.pickWebsite);
 		expect(document.body.textContent).toContain('Notes');
 		// Back to Portal and the docs sit at the bottom of the sidebar, not in a header that pages replace
@@ -1545,7 +1601,6 @@ describe('ProductDashboard', () => {
 		await settle();
 		expect(sidebar()).toEqual([
 			'Overview',
-			'Features',
 			'Settings',
 			'Texts',
 			'Connections',
@@ -1569,7 +1624,7 @@ describe('ProductDashboard', () => {
 		expect(document.body.textContent).toContain('Viewing as admin · Other / other.example.com');
 		expect(document.body.textContent).toContain('tab for p2');
 		// from a website tab, the same tab of the other website
-		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][6]));
+		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][5]));
 		await settle();
 		type(picker, 'p1');
 		await settle();
@@ -1584,7 +1639,7 @@ describe('ProductDashboard', () => {
 	it('opens a sub-page of the tab it is on from a link, with one history entry and no page reload', async () => {
 		const Parts = () => (
 			<SectionsPage
-				tab="features"
+				tab="settings"
 				sections={[
 					{ id: 'one', label: 'One', content: <p>first part</p> },
 					{ id: 'two', label: 'Two', content: <p>second part</p> },
@@ -1592,25 +1647,36 @@ describe('ProductDashboard', () => {
 			/>
 		);
 		serve({ 'GET /v1/dashboard/session': session(MERCHANT) });
-		window.history.replaceState(null, '', '?websiteId=p1&view=features');
-		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ features: Parts }} />);
+		window.history.replaceState(null, '', '?websiteId=p1&view=settings');
+		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ settings: Parts }} />);
 		await settle();
 		const before = window.history.length;
 		click(/** @type {HTMLElement} */ (document.querySelector('[role="option"][data-ss-id="two"]')));
 		await settle();
-		expect(window.location.search).toBe('?websiteId=p1&view=features');
+		expect(window.location.search).toBe('?websiteId=p1&view=settings');
 		expect(window.location.hash).toBe('#two');
 		expect(window.history.length).toBe(before + 1);
 		expect(document.querySelector('h1')?.textContent).toBe('Two');
 		// the tab's crumb leads back to its first sub-page
 		click(
 			/** @type {HTMLElement} */ (
-				document.querySelector('nav[aria-label="Breadcrumb"] a[href="?websiteId=p1&view=features"]')
+				document.querySelector('nav[aria-label="Breadcrumb"] a[href="?websiteId=p1&view=settings"]')
 			),
 		);
 		await settle();
 		expect(window.location.hash).toBe('');
 		expect(document.querySelector('h1')?.textContent).toBe('One');
+	});
+
+	it('an old link to the Features tab opens Settings, where the features are now', async () => {
+		/** @param {TabProps} props */
+		const Where = (props) => <p>{`settings of ${props.websiteId}`}</p>;
+		serve({ 'GET /v1/dashboard/session': session(MERCHANT) });
+		window.history.replaceState(null, '', '?websiteId=p1&view=features');
+		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ settings: Where }} />);
+		await settle();
+		expect(current()).toBe('Settings');
+		expect(document.body.textContent).toContain('settings of p1');
 	});
 
 	it('moves to a sub-page of the tab it is already on when another tab asks to open it', async () => {

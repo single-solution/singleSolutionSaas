@@ -200,7 +200,7 @@ describe('useSetupSteps', () => {
 		expect(open.mock.calls).toEqual([
 			['settings', 'catalog'],
 			['settings', 'shipping.zones'],
-			['features'],
+			['settings'],
 			['settings', 'checkout'],
 		]);
 	});

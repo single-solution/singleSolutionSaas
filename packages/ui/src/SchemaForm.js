@@ -12,8 +12,8 @@
  * the control on the right; an on/off setting is a toggle, a choice of up to four is a segmented control, a longer one
  * a select; long text and lists take the whole row. Rows stack on a narrow card.
  *
- * One view fits one screen (owner 2026-10-16): settings marked `x-ui.advanced` (or in a group named Advanced) are in
- * a collapsed Advanced block after the cards; a form with three or more groups shows one group at a time under a tab
+ * Settings marked `x-ui.advanced` (or in a group named Advanced) are an open Advanced section with its own heading,
+ * after the cards (owner 2026-10-21: no closed boxes); a form with three or more groups shows one group at a time under a tab
  * strip (`tabs={false}` lists the cards instead; `group` shows just that group, which a page with an inner sidebar uses
  * to list the groups as sub-items).
  *
@@ -25,7 +25,7 @@
  */
 import { useId, useState } from 'react';
 import { Button } from './Button.js';
-import { CARD_FLOW, Disclosure, PillTabs, SaveBar, SettingList, SettingsCard } from './blocks.js';
+import { CARD_FLOW, PillTabs, SaveBar, SettingList, SettingsCard } from './blocks.js';
 import {
 	CheckboxGroup,
 	ChoicePicker,
@@ -290,14 +290,15 @@ function NodeControl({
  * above the group cards; `inherited` puts a note (a setting that starts from the Portal's website settings, with the
  * link to change it there) under a setting's help; `before` and `after` are shown above and below the cards. `onSave` shows the Save changes
  * bar while `dirty`. `group` shows only that group's card (`Advanced`: the advanced settings, open); `tabs` (on by
- * default) shows one group at a time from three groups on; `advancedTexts` words the Advanced block.
+ * default) shows one group at a time from three groups on; `advancedTexts` words the Advanced section;
+ * `withAdvanced={false}` leaves the Advanced section out (a page that shows it apart, after other parts).
  * @param {{ schema: SettingsSchema | null | undefined, values: Record<string, unknown>,
  *   onChange: (name: string, value: unknown) => void, errors?: Record<string, string>,
  *   overridden?: Record<string, boolean>, inherited?: Record<string, import('react').ReactNode>,
  *   onReset?: (name: string) => void, disabled?: boolean, idPrefix?: string,
  *   emptyText?: string, className?: string, title?: import('react').ReactNode, description?: import('react').ReactNode,
  *   before?: import('react').ReactNode, after?: import('react').ReactNode, dirty?: boolean, saving?: boolean,
- *   onSave?: () => unknown, onDiscard?: () => void, group?: string, tabs?: boolean,
+ *   onSave?: () => unknown, onDiscard?: () => void, group?: string, tabs?: boolean, withAdvanced?: boolean,
  *   advancedTexts?: { title?: string, description?: string, errors?: string, groups?: string },
  *   saveTexts?: { message?: string, save?: string, discard?: string }, generateText?: string }} props
  */
@@ -323,6 +324,7 @@ export function SchemaForm({
 	onDiscard,
 	group: only,
 	tabs = true,
+	withAdvanced = true,
 	advancedTexts = {},
 	saveTexts = {},
 	generateText,
@@ -334,6 +336,7 @@ export function SchemaForm({
 	if (fields.length === 0) return <p className="text-sm text-muted">{emptyText}</p>;
 	const groups = groupFields(fields.filter((field) => !field.advanced));
 	const advanced = groupFields(fields.filter((field) => field.advanced));
+	const advancedShown = withAdvanced ? advanced : [];
 	const advancedWords = {
 		title: ADVANCED_GROUP,
 		description: 'Settings most people never change',
@@ -414,7 +417,7 @@ export function SchemaForm({
 					? [card(groups[index], `${prefix}-group-${index}`, undefined, undefined, true)]
 					: [];
 	} else if (tabbed) {
-		const ids = [...groups.map((entry) => entry.name), ...(advanced.length > 0 ? [ADVANCED_GROUP] : [])];
+		const ids = [...groups.map((entry) => entry.name), ...(advancedShown.length > 0 ? [ADVANCED_GROUP] : [])];
 		const shown = picked && ids.includes(picked) ? picked : (ids[0] ?? '');
 		cards = [
 			<PillTabs
@@ -464,15 +467,23 @@ export function SchemaForm({
 					single,
 				),
 			),
-			...(advanced.length > 0
+			...(advancedShown.length > 0
 				? [
-						<Disclosure
+						<section
 							key="advanced"
-							title={advancedWords.title}
-							description={advancedWords.description}
-							forceOpen={failing(advanced)}>
+							id={`${prefix}-advanced`}
+							aria-labelledby={`${prefix}-advanced-title`}
+							className="flex min-w-0 flex-col gap-3">
+							<div className="min-w-0 px-1">
+								<h3 id={`${prefix}-advanced-title`} className="text-title font-semibold tracking-[-0.01em] text-fg">
+									{advancedWords.title}
+								</h3>
+								{advancedWords.description ? (
+									<p className="mt-0.5 text-help text-muted">{advancedWords.description}</p>
+								) : null}
+							</div>
 							<div className={CARD_FLOW}>{advancedCards()}</div>
-						</Disclosure>,
+						</section>,
 					]
 				: []),
 		];

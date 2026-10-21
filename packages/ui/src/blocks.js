@@ -4,7 +4,7 @@
  * {@link SettingsCard} with its setting rows (label and muted help on the left, the control on the right, rows divided
  * by hairlines, stacked on phones), the sticky {@link SaveBar} that appears only when something changed, the section
  * choice kept in the address ({@link useHashSection}, used by the dashboard pages with an inner navigation), the
- * {@link PillTabs} form control, and {@link Disclosure}, the collapsed Advanced block.
+ * {@link PillTabs} form control, and {@link Disclosure}, a block that opens and closes.
  *
  * Nothing here stretches a card to the height of its neighbor: the grids align their cells to the start ({@link NO_STRETCH}).
  * @module

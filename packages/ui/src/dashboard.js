@@ -1,7 +1,7 @@
 'use client';
 /**
  * `@ss/ui/dashboard` — the product dashboard (PLAN 0.4.3), one for every product: one page, opened from the Portal
- * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Features · Settings · Texts · Connections ·
+ * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Settings · Texts · Connections ·
  * Developers, plus Defaults and Prices for Owners. The look, the Format and the business facts are not here: they are the
  * Portal's Website settings, shown read-only where a value is used (`ManagedNote`) with a link to the place to change it.
  * Every tab draws a `Page` (layout contract 2026-10-17: the breadcrumbs `Product › Section › sub-page` are its title, the
@@ -31,16 +31,7 @@ import { call, fill, useLoad } from './dashboard-api.js';
 import { DisplayLocale } from './time.js';
 import { DashboardProvider, useDashboard } from './dashboard-parts.js';
 import { FrameContext } from './dashboard-page.js';
-import {
-	ConnectionsTab,
-	DefaultsTab,
-	DevelopersTab,
-	FeaturesTab,
-	OverviewTab,
-	PricesTab,
-	SettingsTab,
-	TextsTab,
-} from './dashboard-tabs.js';
+import { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab } from './dashboard-tabs.js';
 
 export { call, fill, useLoad } from './dashboard-api.js';
 export { isFilled, useSetupSteps, wantsSettings } from './dashboard-setup.js';
@@ -69,7 +60,7 @@ export {
 } from './dashboard-settings.js';
 export { FrameContext, SectionsPage, pageState, useCrumbs } from './dashboard-page.js';
 export { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
-export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
+export { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-parts.js').DashboardManifest} DashboardManifest */
@@ -100,7 +91,6 @@ export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, P
  */
 const STANDARD_TABS = [
 	['overview', { component: OverviewTab, icon: 'home', kind: 'overview' }],
-	['features', { component: FeaturesTab, icon: 'zap', kind: 'feature' }],
 	['settings', { component: SettingsTab, icon: 'sliders', kind: 'settings' }],
 	['texts', { component: TextsTab, icon: 'type', kind: 'settings' }],
 	['connections', { component: ConnectionsTab, icon: 'plug', kind: 'connection' }],
@@ -132,6 +122,9 @@ const tabsOf = (own) => {
 	return [...all.filter(([, tab]) => !tab.global), ...all.filter(([, tab]) => tab.global)];
 };
 
+/** Tabs that were folded into another: an old link to the Features tab opens Settings, where the features are now. @type {Record<string, string>} */
+const MOVED_TABS = { features: 'settings' };
+
 /**
  * The website and tab of a dashboard address.
  * @param {string} search
@@ -139,7 +132,11 @@ const tabsOf = (own) => {
  */
 const queryOf = (search) => {
 	const found = new URLSearchParams(search);
-	return { websiteId: found.get('websiteId'), view: found.get('view') };
+	const view = found.get('view');
+	return {
+		websiteId: found.get('websiteId'),
+		view: view !== null && Object.hasOwn(MOVED_TABS, view) ? (MOVED_TABS[view] ?? view) : view,
+	};
 };
 
 /** Opens a dashboard address inside the page. */
@@ -216,7 +213,7 @@ function WebsiteLocale({ websiteId, children }) {
  * words over the shared ones) and its tabs — a standard tab's key with a component puts the product's section in its
  * place (often the standard tab with the product's props); a new key with `{ component, icon, kind, global? }` adds a
  * tab (its label in `texts.tabs`).
- * `categories` groups the features for the Features and Settings sidebars (most used first).
+ * `categories` groups the features for the chips of the Settings list (most used first).
  * @param {{ manifest: DashboardManifest, texts: { title: string } & Record<string, any>, categories?: DashboardCategories,
  *   tabs?: Record<string, TabComponent | TabSpec | null> }} props
  */
