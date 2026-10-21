@@ -117,6 +117,40 @@ export const PAGE = Object.freeze({
 	padded: 'flex flex-col gap-6 p-4 sm:p-6',
 	/** the body of a list: the table uses all of it */
 	flush: 'flex min-h-0 flex-1 flex-col',
+	/** the area of a page with a list column: the column beside the main panel (one of them alone on phones) */
+	listArea: 'flex min-h-0 min-w-0 flex-1 gap-3 lg:gap-4',
+});
+
+/**
+ * The rich list (`Row`, `ListColumn`): a column of fixed-height rows beside the page. A row, its skeleton and the
+ * highlight that slides under the picked row are all `row` tall; `content-visibility: auto` with that intrinsic size
+ * keeps a very long list fast (rows far outside the pane are not drawn).
+ */
+export const LIST = Object.freeze({
+	/** the side column: a panel like the inner navigation, 320 px wide beside the page, the whole width on phones */
+	column:
+		'flex min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-panel border border-line-soft bg-surface shadow-panel sm:w-80',
+	/** the search box and the filter chips above the rows (they stay put) */
+	head: 'flex shrink-0 flex-col gap-2 p-2 pb-0',
+	/** the box of the rows that scrolls; `group/list` and `data-ss-slide` tell a row that the highlight is drawn for it */
+	scroller: 'ss-scroll group/list min-h-0 flex-1 p-2',
+	/** one row (the outer box); the intrinsic size is the row's height */
+	row: 'h-14 [content-visibility:auto] [contain-intrinsic-size:auto_3.5rem]',
+	/** the highlight under the picked row: one element that moves with `transform` */
+	slide: 'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-md bg-primary-soft opacity-0 transition-[transform,height,opacity] duration-(--ss-motion) ease-ss',
+	/** a filter chip, off and on */
+	chip: 'ss-motion ss-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-micro font-medium focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
+	chipOff: 'bg-surface-2 text-muted hover:text-fg',
+	chipOn: 'bg-primary-soft text-on-primary-soft',
+});
+
+/** The color of the one line under a row's title (and of its warning), by meaning. */
+export const LIST_TONE = Object.freeze({
+	success: 'text-success',
+	warning: 'text-warning',
+	danger: 'text-danger',
+	accent: 'text-primary',
+	neutral: 'text-muted',
 });
 
 /**
