@@ -101,11 +101,16 @@ export function ActionMenu({
 		/** @param {KeyboardEvent} event */
 		const escape = (event) => {
 			if (event.key !== 'Escape') return;
+			// the innermost open thing takes the key: an overlay around the menu listens on its own panel and would
+			// close with it, so the menu stops the key here, before it gets that far
+			event.stopPropagation();
 			setOpen(false);
 			button.current?.focus();
 		};
+		const box = root.current;
 		const close = () => setOpen(false);
 		document.addEventListener('mousedown', outside);
+		box?.addEventListener('keydown', escape);
 		document.addEventListener('keydown', escape);
 		if (floating) {
 			document.addEventListener('scroll', close, true);
@@ -113,6 +118,7 @@ export function ActionMenu({
 		}
 		return () => {
 			document.removeEventListener('mousedown', outside);
+			box?.removeEventListener('keydown', escape);
 			document.removeEventListener('keydown', escape);
 			document.removeEventListener('scroll', close, true);
 			window.removeEventListener('resize', close);
