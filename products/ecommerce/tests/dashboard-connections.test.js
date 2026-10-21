@@ -50,9 +50,9 @@ describe('Ecommerce’s connection forms', () => {
 			for (let i = 0; i < 4; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 		};
 		await settle();
-		// one connection per view of the sidebar: open each
+		// one connection per row of the list: open each
 		for (const name of ['courier_2', 'storage', 'ai', 'link_accounts']) {
-			click(/** @type {HTMLElement} */ (container.querySelector(`nav a[href="#connection-${name}"]`)));
+			click(/** @type {HTMLElement} */ (container.querySelector(`[role="option"][data-ss-id="connection-${name}"]`)));
 			await settle();
 		}
 		const courier = container.querySelector('[id="section-connection-courier_2"]')?.textContent ?? '';

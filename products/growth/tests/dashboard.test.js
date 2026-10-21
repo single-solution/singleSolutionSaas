@@ -141,21 +141,28 @@ const Defaults = (tab) => (
 );
 
 /**
- * Opens a view of the inner sidebar (a sub-item, when it is one, is the last link to it).
+ * Opens a row of the list beside the page. A feature is one row with all its groups stacked on its page, so the id of
+ * a group (`feature.group`) opens the row of its feature.
  * @param {ParentNode} root @param {string} id
  */
-const openSection = (root, id) => click(/** @type {HTMLElement} */ ([...root.querySelectorAll(`nav a[href="#${id}"]`)].at(-1)));
+const openSection = (root, id) =>
+	click(
+		/** @type {HTMLElement} */ (
+			root.querySelector(`[role="option"][data-ss-id="${id}"]`) ??
+				root.querySelector(`[role="option"][data-ss-id="${id.split('.')[0]}"]`)
+		),
+	);
 
 /**
- * Opens every view of the inner sidebar, so the text of all of them is on the page (a view stays mounted once opened).
+ * Opens every row of the list, so the text of all of them is on the page (a view stays mounted once opened).
  * @param {ParentNode} root
  */
 const visitAll = async (root) => {
 	/** @type {Set<string>} */
 	const seen = new Set();
 	for (let pass = 0; pass < 3; pass += 1)
-		for (const link of [...root.querySelectorAll('nav[aria-label] a[href^="#"]')]) {
-			const id = String(link.getAttribute('href')).slice(1);
+		for (const row of [...root.querySelectorAll('[role="option"][data-ss-id]')]) {
+			const id = String(row.getAttribute('data-ss-id'));
 			if (seen.has(id)) continue;
 			seen.add(id);
 			openSection(root, id);
@@ -211,9 +218,9 @@ describe('the dashboard (setup only)', () => {
 		openSection(container, 'conversion_funnel.goals');
 		await settle();
 		const card = /** @type {HTMLElement} */ (container.querySelector('[id="section-conversion_funnel.goals"]'));
-		// a table of the goals; the page says the title, so the card has none
+		// the goals, stacked on the feature's page under their own small heading; the list itself has no second title
 		expect(rowNames(card)).toEqual(['Purchase', 'Contact']);
-		expect(card.querySelector('h2')).toBeNull();
+		expect(card.querySelectorAll('h2')).toHaveLength(1);
 		// a new goal opens in a drawer: its name and event (the kind is a select)
 		await act(async () => click(byText(card, TEXTS.lists.add, 'button')));
 		const fresh = [...drawerOf().querySelectorAll('input')];

@@ -215,7 +215,7 @@ describe('Settings → Role pricing', () => {
 		stub(true);
 		const on = render(inDashboard(<Settings {...props} />));
 		await settle();
-		click(/** @type {HTMLElement} */ (on.container.querySelector('nav a[href="#role_pricing"]')));
+		click(/** @type {HTMLElement} */ (on.container.querySelector('[role="option"][data-ss-id="role_pricing"]')));
 		await settle();
 		expect(on.container.textContent).toContain('Role prices');
 		expect(rowNames(on.container)).toEqual(['wholesale']);
@@ -223,7 +223,7 @@ describe('Settings → Role pricing', () => {
 		stub(false);
 		const off = render(inDashboard(<Settings {...props} />));
 		await settle();
-		expect(off.container.querySelector('nav a[href="#role_pricing"]')).toBeNull();
+		expect(off.container.querySelector('[role="option"][data-ss-id="role_pricing"]')).toBeNull();
 		expect(rowNames(off.container)).toEqual([]);
 	});
 });

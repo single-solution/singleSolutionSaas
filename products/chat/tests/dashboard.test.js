@@ -226,7 +226,7 @@ describe('Connections: the AI providers', () => {
 		await settle();
 		/** @param {string} name */
 		const open = (name) => {
-			click(/** @type {HTMLElement} */ ([...container.querySelectorAll(`nav a[href="#connection-${name}"]`)].at(-1)));
+			click(/** @type {HTMLElement} */ (container.querySelector(`[role="option"][data-ss-id="connection-${name}"]`)));
 			return /** @type {HTMLElement} */ (container.querySelector(`#section-connection-${name}`));
 		};
 		const main = open('ai');

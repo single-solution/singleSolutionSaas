@@ -5,7 +5,7 @@
  * only then), the methods payers do not see yet and Storage missing while a method takes proofs (fixed-choices P1, P2).
  */
 import { act } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '@ss/ui/dashboard';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import manifest from '../manifest.json' with { type: 'json' };
@@ -100,6 +100,17 @@ const Overview = (tab) => (
 		<TABS.overview {...tab} />
 	</DashboardProvider>
 );
+
+// jsdom has no matchMedia: the person asks for less motion (a tile's figure shows its value at once instead of counting
+// up to it), on a wide screen
+beforeEach(() => {
+	vi.stubGlobal('matchMedia', (/** @type {string} */ query) => ({
+		matches: query.includes('prefers-reduced-motion'),
+		media: query,
+		addEventListener: () => undefined,
+		removeEventListener: () => undefined,
+	}));
+});
 
 afterEach(() => {
 	cleanup();
@@ -340,7 +351,7 @@ describe("Payments's dashboard Developers tab", () => {
 			</DashboardProvider>,
 		);
 		await settle();
-		click(/** @type {HTMLElement} */ (container.querySelector('nav a[href="#callbacks"]')));
+		click(/** @type {HTMLElement} */ (container.querySelector('[role="option"][data-ss-id="callbacks"]')));
 		expect(container.textContent).toContain('Stripe: https://p.example/v1/gateways/stripe/web_9');
 		expect(container.textContent).toContain('JazzCash (Pakistan): https://p.example/return/jazzcash/web_9/<paymentId>');
 	});

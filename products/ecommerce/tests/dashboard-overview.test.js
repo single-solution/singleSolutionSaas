@@ -258,14 +258,14 @@ describe('Ecommerce’s Overview', () => {
 		expect(row('Set the category page address').querySelector('.line-through')).not.toBeNull();
 		expect(row('Check your order steps').textContent).toContain('2 steps');
 		expect(row('Decide on guest checkout').textContent).toContain('Optional');
-		// the buttons open the exact section: a setting's own group, a list's view, a connection
+		// the buttons open the exact section: a feature's page (its groups are stacked on it), a list's view, a connection
 		await press(row('Set the product page address'), 'Set address');
 		await press(row('Add a delivery zone with a rate'), 'Open delivery zones');
 		await press(row('Offer a way to pay'), 'Review');
 		await press(row('Add a tax rule'), 'Open tax rules');
 		await press(row('Decide on guest checkout'), 'Choose');
 		expect(opened).toEqual([
-			'settings#catalog.page-addresses',
+			'settings#catalog',
 			'settings#delivery_zones',
 			'settings#checkout.payment-methods',
 			'settings#taxes',
