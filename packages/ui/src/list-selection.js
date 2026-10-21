@@ -80,3 +80,77 @@ export function useListSelection({ ids, param = 'id', initial }) {
 
 	return [selected, select];
 }
+
+/**
+ * @typedef {object} RowSelection
+ * @property {boolean} mode select mode is on
+ * @property {(key?: string) => void} start turn select mode on (and select that row)
+ * @property {() => void} done leave select mode and forget the selection
+ * @property {(key: string) => void} toggle
+ * @property {() => void} selectAll
+ * @property {() => void} clear
+ * @property {string[]} keys the keys of the selected rows (only rows that are still in the list)
+ * @property {unknown[]} rows the selected rows
+ * @property {number} count
+ * @property {number} total
+ * @property {boolean} allSelected
+ * @property {(key: string) => boolean} isSelected
+ * @property {(actions?: import('react').ReactNode) => { onStartSelect?: () => void, bulk?: import('./Toolbar.js').ToolbarBulk }} toolbar
+ *   the Toolbar props for the current mode: the Select button, or the bulk bar with these actions
+ */
+
+/**
+ * Select rows of a list: the state shared by the {@link ListColumn} (or {@link Toolbar}) and the row checks.
+ * Records that leave the list drop out of the selection.
+ * @template T
+ * @param {T[]} rows the rows that can be selected (the ones on screen)
+ * @param {(row: T) => string} rowKey
+ * @returns {RowSelection}
+ */
+export function useRowSelection(rows, rowKey) {
+	const [mode, setMode] = useState(false);
+	const [chosen, setChosen] = useState(/** @type {Set<string>} */ (new Set()));
+	const all = rows.map(rowKey);
+	const keys = all.filter((key) => chosen.has(key));
+	const picked = new Set(keys);
+	/** @param {string} [key] */
+	const start = (key) => {
+		setMode(true);
+		if (key !== undefined) setChosen(new Set([key]));
+	};
+	const done = () => {
+		setMode(false);
+		setChosen(new Set());
+	};
+	/** @param {string} key */
+	const toggle = (key) =>
+		setChosen((previous) => {
+			const next = new Set(previous);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	const selectAll = () => setChosen(new Set(all));
+	const clear = () => setChosen(new Set());
+	const allSelected = all.length > 0 && keys.length === all.length;
+	return {
+		mode,
+		start,
+		done,
+		toggle,
+		selectAll,
+		clear,
+		keys,
+		rows: rows.filter((row) => picked.has(rowKey(row))),
+		count: keys.length,
+		total: all.length,
+		allSelected,
+		isSelected: (key) => picked.has(key),
+		toolbar: (actions) =>
+			mode
+				? { bulk: { count: keys.length, total: all.length, allSelected, actions, onSelectAll: selectAll, onDone: done } }
+				: all.length > 0
+					? { onStartSelect: () => start() }
+					: {},
+	};
+}

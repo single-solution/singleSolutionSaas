@@ -151,4 +151,13 @@ describe('the other skeletons', () => {
 		expect(container.querySelector('a[href="/m"]')?.textContent).toBe('Merchants');
 		expect(container.textContent).toContain('Acme');
 	});
+
+	it('the page skeleton draws the list column when list is true', () => {
+		const { container } = render(<PageSkeleton list />);
+		expect(cls(container.querySelector('[data-ss-page] > div'))).toBe(PAGE.listArea);
+		const aside = container.querySelector('aside');
+		expect(aside).not.toBeNull();
+		expect(cls(aside)).toContain(LIST.column);
+		expect(aside?.querySelectorAll('[data-ss-row], [class*="h-14"]').length).toBeGreaterThan(0);
+	});
 });

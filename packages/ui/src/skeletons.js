@@ -19,7 +19,6 @@ import {
 	NAV_PANEL,
 	PAGE,
 	pageBody,
-	TABLE,
 } from './layout-metrics.js';
 import { Crumbs, ShellMenuButton } from './page-parts.js';
 import { PaginationSkeleton } from './Pagination.js';
@@ -84,51 +83,6 @@ const CELLS = {
 	date: 'h-3 w-20',
 	status: 'h-5 w-16 rounded-full',
 };
-
-/**
- * The data table while it loads: the same scrolling box, the same header row (with the real column names when they
- * are known) and skeleton rows with the same columns, cell classes and heights as the real rows.
- * @param {{ columns: number | SkeletonColumn[], rows?: number, selectable?: boolean, menu?: boolean,
- *   label?: string, className?: string }} props `selectable` keeps the room for the corner check, `menu` the last
- *   column of the row menu
- */
-export function DataTableSkeleton({ columns, rows = 8, selectable = false, menu = false, label = 'Loading', className }) {
-	/** @type {SkeletonColumn[]} */
-	const list = typeof columns === 'number' ? Array.from({ length: columns }, () => ({})) : columns;
-	return (
-		<div role="status" aria-label={label} aria-busy="true" className={cx(TABLE.scroller, 'animate-ss-fade', className)}>
-			<table className={TABLE.table}>
-				<thead>
-					<tr>
-						{list.map((column, i) => (
-							<th key={i} scope="col" className={cx(TABLE.th, columnClass(column, selectable && i === 0))}>
-								{column.header ?? <SkeletonBlock className="inline-block h-3 w-14 align-middle" />}
-							</th>
-						))}
-						{menu ? <th scope="col" className={cx(TABLE.th, TABLE.menu)} /> : null}
-					</tr>
-				</thead>
-				<tbody>
-					{Array.from({ length: rows }, (_, row) => (
-						<tr key={row}>
-							{list.map((column, i) => (
-								<td key={i} className={cx(TABLE.td, columnClass(column, selectable && i === 0))}>
-									<SkeletonBlock
-										className={cx(
-											CELLS[column.kind ?? 'text'],
-											(column.kind ?? 'text') === 'text' && WIDTHS[(row + i) % WIDTHS.length],
-										)}
-									/>
-								</td>
-							))}
-							{menu ? <td className={cx(TABLE.td, TABLE.menu)} /> : null}
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
-	);
-}
 
 /**
  * The figures table while it loads: the same scrolling container, sticky header row, skeleton rows with the same column
@@ -264,16 +218,17 @@ export function StatGridSkeleton({ tiles = 4, className }) {
 /**
  * A page while it loads (for a route's `loading.js`, and what {@link Page} draws for `loading`): the same one-line
  * header (the breadcrumbs when they are known, blocks for the numbers and the actions), the same inner navigation, toolbar,
- * body and footer areas as the page, the same sizes. `children` is the body's own skeleton (a `DataTableSkeleton`, an
+ * body and footer areas as the page, the same sizes. `children` is the body's own skeleton (a `RowListSkeleton`, an
  * `OverviewSkeleton`); a few settings cards by default.
  * @param {{ crumbs?: import('./page-parts.js').PageCrumb[], linkAs?: import('react').ElementType, nav?: boolean,
- *   toolbar?: boolean, footer?: boolean, flush?: boolean, label?: string, children?: import('react').ReactNode,
+ *   list?: boolean, toolbar?: boolean, footer?: boolean, flush?: boolean, label?: string, children?: import('react').ReactNode,
  *   className?: string }} props
  */
 export function PageSkeleton({
 	crumbs,
 	linkAs,
 	nav = false,
+	list = false,
 	toolbar = false,
 	footer = false,
 	flush = false,
@@ -298,8 +253,19 @@ export function PageSkeleton({
 				<SkeletonBlock className="hidden h-7 w-28 rounded-full @[60rem]:block" />
 				<SkeletonBlock className="h-9 w-24" />
 			</header>
-			<div className={PAGE.area}>
-				{nav ? <InnerNavSkeleton /> : null}
+			<div className={list ? PAGE.listArea : PAGE.area}>
+				{list ? (
+					<aside aria-hidden="true" className={cx(LIST.column, 'animate-ss-fade hidden lg:flex')}>
+						<div className="p-2">
+							<SkeletonBlock className="h-9 w-full rounded-md" />
+						</div>
+						<div className="flex-1 space-y-1 p-2">
+							<RowListSkeleton rows={8} />
+						</div>
+					</aside>
+				) : nav ? (
+					<InnerNavSkeleton />
+				) : null}
 				<section className={PAGE.main}>
 					{toolbar ? (
 						<div data-ss-part="toolbar" className={PAGE.toolbar}>

@@ -2,7 +2,7 @@
 /**
  * Building blocks shared by console views: the page error (drawn as a Page, layout contract R2) and the two helpers
  * of product dashboards and two-step forms. The list-and-detail layout, its rows and the detail tabs that stood here
- * are gone: lists are `DataTable` pages and the parts of a page are `InnerNav` items with their own addresses.
+ * are gone: lists are rich rows and the parts of a page are sections or `InnerNav` items with their own addresses.
  * @module
  */
 import { ButtonLink, Page, describeProblem, problemCode } from '@ss/ui';

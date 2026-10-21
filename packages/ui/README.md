@@ -106,12 +106,10 @@ export function Merchants({ merchants, onAdd, onToggle }) {
 }
 ```
 
-**Never** draw a table (`DataTable`, `Table` or a raw `<table>`), a closed box (`Disclosure`) or small tabs
+**Never** draw a raw table (`<table>`), a closed box (`Disclosure`) or small tabs
 (`PillTabs`), and never write a raw `<select>`, `<input>` or `<textarea>`: use `ListColumn` + `Row`, `Page sections` and
-`Card`, and the kit fields (`Select`, `Input`, `TextArea`). The test `test/kit-only.test.js` reads every screen under
-`platform/src`, `platform/app` and `products/*/app` and fails when one does. The screens that still do are listed in
-`test/kit-only-todo.js`; that list only shrinks (a new screen on it, or a cleaned one left on it, fails the test), and
-the screens move off it as they are rebuilt.
+`Card`, `FiguresTable` for figures, and the kit fields (`Select`, `Input`, `TextArea`). The test `test/kit-only.test.js`
+reads every screen under `platform/src`, `platform/app` and `products/*/app` and fails when one does. All screens are 100% clean.
 
 ## Color rule (redesign 2, owner 2026-10-17: 60-30-10, colors carry meaning)
 
@@ -153,13 +151,12 @@ One component per job. The window never scrolls; every pane has its own thin scr
   bulk bar in select mode. `FiguresTable`: the ONE table in the kit, only for figures (owner 2026-10-21 19:47, K-1e) —
   comparing numbers across rows and columns (usage, finance sums, reports, order lines); sticky header, numbers on the
   right (tabular figures), accessible sort with `aria-sort`, five states, totals row, and clean stacked rows on phones so the
-  page never scrolls sideways. `DataTable` (+ `useRowSelection`): the old table of records; new screens use `ListColumn` instead (see "How to
-  build a screen") and the screens still on `DataTable` are listed in `test/kit-only-todo.js`. `Pagination`: the Page footer.
+  page never scrolls sideways. `Pagination`: the Page footer.
 - `Drawer` (`size="md"` about 480 px, `"lg"` about 760 px, full screen on phones; `Dialog` on the right is the same
   drawer), `SaveBar` (the only save control), `AppShell` nav items with `badge: { count, tone }` and `dot`, and the
   account with its `role`.
-- Skeletons at the real sizes: `PageSkeleton`, `InnerNavSkeleton`, `ToolbarSkeleton`, `DataTableSkeleton`,
-  `FiguresTableSkeleton`, `PaginationSkeleton`, `SettingsCardSkeleton`, `StatGridSkeleton`, `DrawerSkeleton`, `DrawerBodySkeleton`.
+- Skeletons at the real sizes: `PageSkeleton`, `InnerNavSkeleton`, `ToolbarSkeleton`, `FiguresTableSkeleton`,
+  `RowListSkeleton`, `PaginationSkeleton`, `SettingsCardSkeleton`, `StatGridSkeleton`, `DrawerSkeleton`, `DrawerBodySkeleton`.
 
 ## The premium frame and blocks (owner 2026-10-16)
 
@@ -227,8 +224,6 @@ it is the menu button.
 - `<StatGrid label?>` (classes in `STAT_GRID`) holds the tiles: one column, two from 28rem (an odd last tile spans the
   row), three tiles in a row from 42rem and four from 56rem.
 - `KeyValueList`, `Masonry` and the field grid also follow their own width.
-- `Table` cells keep one line (a column with `wrap` wraps on whole words within 10rem); a table wider than its card
-  scrolls inside it (a labeled region the keyboard can focus and scroll). With no rows it shows only its empty message.
 - Type sizes beside Tailwind's scale are named in `theme.css`: `text-micro` (11px), `text-label` (13px), `text-lead` (15px),
   `text-heading` (17px), `text-page` (26px) and `text-figure` (28px); use them instead of `text-[13px]`. A failed
   dashboard section (`Loaded` with an answer from `useLoad`) offers Try again; `ConfirmDialog` starts on Cancel when `danger`.
@@ -311,7 +306,7 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   `ListColumn` beside the page (`SectionsPage` in `dashboard-page.js`, each view its own `#hash`, the badge, status dot,
   `meta` line and lock on its row, the groups as filter chips); a section with parts is one row whose page shows every part
   stacked under its heading.
-  Lists are `DataTable` pages for now (the Changes table; it moves to rows) and a record edit opens in a
+  Lists are rich rows beside the item's page and a record edit opens in place or in a
   `Drawer`. The widget texts (Texts, and the texts of Defaults) are no table: a screen's row says "{n} texts · {m} changed"
   and its page is every text as a kit field in place (label the English words, help where it shows, Reset to default
   once changed; `useTextsEditor` + `TextFields`), all edits waiting for the page's one Save bar (`SettingsBar`); the

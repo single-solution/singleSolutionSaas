@@ -1,12 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { KIT_ONLY_TODO } from './kit-only-todo.js';
 
 /**
  * Guard: screens are built from the kit's parts only (see "How to build a screen" in the README). A screen never draws
- * a table, a closed box (`Disclosure`), small tabs (`PillTabs`) or a raw form field. The files that still do are in
- * `kit-only-todo.js`; the list may only shrink: a new offender fails, and so does a listed file that has been cleaned.
+ * a table (`DataTable`, `Table`, raw `<table>`), a closed box (`Disclosure`), small tabs (`PillTabs`) or a raw form field
+ * (`<select>`, `<input>`, `<textarea>`). All screens in the repository are clean; any new offender fails this test immediately.
  */
 
 /** The repository root. */
@@ -90,8 +89,6 @@ const found = new Map(
 		.filter(([, uses]) => uses.length > 0),
 );
 
-const todo = new Map(KIT_ONLY_TODO.map((entry) => [entry.file, entry.uses]));
-
 describe('kit only: screens are built from the kit', () => {
 	it('finds the screens', () => {
 		// a wrong folder would make the guard pass on nothing
@@ -99,44 +96,15 @@ describe('kit only: screens are built from the kit', () => {
 		expect(jsFiles(path.join(ROOT, 'platform/src')).length).toBeGreaterThan(20);
 	});
 
-	it('no file outside the todo list draws a table, a closed box, small tabs or a raw field', () => {
+	it('no screen in the repository draws a banned component or raw field', () => {
 		const problems = [];
 		for (const [file, uses] of found) {
-			const listed = todo.get(file) ?? [];
-			const added = uses.filter((kind) => !listed.includes(kind));
-			if (added.length > 0)
-				problems.push(
-					`${file} uses ${added.join(', ')}: use Row/ListColumn/Card/the kit fields instead (see packages/ui/README.md, "How to build a screen")`,
-				);
+			problems.push(
+				`${file} uses ${uses.join(', ')}: use Row/ListColumn/Card/the kit fields instead (see packages/ui/README.md, "How to build a screen")`,
+			);
 		}
 		expect(problems).toEqual([]);
-	});
-
-	it('every file in the todo list still uses what it lists', () => {
-		const problems = [];
-		for (const { file, uses } of KIT_ONLY_TODO) {
-			const now = found.get(file);
-			if (!now) problems.push(`${file} no longer uses anything banned: remove it from kit-only-todo.js`);
-			else {
-				const gone = uses.filter((kind) => !now.includes(kind));
-				if (gone.length > 0)
-					problems.push(`${file} no longer uses ${gone.join(', ')}: remove that from its uses in kit-only-todo.js`);
-			}
-		}
-		expect(problems).toEqual([]);
-	});
-
-	it('the todo list is sorted, has each file once and names known kinds', () => {
-		const files = KIT_ONLY_TODO.map((entry) => entry.file);
-		expect(files).toEqual([...new Set(files)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
-		for (const { file, uses } of KIT_ONLY_TODO) {
-			expect(uses.length, file).toBeGreaterThan(0);
-			expect(
-				uses.filter((kind) => !KINDS.includes(kind)),
-				file,
-			).toEqual([]);
-			expect(uses, file).toEqual(KINDS.filter((kind) => uses.includes(kind)));
-		}
+		expect([...found.entries()]).toEqual([]);
 	});
 
 	it('K-1e: allows FiguresTable while refusing DataTable, Table and raw <table>', () => {
@@ -147,5 +115,9 @@ describe('kit only: screens are built from the kit', () => {
 		expect(offences("import { FiguresTable } from '@ss/ui';\nexport const x = <FiguresTable />;")).toEqual([]);
 		expect(offences("import { DataTable } from '@ss/ui';\nexport const x = <DataTable />;")).toEqual(['DataTable']);
 		expect(offences('export const x = <table><tbody /></table>;')).toEqual(['<table']);
+		expect(offences('export const x = <select><option /></select>;')).toEqual(['<select']);
+		expect(offences('export const x = <input type="text" />;')).toEqual(['<input']);
+		expect(offences('export const x = <textarea />;')).toEqual(['<textarea']);
+		expect(offences("import { Disclosure, PillTabs } from '@ss/ui';")).toEqual(['Disclosure', 'PillTabs']);
 	});
 });

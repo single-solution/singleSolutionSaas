@@ -18,11 +18,11 @@
 import { Fragment, useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
-import { DataTable } from './DataTable.js';
 import { Badge, Card, EmptyState, Stat, StatGrid, TextLink } from './display.js';
 import { formatCredits, humanize, supportContact } from './format.js';
 import { Icon } from './icons.js';
 import { Page } from './Page.js';
+import { Row } from './Row.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
 import { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
 import { SettingsCardSkeleton, StatGridSkeleton } from './skeletons.js';
@@ -303,25 +303,26 @@ export function RecentChanges({ items, intro, limit }) {
 }
 
 /**
- * A dashboard's Recent changes (newest first) as a page of their own: one table of who, what and when (in the viewer's
+ * A dashboard's Recent changes (newest first) as a list of rich rows: who, what and when (in the viewer's
  * local time) that uses the whole body (a flush {@link Page} body), as under Defaults and Prices.
  * @param {{ items: ReadonlyArray<{ who: { name: string }, detail: string, at: string }> }} props
  */
 export function ChangesTable({ items }) {
-	/** @type {import('./DataTable.js').DataColumn<{ key: string, who: string, what: string, at: string }>[]} */
-	const columns = [
-		{ key: 'who', header: OVERVIEW_TEXTS.changeWho },
-		{ key: 'what', header: OVERVIEW_TEXTS.changeWhat, wrap: true },
-		{ key: 'at', header: OVERVIEW_TEXTS.changeWhen, kind: 'date', render: (row) => <LocalTime value={row.at} /> },
-	];
+	if (!items || items.length === 0) {
+		return <p className="p-4 text-sm text-muted">{OVERVIEW_TEXTS.noChanges}</p>;
+	}
 	return (
-		<DataTable
-			caption={OVERVIEW_TEXTS.changes}
-			columns={columns}
-			rows={items.map((item, i) => ({ key: `${item.at}-${i}`, who: item.who.name, what: item.detail, at: item.at }))}
-			rowKey={(row) => row.key}
-			empty={OVERVIEW_TEXTS.noChanges}
-		/>
+		<div className="divide-y divide-line-soft">
+			{items.map((item, i) => (
+				<Row
+					key={`${item.at}-${i}`}
+					lead={{ avatar: item.who.name }}
+					title={item.who.name}
+					meta={item.detail}
+					time={<LocalTime value={item.at} />}
+				/>
+			))}
+		</div>
 	);
 }
 

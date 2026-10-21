@@ -55,25 +55,22 @@ export {
 	TextLink,
 	ManagedNote,
 } from './display.js';
-export { Table } from './Table.js';
 export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
 export { Toolbar, TOOLBAR_TEXTS } from './Toolbar.js';
-export { DataTable, DATA_TABLE_TEXTS, useRowSelection } from './DataTable.js';
 export { FiguresTable, FIGURES_TABLE_TEXTS } from './FiguresTable.js';
 export { Pagination, PaginationSkeleton } from './Pagination.js';
 export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
 export { Row } from './Row.js';
 export { NextStep, NEXT_STEP_TEXTS } from './NextStep.js';
 export { ListColumn, LIST_COLUMN_TEXTS } from './ListColumn.js';
-export { useListSelection } from './list-selection.js';
+export { useListSelection, useRowSelection } from './list-selection.js';
 export { Page, PAGE_TEXTS } from './Page.js';
 export { useNarrow } from './page-parts.js';
 export { SECTION_JUMPS_FROM } from './page-sections.js';
 export {
 	InnerNavSkeleton,
 	ToolbarSkeleton,
-	DataTableSkeleton,
 	FiguresTableSkeleton,
 	RowListSkeleton,
 	PageSkeleton,
@@ -141,7 +138,7 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('./InnerNav.js').InnerNavItem} InnerNavItem */
 /** @typedef {import('./InnerNav.js').InnerNavGroup} InnerNavGroup */
-/** @typedef {import('./DataTable.js').RowSelection} RowSelection */
+/** @typedef {import('./list-selection.js').RowSelection} RowSelection */
 /** @template [T=unknown] @typedef {import('./FiguresTable.js').FigureColumn<T>} FigureColumn */
 /** @typedef {import('./FiguresTable.js').FiguresTableTexts} FiguresTableTexts */
 /** @typedef {import('./layout-metrics.js').ColumnKind} ColumnKind */

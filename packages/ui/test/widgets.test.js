@@ -40,7 +40,6 @@ import {
 	StatusBadge,
 	Stepper,
 	Switch,
-	Table,
 	TextArea,
 	ToastProvider,
 	copyText,
@@ -273,88 +272,6 @@ describe('display', () => {
 		expect(container.textContent).toContain('No data for this period.');
 		expect(container.textContent).toContain('Nothing earned yet.');
 		expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
-	});
-});
-
-describe('Table', () => {
-	it('puts its scrolling box in the tab order as a labeled region, so the keyboard can scroll it', () => {
-		const { container } = render(
-			<Table caption="Things" rows={[]} rowKey={(r) => String(r)} columns={[{ key: 'name', header: 'Name' }]} />,
-		);
-		const box = /** @type {HTMLElement} */ (container.querySelector('[role="region"]'));
-		expect(box.getAttribute('aria-label')).toBe('Things');
-		expect(box.tabIndex).toBe(0);
-		expect(box.querySelector('table')).not.toBeNull();
-	});
-
-	const rows = [
-		{ id: 'a', name: 'Beta', n: 2 },
-		{ id: 'b', name: 'Alpha', n: 10 },
-		{ id: 'c', name: 'Gamma', n: null },
-	];
-	it('sorts by column with aria-sort and loads more by cursor', () => {
-		const onLoadMore = vi.fn();
-		const { container } = render(
-			<Table
-				caption="Things"
-				rows={rows}
-				rowKey={(r) => r.id}
-				hasMore
-				onLoadMore={onLoadMore}
-				columns={[
-					{ key: 'name', header: 'Name', sortable: true, rowHeader: true },
-					{ key: 'n', header: 'N', sortable: true, align: 'right', render: (r) => String(r.n ?? '—') },
-				]}
-			/>,
-		);
-		const names = () => [...container.querySelectorAll('tbody th')].map((th) => th.textContent);
-		expect(names()).toEqual(['Beta', 'Alpha', 'Gamma']);
-		const [nameHeader, nHeader] = [...container.querySelectorAll('thead th')];
-		expect(nameHeader?.getAttribute('aria-sort')).toBe('none');
-		click(/** @type {HTMLElement} */ (nameHeader?.querySelector('button')));
-		expect(nameHeader?.getAttribute('aria-sort')).toBe('ascending');
-		expect(names()).toEqual(['Alpha', 'Beta', 'Gamma']);
-		click(/** @type {HTMLElement} */ (nameHeader?.querySelector('button')));
-		expect(nameHeader?.getAttribute('aria-sort')).toBe('descending');
-		expect(names()).toEqual(['Gamma', 'Beta', 'Alpha']);
-		click(/** @type {HTMLElement} */ (nHeader?.querySelector('button')));
-		expect(names()).toEqual(['Beta', 'Alpha', 'Gamma']);
-		expect(container.querySelector('caption')?.textContent).toBe('Things');
-		click(byText(container, 'Load more', 'button'));
-		expect(onLoadMore).toHaveBeenCalled();
-	});
-	it('shows the empty message', () => {
-		const { container } = render(
-			<Table caption="None" rows={[]} rowKey={() => 'x'} columns={[{ key: 'a', header: 'A' }]} empty="Nothing here" />,
-		);
-		expect(container.textContent).toContain('Nothing here');
-		const other = render(
-			<Table caption="Node" rows={[]} rowKey={() => 'x'} columns={[{ key: 'a', header: 'A' }]} empty={<b>No rows</b>} />,
-		);
-		expect(other.container.querySelector('td > b')?.textContent).toBe('No rows');
-		const fallback = render(<Table caption="Plain" rows={[]} rowKey={() => 'x'} columns={[{ key: 'a', header: 'A' }]} />);
-		expect(fallback.container.textContent).toContain('Nothing to show yet.');
-		// no header row to scroll past, and as wide as its card
-		expect(fallback.container.querySelector('thead')?.className).toContain('hidden');
-		expect(fallback.container.querySelector('table')?.className).not.toContain('min-w-');
-	});
-	it('keeps cells on one line; a wrap column wraps on whole words within a readable width', () => {
-		const { container } = render(
-			<Table
-				caption="Log"
-				rows={[{ id: 'a', when: '1 Oct', what: 'A longer description of what happened' }]}
-				rowKey={(r) => r.id}
-				columns={[
-					{ key: 'when', header: 'When', rowHeader: true },
-					{ key: 'what', header: 'What', wrap: true },
-				]}
-			/>,
-		);
-		const [when, what] = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('tbody th, tbody td')]);
-		expect(when?.className).toContain('whitespace-nowrap');
-		expect(what?.className).not.toContain('whitespace-nowrap');
-		expect(what?.querySelector('span.min-w-40')?.textContent).toBe('A longer description of what happened');
-		expect(container.querySelector('table')?.className).toContain('min-w-[32rem]');
 	});
 });
 

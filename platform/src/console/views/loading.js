@@ -9,15 +9,7 @@
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import {
-	DataTableSkeleton,
-	PageSkeleton,
-	RouteProgress,
-	SettingsCardSkeleton,
-	SkeletonBlock,
-	StatGridSkeleton,
-	cx,
-} from '@ss/ui';
+import { PageSkeleton, RouteProgress, RowListSkeleton, SettingsCardSkeleton, SkeletonBlock, StatGridSkeleton, cx } from '@ss/ui';
 import { ADMIN, CONSOLE, MERCHANT } from '../../texts/console.js';
 import { PUBLIC_PATHS } from '../paths.js';
 import { Link } from '../link.js';
@@ -112,7 +104,7 @@ export function ConsoleLoading({ area }) {
 				footer={Boolean(shape.list)}
 				flush={table}>
 				{table ? (
-					<DataTableSkeleton columns={shape.columns ?? 5} menu />
+					<RowListSkeleton rows={shape.columns ?? 5} />
 				) : shape.body === 'overview' ? (
 					<>
 						<StatGridSkeleton />

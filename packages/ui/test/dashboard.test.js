@@ -1421,10 +1421,10 @@ describe('standard tabs', () => {
 			{ method: 'PUT', path: '/v1/dashboard/defaults/text.hello.title', body: { value: 'Howdy' } },
 		]);
 		expect(buttonsOf(container, 'Save changes')).toHaveLength(0);
-		// Recent changes is a table of its own, without a card or a list
+		// Recent changes is rich rows, without a card or an ol
 		openSection(container, 'changes');
 		expect(crumbsOf(container)).toEqual(['Notes', 'Defaults', 'Recent changes']);
-		const changes = /** @type {HTMLElement} */ (container.querySelector('#section-changes table'));
+		const changes = /** @type {HTMLElement} */ (container.querySelector('#section-changes [data-ss-row]'));
 		expect(changes.textContent).toContain('Alex');
 		expect(changes.textContent).toContain('Changed the default greeting');
 		expect(container.querySelector('#section-changes ol, #section-changes ul')).toBeNull();
@@ -1490,10 +1490,10 @@ describe('standard tabs', () => {
 		expect(container.querySelector('#section-security')?.textContent).not.toContain(TEXTS.reseal.intro);
 		expect(aboutOf(container)).toContain(TEXTS.reseal.intro);
 		expect(button(TEXTS.reseal.button)).toBeTruthy();
-		// Recent changes is a table of its own
+		// Recent changes is rich rows
 		openSection(container, 'changes');
 		expect(crumbsOf(container)).toEqual(['Notes', 'Prices', 'Recent changes']);
-		expect(container.querySelector('#section-changes table')).not.toBeNull();
+		expect(container.querySelector('#section-changes [data-ss-row]')).not.toBeNull();
 	});
 });
 

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { ListColumn } from '../src/ListColumn.js';
-import { useListSelection } from '../src/list-selection.js';
+import { useListSelection, useRowSelection } from '../src/list-selection.js';
 import { STAGGER } from '../src/layout-metrics.js';
 import { act, allByRole, byText, cleanup, click, keydown, render, type } from '../src/testing.js';
 
@@ -554,5 +554,103 @@ describe('ListColumn selection', () => {
 		keydown(input, 'Enter');
 		expect(onSearch).toHaveBeenCalledWith('query');
 		expect(onSubmit).toHaveBeenCalledWith('query');
+	});
+
+	it('useRowSelection manages bulk selection state with ListColumn', () => {
+		/** Selection with hook. */
+		const Component = ({ items = merchants }) => {
+			const selection = useRowSelection(items, (m) => m.id);
+			return (
+				<div>
+					<span data-testid="count">{selection.count}</span>
+					<span data-testid="all">{String(selection.allSelected)}</span>
+					{column({
+						items,
+						selection: {
+							...selection,
+							actions: <button type="button">Delete</button>,
+						},
+					})}
+				</div>
+			);
+		};
+
+		const { container, rerender } = render(<Component />);
+		const selectBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Select');
+		expect(selectBtn).not.toBeUndefined();
+		click(/** @type {HTMLElement} */ (selectBtn));
+		expect(container.querySelector('[data-ss-bulk]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="count"]')?.textContent).toBe('0');
+
+		const checkAcme = container.querySelector('button[aria-label="Select Acme Shop"]');
+		click(/** @type {HTMLElement} */ (checkAcme));
+		expect(container.querySelector('[data-testid="count"]')?.textContent).toBe('1');
+		expect(container.querySelector('[data-testid="all"]')?.textContent).toBe('false');
+
+		const selectAllBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Select all');
+		click(/** @type {HTMLElement} */ (selectAllBtn));
+		expect(container.querySelector('[data-testid="count"]')?.textContent).toBe('3');
+		expect(container.querySelector('[data-testid="all"]')?.textContent).toBe('true');
+
+		// items leaving the list drop out of selection
+		rerender(<Component items={merchants.slice(0, 1)} />);
+		expect(container.querySelector('[data-testid="count"]')?.textContent).toBe('1');
+
+		const doneBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Done');
+		click(/** @type {HTMLElement} */ (doneBtn));
+		expect(container.querySelector('[data-ss-bulk]')).toBeNull();
+		expect(container.querySelector('[data-testid="count"]')?.textContent).toBe('0');
+	});
+
+	it('useRowSelection provides toolbar helper for bulk and start select', () => {
+		/** @type {import('../src/list-selection.js').RowSelection} */
+		let probe = /** @type {any} */ (null);
+		const Probe = () => {
+			probe = useRowSelection(merchants, (m) => m.id);
+			return null;
+		};
+		render(<Probe />);
+		expect(probe.toolbar(null).onStartSelect).toBeDefined();
+		expect(probe.toolbar(null).bulk).toBeUndefined();
+
+		act(() => {
+			probe.start('acme');
+		});
+		expect(probe.mode).toBe(true);
+		expect(probe.isSelected('acme')).toBe(true);
+		expect(probe.isSelected('bolt')).toBe(false);
+		expect(probe.keys).toEqual(['acme']);
+		expect(probe.rows).toEqual([merchants[0]]);
+		expect(probe.toolbar(null).bulk).toBeDefined();
+
+		act(() => {
+			probe.toggle('bolt');
+		});
+		expect(probe.keys).toEqual(['acme', 'bolt']);
+
+		act(() => {
+			probe.toggle('acme');
+		});
+		expect(probe.keys).toEqual(['bolt']);
+
+		act(() => {
+			probe.clear();
+		});
+		expect(probe.keys).toEqual([]);
+
+		act(() => {
+			probe.done();
+		});
+		expect(probe.mode).toBe(false);
+
+		// empty list has no onStartSelect
+		/** @type {import('../src/list-selection.js').RowSelection} */
+		let emptyProbe = /** @type {any} */ (null);
+		const EmptyProbe = () => {
+			emptyProbe = useRowSelection(/** @type {{ id: string }[]} */ ([]), (m) => m.id);
+			return null;
+		};
+		render(<EmptyProbe />);
+		expect(emptyProbe.toolbar(null).onStartSelect).toBeUndefined();
 	});
 });
