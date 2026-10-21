@@ -6,5 +6,5 @@ export const metadata = { title: 'Settings' };
 
 export default async function SettingsPage() {
 	const { api } = await adminContext('/admin/settings');
-	return <SettingsView {...await loadSettings(api)} part="branding" />;
+	return <SettingsView {...await loadSettings(api)} />;
 }

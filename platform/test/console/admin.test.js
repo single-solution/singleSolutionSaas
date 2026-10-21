@@ -309,18 +309,22 @@ describe('admin console smoke', () => {
 			expect(text(ssr(<AdminsView {...await admin.loadAdmin(ownerBrowser.api, owner, gone)} selectedId={gone} />))).toContain(
 				'This admin does not exist or was removed.',
 			);
-			// Settings: one Page, its sections in the inner navigation, each its own address (Branding first); the
-			// save bar is hidden until something changes
-			const settingsRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} part="branding" />);
+			// Settings: one Page with all its parts at once (Branding first), each a named section with its own anchor
+			// (the jump list scrolls to it); the save bar is hidden until something changes
+			const settingsRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />);
+			for (const part of ['branding', 'support', 'mail', 'security', 'billing'])
+				expect(settingsRaw).toContain(`<section id="${part}"`);
+			expect(settingsRaw.indexOf('id="branding"')).toBeLessThan(settingsRaw.indexOf('id="support"'));
+			expect(settingsRaw.indexOf('id="mail"')).toBeLessThan(settingsRaw.indexOf('id="security"'));
 			expect(settingsRaw).toContain('aria-label="Branding"');
-			expect(settingsRaw).toContain('href="/admin/settings/mail"');
 			for (const title of ['Email sending', 'Branding', 'Support contact', 'Security', 'Billing rules'])
 				expect(text(settingsRaw)).toContain(title);
-			expect(text(settingsRaw)).not.toContain('Encryption key'); // under Advanced on Security
+			// the fields of every part are there at once
+			for (const field of ['Accent color', 'SMTP host', 'Session length (hours)', 'Grace period (days)'])
+				expect(text(settingsRaw)).toContain(field);
+			expect(text(settingsRaw)).toContain('Encryption key'); // the Advanced bar of Security, closed
+			expect(text(settingsRaw)).not.toContain('Re-seal stored secrets');
 			expect(text(settingsRaw)).not.toContain('Save changes');
-			const mailRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} part="mail" />);
-			expect(text(mailRaw)).toContain('SMTP host');
-			expect(text(mailRaw)).not.toContain('Accent color');
 			// My account: an inner sidebar (Your name first); the two-step section is a link
 			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain('Two-step sign-in');
 			const finance = await admin.loadBilling(ownerBrowser.api, { merchantId, by: 'merchant', method: 'Bank transfer' });
@@ -482,6 +486,15 @@ describe('admin console smoke', () => {
 		}
 	});
 
+	it('opens an old address of a Settings part at that part of the one Settings page', async () => {
+		const { default: SettingsPart } = await import('../../app/(admin)/admin/_views/settings-part.js');
+		const open = (/** @type {string} */ part) => SettingsPart({ params: Promise.resolve({ part }) });
+		await expect(open('mail')).rejects.toMatchObject({ digest: expect.stringContaining('/admin/settings#mail') });
+		await expect(open('billing')).rejects.toMatchObject({ digest: expect.stringContaining('/admin/settings#billing') });
+		// a part that does not exist stays a 404
+		await expect(open('nothing')).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+	});
+
 	it('pure helpers of the admin views', () => {
 		expect(query({ a: 'x', b: null, c: '', d: 2 })).toBe('?a=x&d=2');
 		expect(query({})).toBe('');
@@ -497,6 +510,8 @@ describe('admin console smoke', () => {
 		expect(adminRoutes.productPart('notes', 'websites')).toBe('/admin/products/notes');
 		expect(adminRoutes.productPart('notes', 'features')).toBe('/admin/products/notes/features');
 		expect(adminRoutes.admin('adm_1')).toBe('/admin/admins/adm_1');
+		expect(adminRoutes.settingsPart('mail')).toBe('/admin/settings#mail');
+		expect(adminRoutes.settingsPart('branding')).toBe('/admin/settings#branding');
 		expect(adminRoutes.products({ status: 'active' })).toBe('/admin/products?status=active');
 		expect(adminApi.productWebsites('notes', 'abc')).toBe('/v1/admin/products/notes/websites?cursor=abc');
 		expect(adminApi.launch('notes')).toBe('/v1/admin/products/notes/launch');

@@ -86,8 +86,8 @@ const pressInDialog = async (label) => {
 };
 
 /** Open the Advanced block of the page. */
-const openAdvanced = async () => {
-	const bar = [...document.querySelectorAll('button[aria-expanded]')].find((b) => b.textContent?.startsWith('Advanced'));
+const openAdvanced = async (/** @type {ParentNode} */ inside = document) => {
+	const bar = [...inside.querySelectorAll('button[aria-expanded]')].find((b) => b.textContent?.startsWith('Advanced'));
 	if (!bar) throw new Error('no Advanced block on the page');
 	await act(async () => {
 		/** @type {HTMLButtonElement} */ (bar).click();
@@ -448,17 +448,17 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 
 		// ---------------------------------------------------------------- Settings: email sending, branding, support, security, key
-		// each part of the page is its own address: a visit loads the settings again
-		/** @param {string} part */
-		const visitSettings = async (part) => {
+		// all parts are on one page: a visit loads the settings again
+		const visitSettings = async () => {
 			cleanup();
 			render(
 				<ToastProvider>
-					<SettingsView {...await admin.loadSettings(ownerBrowser.api)} part={part} />
+					<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />
 				</ToastProvider>,
 			);
 		};
-		await visitSettings('mail');
+		await visitSettings();
+		const mailPart = /** @type {HTMLElement} */ (document.getElementById('mail'));
 		fill('SMTP host', 'smtp.example.com');
 		fill('Port', '587');
 		fill('User', 'mailer');
@@ -466,8 +466,8 @@ describe('admin console interactions (jsdom)', () => {
 		fill('Sender name', 'Portal');
 		fill('Sender address', 'no-reply@example.com');
 		// the secure-connection switch is under Advanced
-		expect(document.querySelector('[role="switch"]')).toBeNull();
-		await openAdvanced();
+		expect(mailPart.querySelector('[role="switch"]')).toBeNull();
+		await openAdvanced(mailPart);
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (byLabel(document, 'Secure connection from the start (SSL/TLS)')).click();
 		});
@@ -478,7 +478,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMailTest()));
 		await press('Turn email sending off');
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
-		await visitSettings('branding');
+		await visitSettings();
 		fill('Name', 'Acme Portal');
 		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsBranding() && c.status === 200));
@@ -502,7 +502,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Remove logo');
 		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
 		// the support contact: a list of channels, each with its kind, label and address
-		await visitSettings('support');
+		await visitSettings();
 		await press('Add channel');
 		const supportCard = /** @type {HTMLElement} */ (document.querySelector('section[aria-label="Support contact"]'));
 		type(byLabel(supportCard, 'Label'), 'Email');
@@ -524,7 +524,7 @@ describe('admin console interactions (jsdom)', () => {
 				{ type: 'email', label: 'Email', url: 'mailto:help@acme.test' },
 			],
 		});
-		await visitSettings('security');
+		await visitSettings();
 		fill('Session length (hours)', '0');
 		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
@@ -535,18 +535,38 @@ describe('admin console interactions (jsdom)', () => {
 		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
 		// Encryption key: Re-seal after a key change (RT-14), under Advanced on Security
-		await openAdvanced();
+		await openAdvanced(document.getElementById('security') ?? document);
 		await press('Re-seal stored secrets');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsReseal() && c.status === 200));
 		await until(() => shows('ENCRYPTION_KEY_PREVIOUS can be removed'));
 		// the save bar only shows what is changed, and Discard puts the saved value back
-		await visitSettings('billing');
+		await visitSettings();
 		expect(shows('You have unsaved changes')).toBe(false);
 		fill('Grace period (days)', '9');
 		await until(() => shows('You have unsaved changes'));
 		await press('Discard');
 		await until(() => !shows('You have unsaved changes'));
 		expect(/** @type {HTMLInputElement} */ (byLabel(document, 'Grace period (days)')).value).not.toBe('9');
+		// two parts changed: ONE bar, and one Save writes both, in the order of the page (a failed one would stop it)
+		fill('Name', 'Acme Two');
+		fill('Session length (hours)', '12');
+		await until(() => shows('You have unsaved changes'));
+		expect(document.querySelectorAll('[role="region"][aria-label="Save changes"]')).toHaveLength(1);
+		const before = ownerBrowser.calls.length;
+		await saveChanges();
+		const written = () =>
+			ownerBrowser.calls
+				.slice(before)
+				.filter(
+					(c) =>
+						c.status === 200 &&
+						/** @type {string[]} */ ([adminApi.settingsBranding(), adminApi.settingsSecurity()]).includes(c.path),
+				)
+				.map((c) => c.path);
+		await until(() => written().length === 2);
+		expect(written()).toEqual([adminApi.settingsBranding(), adminApi.settingsSecurity()]);
+		await until(() => !shows('You have unsaved changes'));
+		expect(/** @type {HTMLInputElement} */ (byLabel(document, 'Name')).value).toBe('Acme Two');
 		cleanup();
 		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
 		expect(shows('Not permitted')).toBe(true);

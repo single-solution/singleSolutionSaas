@@ -48,7 +48,7 @@ describe('loading skeletons', () => {
 		expect(shapeOf('admin', '/admin/merchants/mer_a/websites/web_a')).toMatchObject({ body: 'cards', nav: true });
 		expect(shapeOf('admin', '/admin/finance/receipts')).toMatchObject({ body: 'table', nav: true });
 		expect(shapeOf('merchant', '/credits/receipts')).toMatchObject({ body: 'table', nav: true });
-		expect(shapeOf('admin', '/admin/settings/mail')).toMatchObject({ body: 'cards', nav: true });
+		expect(shapeOf('admin', '/admin/settings')).toMatchObject({ body: 'cards', nav: true, title: 'Settings' });
 		// the Overview is tiles and cards
 		expect(shapeOf('admin', '/admin')).toMatchObject({ body: 'overview', title: 'Overview' });
 		expect(shapeOf('merchant', '/overview')).toMatchObject({ body: 'overview' });

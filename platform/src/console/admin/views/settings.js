@@ -1,13 +1,14 @@
 'use client';
 /**
- * Settings (PLAN 0.8.2; Owner only; layout contract 2026-10-17): one Page whose sections are the parts of its inner
- * navigation, each its own address (`/admin/settings/:part`; Branding is `/admin/settings`): Branding (name, accent,
- * logo), Support contact (a list of channels), Email sending (SMTP host, port, user, password, sender name and
- * address; Send test email and Turn email sending off in the card's header), Security (session length, require
- * two-step for admins; Advanced: Re-seal the stored secrets after a key change) and Billing rules (grace days,
- * low-balance threshold). The floating save bar is the only save control: it appears when a section has changes and
- * offers Save changes and Discard. Every change is written to Activity and reaches every Portal instance within
- * seconds. The page's description is behind its (i).
+ * Settings (PLAN 0.8.2; Owner only; flat layout 2026-10-21): ONE Page that shows all its parts at once, one under the
+ * other (the jump list in its inner navigation scrolls to a part; `/admin/settings#mail` opens the page there):
+ * Branding (name, accent, logo), Support contact (a list of channels), Email sending (SMTP host, port, user, password,
+ * sender name and address; Send test email and Turn email sending off in the card's header), Security (session
+ * length, require two-step for admins; Advanced: Re-seal the stored secrets after a key change) and Billing rules
+ * (grace days, low-balance threshold). The floating save bar is the only save control, ONE for the whole page: it
+ * appears when any part has changes and offers Save changes (every changed part is saved, one after the other) and
+ * Discard. Every change is written to Activity and reaches every Portal instance within seconds. The page's
+ * description is behind its (i).
  * @module
  */
 import { useState } from 'react';
@@ -34,7 +35,7 @@ import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../../infra/branding.js';
 import { ADMIN, LOGIN } from '../../../texts/console.js';
 import { apiFetch } from '../../client.js';
 import { Link } from '../../link.js';
-import { SETTINGS_PARTS, adminApi, adminRoutes } from '../paths.js';
+import { adminApi } from '../paths.js';
 import { AdminProblem } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -69,6 +70,13 @@ const useSave = (onSaved) => {
 	};
 	return { busy, problem, save };
 };
+
+/**
+ * What a section tells the page's one save bar when it saves: `false` when the API refused (the section shows why),
+ * so the bar stops there and leaves the sections after it unsaved.
+ * @param {Promise<unknown>} run a section's save
+ */
+const wentThrough = async (run) => (await run) !== null;
 
 /**
  * What a section is editing: the values, whether they differ from the ones it opened with, and a way back to them.
@@ -210,7 +218,7 @@ function MailCard({ settings, onSaved }) {
 					{testProblem ? <Callout tone="danger">{describeProblem(testProblem)}</Callout> : null}
 				</Form>
 			</SettingsCard>
-			<SaveBar show={dirty} onSave={submit} onDiscard={discard} saving={busy} />
+			<SaveBar show={dirty} onSave={() => wentThrough(submit())} onDiscard={discard} saving={busy} />
 		</>
 	);
 }
@@ -281,7 +289,7 @@ function BrandingCard({ settings, onSaved }) {
 					<FormError problem={problem} fields={['name', 'accent', 'type', 'data']} />
 				</Form>
 			</SettingsCard>
-			<SaveBar show={dirty} onSave={submit} onDiscard={discard} saving={busy} />
+			<SaveBar show={dirty} onSave={() => wentThrough(submit())} onDiscard={discard} saving={busy} />
 		</>
 	);
 }
@@ -357,7 +365,7 @@ function SupportCard({ settings, onSaved }) {
 					<FormError problem={problem} fields={['channels']} />
 				</Form>
 			</SettingsCard>
-			<SaveBar show={dirty} onSave={submit} onDiscard={discard} saving={busy} />
+			<SaveBar show={dirty} onSave={() => wentThrough(submit())} onDiscard={discard} saving={busy} />
 		</>
 	);
 }
@@ -397,7 +405,7 @@ function SecurityCard({ settings, onSaved }) {
 					<FormError problem={problem} fields={['sessionHours', 'requireTwoStepForAdmins']} />
 				</Form>
 			</SettingsCard>
-			<SaveBar show={dirty} onSave={submit} onDiscard={discard} saving={busy} />
+			<SaveBar show={dirty} onSave={() => wentThrough(submit())} onDiscard={discard} saving={busy} />
 		</>
 	);
 }
@@ -446,7 +454,7 @@ function BillingRulesCard({ settings, onSaved }) {
 					<FormError problem={problem} fields={['graceDays', 'lowBalanceDays']} />
 				</Form>
 			</SettingsCard>
-			<SaveBar show={dirty} onSave={submit} onDiscard={discard} saving={busy} />
+			<SaveBar show={dirty} onSave={() => wentThrough(submit())} onDiscard={discard} saving={busy} />
 		</>
 	);
 }
@@ -488,60 +496,51 @@ function EncryptionBlock() {
 	);
 }
 
-/**
- * @param {any} props loader result of `loadSettings`, plus `part` (one of {@link SETTINGS_PARTS}; Branding when
- *   missing)
- */
+/** @param {any} props loader result of `loadSettings` */
 export function SettingsView(props) {
 	const [settings, setSettings] = useState(props.ok ? props.settings : null);
-	// a saved section opens again with what was saved: a new key makes it start over from the new settings
-	const [version, setVersion] = useState(0);
+	// a saved part opens again with what was saved: a new key makes it start over from the new settings; the other parts
+	// keep what was typed in them (the page's one save bar may save several in a row)
+	const [versions, setVersions] = useState(/** @type {Record<string, number>} */ ({}));
 	if (!props.ok || !settings) return <AdminProblem problem={props.problem} />;
 	const S = ADMIN.settingsSections;
-	const part = SETTINGS_PARTS.includes(props.part) ? props.part : 'branding';
-	/** @param {any} next @param {boolean} [keepForm] */
-	const onSaved = (next, keepForm = false) => {
-		setSettings(next);
-		if (!keepForm) setVersion((v) => v + 1);
-	};
-	/** @type {Record<string, import('react').ReactNode>} */
-	const bodies = {
-		branding: <BrandingCard key={version} settings={settings} onSaved={onSaved} />,
-		support: <SupportCard key={version} settings={settings} onSaved={onSaved} />,
-		mail: <MailCard key={version} settings={settings} onSaved={onSaved} />,
-		security: (
-			<>
-				<SecurityCard key={version} settings={settings} onSaved={onSaved} />
-				<EncryptionBlock />
-			</>
-		),
-		billing: <BillingRulesCard key={version} settings={settings} onSaved={onSaved} />,
-	};
-	/** @param {string} id @param {import('@ss/ui').IconName} icon */
-	const item = (id, icon) => ({
-		id,
-		label: S[/** @type {keyof typeof S} */ (id)].title,
-		icon,
-		href: adminRoutes.settingsPart(id),
-	});
+	/** @param {string} id */
+	const savedIn =
+		(id) =>
+		/** @param {any} next @param {boolean} [keepForm] */
+		(next, keepForm = false) => {
+			setSettings(next);
+			if (!keepForm) setVersions((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }));
+		};
+	/** @param {string} id @param {import('@ss/ui').IconName} icon @param {import('react').ReactNode} body */
+	const part = (id, icon, body) => ({ id, label: S[/** @type {keyof typeof S} */ (id)].title, icon, body });
 	return (
 		<Page
 			linkAs={Link}
-			bodyKey={part}
 			crumbs={[{ label: ADMIN.settingsTitle }]}
 			info={ADMIN.settingsIntro}
-			nav={{
-				value: part,
-				label: ADMIN.settingsTitle,
-				groups: [
-					{
-						label: ADMIN.settingsGroups.portal,
-						items: [item('branding', 'palette'), item('support', 'help'), item('mail', 'mail')],
-					},
-					{ label: ADMIN.settingsGroups.safety, items: [item('security', 'shield'), item('billing', 'wallet')] },
-				],
-			}}>
-			{bodies[part]}
-		</Page>
+			sections={[
+				part(
+					'branding',
+					'palette',
+					<BrandingCard key={versions.branding} settings={settings} onSaved={savedIn('branding')} />,
+				),
+				part('support', 'help', <SupportCard key={versions.support} settings={settings} onSaved={savedIn('support')} />),
+				part('mail', 'mail', <MailCard key={versions.mail} settings={settings} onSaved={savedIn('mail')} />),
+				part(
+					'security',
+					'shield',
+					<>
+						<SecurityCard key={versions.security} settings={settings} onSaved={savedIn('security')} />
+						<EncryptionBlock />
+					</>,
+				),
+				part(
+					'billing',
+					'wallet',
+					<BillingRulesCard key={versions.billing} settings={settings} onSaved={savedIn('billing')} />,
+				),
+			]}
+		/>
 	);
 }

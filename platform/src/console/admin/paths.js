@@ -56,8 +56,8 @@ export const adminRoutes = Object.freeze({
 	adminPart: (/** @type {string} */ id, /** @type {string} */ part) =>
 		part === 'details' ? `/admin/admins/${e(id)}` : `/admin/admins/${e(id)}/${e(part)}`,
 	settings: () => '/admin/settings',
-	/** a part of Settings: branding (the page's own address), support, mail, security or billing */
-	settingsPart: (/** @type {string} */ part) => (part === 'branding' ? '/admin/settings' : `/admin/settings/${e(part)}`),
+	/** a part of Settings (branding, support, mail, security or billing): the page's one address with the part in the hash */
+	settingsPart: (/** @type {string} */ part) => `/admin/settings#${e(part)}`,
 	account: () => '/admin/account',
 	/** a part of My account: profile (the page's own address), sign-in, two-step or activity */
 	accountPart: (/** @type {string} */ part) => (part === 'profile' ? '/admin/account' : `/admin/account/${e(part)}`),
@@ -154,7 +154,7 @@ export const FINANCE_PARTS = /** @type {const} */ (['attention', 'receipts', 'ch
 /** The parts of an admin's page (Details is the admin's own address). */
 export const ADMIN_PARTS = ['details', 'activity'];
 
-/** The parts of the Settings page (Branding is the page's own address). */
+/** The parts of the Settings page, all on its one page (`/admin/settings#<part>`). */
 export const SETTINGS_PARTS = ['branding', 'support', 'mail', 'security', 'billing'];
 
 /** The parts of My account (Profile is the page's own address). */
