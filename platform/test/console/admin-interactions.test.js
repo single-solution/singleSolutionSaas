@@ -541,16 +541,16 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('ENCRYPTION_KEY_PREVIOUS can be removed'));
 		// the save bar only shows what is changed, and Discard puts the saved value back
 		await visitSettings();
-		expect(shows('You have unsaved changes')).toBe(false);
+		expect(shows('Unsaved changes in')).toBe(false);
 		fill('Grace period (days)', '9');
-		await until(() => shows('You have unsaved changes'));
+		await until(() => shows('Unsaved changes in'));
 		await press('Discard');
-		await until(() => !shows('You have unsaved changes'));
+		await until(() => !shows('Unsaved changes in'));
 		expect(/** @type {HTMLInputElement} */ (byLabel(document, 'Grace period (days)')).value).not.toBe('9');
 		// two parts changed: ONE bar, and one Save writes both, in the order of the page (a failed one would stop it)
 		fill('Name', 'Acme Two');
 		fill('Session length (hours)', '12');
-		await until(() => shows('You have unsaved changes'));
+		await until(() => shows('Unsaved changes in'));
 		expect(document.querySelectorAll('[role="region"][aria-label="Save changes"]')).toHaveLength(1);
 		const before = ownerBrowser.calls.length;
 		await saveChanges();
@@ -565,7 +565,7 @@ describe('admin console interactions (jsdom)', () => {
 				.map((c) => c.path);
 		await until(() => written().length === 2);
 		expect(written()).toEqual([adminApi.settingsBranding(), adminApi.settingsSecurity()]);
-		await until(() => !shows('You have unsaved changes'));
+		await until(() => !shows('Unsaved changes in'));
 		expect(/** @type {HTMLInputElement} */ (byLabel(document, 'Name')).value).toBe('Acme Two');
 		cleanup();
 		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
