@@ -18,7 +18,7 @@ import { ADVANCED_GROUP, shapeOf } from './schema.js';
 import { call, fill } from './dashboard-api.js';
 import { humanize } from './format.js';
 import { describeProblem, problemCode } from './problems.js';
-import { Outcome, hasSettings, mergeEdits, withoutField } from './dashboard-parts.js';
+import { Outcome, hasSettings, mergeEdits, useHeld, withoutField } from './dashboard-parts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-page.js').Section} Section */
@@ -50,9 +50,12 @@ export const settingSectionOf = (feature) => feature.key;
  * The unsaved edits of the features' settings and their saves: Save writes each edited setting on its own and keeps
  * the edits of what failed; Reset sets a saved value back to the default (`resetBody`: with `PUT { value: null }`
  * instead of `DELETE`).
- * @param {{ saveUrl: (key: string) => string, resetBody: boolean, reload: () => void }} options
+ * What is saved stays on screen until the fresh read is there (`held`; see {@link useHeld}).
+ * @param {{ saveUrl: (key: string) => string, resetBody: boolean, reload: () => void, loaded?: unknown }} options
+ *   `loaded`: the data the settings were read into (it is replaced when the read after a save arrives)
  */
-export function useSettingsEditor({ saveUrl, resetBody, reload }) {
+export function useSettingsEditor({ saveUrl, resetBody, reload, loaded }) {
+	const kept = useHeld(loaded, /** @type {Record<string, Record<string, unknown>>} */ ({}));
 	const [edits, setEdits] = useState(/** @type {Record<string, Record<string, unknown>>} */ ({}));
 	const [result, setResult] = useState(/** @type {{ feature: string, answer: Answer } | null} */ (null));
 	const [saving, setSaving] = useState(false);
@@ -65,6 +68,8 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 		saving,
 		dirty,
 		blocked,
+		/** What was just saved and is not in the data on screen yet, by feature and setting. */
+		held: kept.values,
 		/** @param {string} feature @param {string} name @param {unknown} value */
 		change: (feature, name, value) => setEdits((all) => ({ ...all, [feature]: { ...all[feature], [name]: value } })),
 		/** @param {string} feature @param {string} name */
@@ -73,7 +78,10 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 			const answer = resetBody ? await call('PUT', key, { value: null }) : await call('DELETE', key);
 			setResult({ feature, answer });
 			// the setting is the default now: an edit of it that was not saved goes too (else Save would put it back)
-			if (answer.ok) setEdits((all) => withoutField(all, feature, name));
+			if (answer.ok) {
+				setEdits((all) => withoutField(all, feature, name));
+				kept.drop((all) => withoutField(all, feature, name));
+			}
 			reload();
 		},
 		save: async () => {
@@ -82,11 +90,14 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 			/** @type {{ feature: string, answer: Answer } | null} */
 			let outcome = null;
 			const left = { ...edits };
+			/** @type {Record<string, Record<string, unknown>>} */
+			const written = {};
 			for (const [feature, changed] of Object.entries(edits)) {
 				for (const [name, value] of Object.entries(changed)) {
 					const answer = await call('PUT', saveUrl(`${feature}.${name}`), { value });
 					outcome = { feature, answer };
 					if (!answer.ok) break;
+					written[feature] = { ...written[feature], [name]: value };
 				}
 				if (outcome && !outcome.answer.ok) break;
 				if (Object.keys(changed).length > 0) delete left[feature];
@@ -94,6 +105,8 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 			setSaving(false);
 			setResult(outcome);
 			setEdits(left);
+			// the edits are saved: they stay on screen until the read below has brought them back
+			kept.keep(loaded, (all) => mergeEdits(all, written));
 			reload();
 		},
 		/** Drops every edit at once; the function it returns brings them back (the page offers it as Undo). */
@@ -138,8 +151,12 @@ export function SettingsBar({ editor, texts }) {
  */
 function FeatureForm({ feature, features, editor, savedSource, notice, group, withAdvanced = true, texts, portalLink }) {
 	const changed = editor.edits[feature.key] ?? {};
+	const kept = editor.held[feature.key] ?? {};
 	const values = Object.fromEntries(
-		Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
+		Object.entries(feature.values).map(([name, entry]) => [
+			name,
+			name in changed ? changed[name] : name in kept ? kept[name] : entry.value,
+		]),
 	);
 	// a product's notice reads values, never text that is not valid JSON yet: it sees the saved value then
 	const saneValues = Object.fromEntries(
@@ -318,9 +335,12 @@ const reasonOf = (problem) => {
  * The widget texts' unsaved edits and their saves, like {@link useSettingsEditor}: the edits of every text, on any
  * screen, wait for the page's one Save bar; Save writes each edited text on its own, keeps the edit of a text that was
  * refused and says why under that text (`errors`); Reset sets a saved text back to the default at once.
- * @param {{ saveUrl: (key: string) => string, resetBody: boolean, reload: () => void }} options
+ * What is saved stays on screen until the fresh read is there (`held`; see {@link useHeld}).
+ * @param {{ saveUrl: (key: string) => string, resetBody: boolean, reload: () => void, loaded?: unknown }} options
+ *   `loaded`: the data the texts were read into (it is replaced when the read after a save arrives)
  */
-export function useTextsEditor({ saveUrl, resetBody, reload }) {
+export function useTextsEditor({ saveUrl, resetBody, reload, loaded }) {
+	const kept = useHeld(loaded, /** @type {Record<string, string>} */ ({}));
 	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
 	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
@@ -331,6 +351,8 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 		result,
 		saving,
 		dirty: Object.keys(edits).length > 0,
+		/** What was just saved and is not in the data on screen yet, by text. */
+		held: kept.values,
 		/**
 		 * Sets the words of a text; the saved words (`saved`) are no edit.
 		 * @param {string} key @param {string} value @param {string} [saved]
@@ -338,6 +360,7 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 		change: (key, value, saved) => {
 			setEdits((all) => (value === saved ? without(all, key) : { ...all, [key]: value }));
 			setErrors((all) => without(all, key));
+			kept.drop((all) => without(all, key));
 		},
 		/** Sets a text back to the default. @param {string} key */
 		reset: async (key) => {
@@ -346,6 +369,7 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 			if (answer.ok) {
 				setEdits((all) => without(all, key));
 				setErrors((all) => without(all, key));
+				kept.drop((all) => without(all, key));
 			}
 			reload();
 		},
@@ -358,10 +382,14 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 			const left = {};
 			/** @type {Record<string, string>} */
 			const refused = {};
+			/** @type {Record<string, string>} */
+			const written = {};
 			for (const [key, value] of Object.entries(edits)) {
 				const answer = await call('PUT', saveUrl(key), { value });
-				if (answer.ok) outcome ??= answer;
-				else {
+				if (answer.ok) {
+					outcome ??= answer;
+					written[key] = value;
+				} else {
 					outcome = answer;
 					left[key] = value;
 					refused[key] = reasonOf(answer.problem);
@@ -371,6 +399,8 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 			setResult(outcome);
 			setEdits(left);
 			setErrors(refused);
+			// the edits are saved: they stay on screen until the read below has brought them back
+			kept.keep(loaded, (all) => ({ ...all, ...written }));
 			reload();
 		},
 		/** Drops every edit at once; the function it returns brings them back (the page offers it as Undo). */
@@ -442,7 +472,7 @@ export function TextFields({ items, editor, savedSource, texts, empty }) {
 							name={text.key}
 							label={text.english}
 							help={fill(T.where, { where: whereOf(text.key) })}
-							value={editor.edits[text.key] ?? text.value}
+							value={editor.edits[text.key] ?? editor.held[text.key] ?? text.value}
 							onChange={(event) => editor.change(text.key, event.target.value, text.value)}
 							{...(error ? { error } : {})}
 							{...(text.source === savedSource

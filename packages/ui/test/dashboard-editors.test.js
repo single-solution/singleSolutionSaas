@@ -4,7 +4,7 @@
  * not valid JSON do to them.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DashboardProvider, SettingsTab } from '../src/dashboard.js';
+import { DashboardProvider, PricesTab, SettingsTab, TextsTab } from '../src/dashboard.js';
 import { dashboardTexts } from '../src/index.js';
 import { act, byLabel, cleanup, click, render, type } from '../src/testing.js';
 
@@ -28,9 +28,12 @@ const CATALOG = [{ key: 'notes', name: 'Notes', description: 'Keep notes.', depe
 
 /** What the fake product holds for the settings of the website, changed by the saves. */
 let saved = { greeting: 'Hi', flags: [true] };
+/** The hourly price of Notes in credits and the words of one text, changed by the saves. */
+let price = 1;
+let words = 'Hello';
 /** @type {Array<{ method: string, path: string, body: any }>} */
 let requests = [];
-/** Answers held back, the oldest first (a slow server): `release` lets the next one go. @type {Array<() => void>} */
+/** Answers held back, the oldest first (a slow server): calling one lets that answer go. @type {Array<() => void>} */
 let held = [];
 
 /** The settings answer for the website, from what the product holds. */
@@ -58,6 +61,8 @@ const serve = (base, how = {}) => {
 	requests = [];
 	held = [];
 	saved = { greeting: 'Hi', flags: [true] };
+	price = 1;
+	words = 'Hello';
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
@@ -76,10 +81,33 @@ const serve = (base, how = {}) => {
 				return answer(null, 204);
 			}
 			if (method === 'GET' && path === `${base}/settings`) {
-				const data = settingsAnswer();
 				if (how.slow && requests.filter((r) => r.path === path).length > 1)
 					await new Promise((resolve) => held.push(() => resolve(undefined)));
-				return answer(data);
+				return answer(settingsAnswer());
+			}
+			// every read after the first waits for its turn when the server is `slow` (the read after a save)
+			const waits = async () => {
+				if (how.slow && requests.filter((r) => r.path === path && r.method === 'GET').length > 1)
+					await new Promise((resolve) => held.push(() => resolve(undefined)));
+			};
+			if (path === '/v1/dashboard/prices') {
+				if (method === 'PUT') {
+					price = body.prices.notes / 1000;
+					return answer({});
+				}
+				await waits();
+				return answer({
+					features: [{ key: 'notes', name: 'Notes', millicreditsPerHour: price * 1000, on: true }],
+					recentChanges: [],
+				});
+			}
+			if (path === `${base}/texts/screen.title` && method === 'PUT') {
+				words = body.value;
+				return answer({});
+			}
+			if (path === `${base}/texts`) {
+				await waits();
+				return answer({ texts: [{ key: 'screen.title', english: 'Title', value: words, source: 'default' }] });
 			}
 			if (method === 'GET' && path === `${base}/features`) return answer({ features: CATALOG });
 			if (method === 'GET' && path === `${base}/connections`) return answer({ connections: [] });
@@ -214,5 +242,64 @@ describe('Discard can be undone (KP-1a left over)', () => {
 		type(byLabel(container, 'Greeting'), 'Newer');
 		await act(async () => buttonsOf(toasts(), 'Undo')[0]?.click());
 		expect(byLabel(container, 'Greeting').value).toBe('Newer');
+	});
+});
+
+describe('after Save the old values never flash (179)', () => {
+	it('keeps the saved values on screen until the fresh data has arrived, then shows the fresh data', async () => {
+		const id = freshSite();
+		serve(`/v1/dashboard/websites/${id}`, { slow: true });
+		const { container } = render(inDashboard(<SettingsTab {...tab(id)} />));
+		await settle();
+		type(byLabel(container, 'Greeting'), 'Mine');
+		type(byLabel(container, 'Flags'), '[false]');
+		await act(async () => buttonsOf(container, 'Save changes')[0]?.click());
+		await settle();
+		// the product has the new values; the page has not been read again yet
+		expect(requests.filter((r) => r.method === 'PUT')).toHaveLength(2);
+		expect(held).toHaveLength(1);
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(0);
+		expect(byLabel(container, 'Greeting').value).toBe('Mine');
+		expect(JSON.parse(byLabel(container, 'Flags').value)).toEqual([false]);
+		// somebody else changed it meanwhile: the fresh data wins once it is there
+		saved = { ...saved, greeting: 'Other' };
+		await act(async () => held[0]?.());
+		await settle();
+		expect(byLabel(container, 'Greeting').value).toBe('Other');
+		expect(JSON.parse(byLabel(container, 'Flags').value)).toEqual([false]);
+	});
+});
+
+describe('after Save the old texts and prices never flash either (179)', () => {
+	it('Texts: the saved words stay until the fresh read is there', async () => {
+		const id = freshSite();
+		serve(`/v1/dashboard/websites/${id}`, { slow: true });
+		const { container } = render(inDashboard(<TextsTab {...tab(id)} />));
+		await settle();
+		type(byLabel(container, 'Title'), 'Headline');
+		await act(async () => buttonsOf(container, 'Save changes')[0]?.click());
+		await settle();
+		expect(held).toHaveLength(1);
+		expect(byLabel(container, 'Title').value).toBe('Headline');
+		await act(async () => held[0]?.());
+		await settle();
+		expect(byLabel(container, 'Title').value).toBe('Headline');
+	});
+
+	it('Prices: the saved price stays until the fresh read is there', async () => {
+		serve('/v1/dashboard/websites/none', { slow: true });
+		const { container } = render(inDashboard(<PricesTab />));
+		await settle();
+		expect(byLabel(container, 'Notes').value).toBe('1');
+		type(byLabel(container, 'Notes'), '2.5');
+		await act(async () => buttonsOf(document.body, 'Save')[0]?.click());
+		await settle();
+		expect(held).toHaveLength(1);
+		expect(byLabel(container, 'Notes').value).toBe('2.5');
+		// the product rounds it: the fresh read wins
+		price = 2;
+		await act(async () => held[0]?.());
+		await settle();
+		expect(byLabel(container, 'Notes').value).toBe('2');
 	});
 });

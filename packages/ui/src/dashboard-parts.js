@@ -249,6 +249,31 @@ export const mergeEdits = (before, now) => {
 };
 
 /**
+ * Values that were just saved, kept on screen until the data that was on screen when they were saved has been replaced
+ * (the page is read again after a save and the answer comes a moment later: without this the fields would show their old
+ * values in between, and people think the save failed). `loaded` is that data: any object that is replaced when a fresh
+ * read arrives (it is `undefined` when the caller has none: nothing is kept then). `values` is what is kept now.
+ * @template T
+ * @param {unknown} loaded
+ * @param {T} none what is kept when nothing is
+ */
+export function useHeld(loaded, none) {
+	const [held, setHeld] = useState(/** @type {{ at: unknown, values: T } | null} */ (null));
+	const live = held !== null && loaded !== undefined && held.at === loaded;
+	return {
+		values: live ? held.values : none,
+		/**
+		 * Keeps more values, next to those kept for the same data.
+		 * @param {unknown} at the data on screen when they were saved
+		 * @param {(kept: T) => T} next
+		 */
+		keep: (at, next) => setHeld((before) => ({ at, values: next(before && before.at === at ? before.values : none) })),
+		/** Forgets some of what is kept. @param {(kept: T) => T} next */
+		drop: (next) => setHeld((before) => (before ? { ...before, values: next(before.values) } : before)),
+	};
+}
+
+/**
  * Settings forms of the features that have settings (none: nothing), a website's or the global defaults: each feature
  * is a titled group of cards (`x-ui.group` makes the cards, a feature without groups is one card) and one sticky
  * Save changes bar with Discard appears while anything is edited. `resetBody` resets with `PUT { value: null }`
@@ -261,6 +286,7 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 	const [edits, setEdits] = useState(/** @type {Record<string, Record<string, unknown>>} */ ({}));
 	const [result, setResult] = useState(/** @type {{ feature: string, answer: Answer } | null} */ (null));
 	const [saving, setSaving] = useState(false);
+	const kept = useHeld(features, /** @type {Record<string, Record<string, unknown>>} */ ({}));
 	const shown = features.filter(hasSettings);
 	if (shown.length === 0) return null;
 	const dirty = shown.some((feature) => Object.keys(edits[feature.key] ?? {}).length > 0);
@@ -272,7 +298,10 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 		const answer = resetBody ? await call('PUT', key, { value: null }) : await call('DELETE', key);
 		setResult({ feature, answer });
 		// the setting is the default now: an edit of it that was not saved goes too (else Save would put it back)
-		if (answer.ok) setEdits((all) => withoutField(all, feature, name));
+		if (answer.ok) {
+			setEdits((all) => withoutField(all, feature, name));
+			kept.drop((all) => withoutField(all, feature, name));
+		}
 		reload();
 	};
 	const save = async () => {
@@ -281,12 +310,15 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 		/** @type {{ feature: string, answer: Answer } | null} */
 		let outcome = null;
 		const left = { ...edits };
+		/** @type {Record<string, Record<string, unknown>>} */
+		const written = {};
 		for (const feature of shown) {
 			const changed = edits[feature.key] ?? {};
 			for (const [name, value] of Object.entries(changed)) {
 				const answer = await call('PUT', saveUrl(`${feature.key}.${name}`), { value });
 				outcome = { feature: feature.key, answer };
 				if (!answer.ok) break;
+				written[feature.key] = { ...written[feature.key], [name]: value };
 			}
 			if (outcome && !outcome.answer.ok) break;
 			if (Object.keys(changed).length > 0) delete left[feature.key];
@@ -294,14 +326,20 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 		setSaving(false);
 		setResult(outcome);
 		setEdits(left);
+		// the edits are saved: they stay on screen until the read below has brought them back
+		kept.keep(features, (all) => mergeEdits(all, written));
 		reload();
 	};
 	return (
 		<>
 			{shown.map((feature) => {
 				const changed = edits[feature.key] ?? {};
+				const held = kept.values[feature.key] ?? {};
 				const values = Object.fromEntries(
-					Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
+					Object.entries(feature.values).map(([name, entry]) => [
+						name,
+						name in changed ? changed[name] : name in held ? held[name] : entry.value,
+					]),
 				);
 				// a product's notice reads values, never text that is not valid JSON yet: it sees the saved value then
 				const saneValues = Object.fromEntries(

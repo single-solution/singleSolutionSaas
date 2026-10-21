@@ -31,7 +31,7 @@ import { call, useLoad } from './dashboard-api.js';
 import { useConnections } from './dashboard-connections.js';
 import { featureLooks, useFeatureSwitches } from './dashboard-features.js';
 import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
-import { Outcome, ResealCard, useDashboard } from './dashboard-parts.js';
+import { Outcome, ResealCard, useDashboard, useHeld } from './dashboard-parts.js';
 import {
 	SettingsBar,
 	TextFields,
@@ -145,6 +145,7 @@ export function SettingsTab({ websiteId, merchantId, who, portal, support, open,
 					websiteId={websiteId}
 					merchantId={merchantId ?? null}
 					open={open}
+					loaded={settings.answer}
 					reload={() => {
 						settings.reload();
 						catalog.reload();
@@ -179,10 +180,11 @@ const bothOf = (settings, catalog) => {
 /**
  * @param {{ features: FeatureSettings[], catalog: Feature[], links: Connection[], base: string, who: Who,
  *   support: TabProps['support'], portal: string, websiteId: string | null, merchantId: string | null,
- *   open?: TabProps['open'], reload: () => void, sections?: SectionSpec[], notice?: SettingsNotice,
+ *   open?: TabProps['open'], reload: () => void, loaded: Answer | null, sections?: SectionSpec[], notice?: SettingsNotice,
  *   extras?: Record<string, FeatureExtra>, warnings?: (on: string[]) => string[],
  *   portalLink: (section: string) => string }} props `features`: the settings of the features that have some (a
- *   merchant's: only of those that are on); `catalog`: every feature
+ *   merchant's: only of those that are on); `catalog`: every feature; `loaded`: the answer the settings came in (a
+ *   fresh one after every read: what was just saved stays on screen until then)
  */
 function SettingsPanel({
 	features,
@@ -196,6 +198,7 @@ function SettingsPanel({
 	merchantId,
 	open,
 	reload,
+	loaded,
 	sections = [],
 	notice,
 	extras,
@@ -209,6 +212,7 @@ function SettingsPanel({
 		saveUrl: (key) => `${base}/settings/${encodeURIComponent(key)}`,
 		resetBody: false,
 		reload,
+		loaded,
 	});
 	const switches = useFeatureSwitches({ base, catalog, ...(warnings ? { warnings } : {}), reload });
 	// every feature of the product, with its settings when it has some
@@ -296,6 +300,7 @@ export function TextsTab({ websiteId }) {
 					resetBody={false}
 					savedSource="website"
 					reload={texts.reload}
+					loaded={texts.answer}
 				/>
 			)}
 		</LoadedPage>
@@ -305,12 +310,13 @@ export function TextsTab({ websiteId }) {
 /**
  * The texts' pages and search (a website's or the global defaults), with their one Save bar.
  * @param {{ items: Array<{ key: string, english: string, value: string, source: string }>, saveUrl: (key: string) => string,
- *   resetBody: boolean, savedSource: string, reload: () => void }} props
+ *   resetBody: boolean, savedSource: string, reload: () => void, loaded: Answer | null }} props `loaded`: the answer
+ *   the texts came in (a fresh one after every read: what was just saved stays on screen until then)
  */
-function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
+function TextsPanel({ items, saveUrl, resetBody, savedSource, reload, loaded }) {
 	const dash = useDashboard();
 	const T = dash.texts.texts;
-	const editor = useTextsEditor({ saveUrl, resetBody, reload });
+	const editor = useTextsEditor({ saveUrl, resetBody, reload, loaded });
 	const paged = usePaged(items, { text: (text) => `${text.key} ${text.english} ${text.value}`, pageSize: 50 });
 	const searching = paged.query.trim() !== '';
 	return (
@@ -479,21 +485,22 @@ export function DefaultsTab({ notice }) {
 	const { answer, reload } = useLoad('/v1/dashboard/defaults');
 	return (
 		<LoadedPage answer={answer} tab="defaults" withNav>
-			{(data) => <DefaultsPanel data={data} reload={reload} {...(notice ? { notice } : {})} />}
+			{(data) => <DefaultsPanel data={data} reload={reload} loaded={answer} {...(notice ? { notice } : {})} />}
 		</LoadedPage>
 	);
 }
 
 /**
- * @param {{ data: any, reload: () => void, notice?: SettingsNotice }} props
+ * @param {{ data: any, reload: () => void, loaded: Answer | null, notice?: SettingsNotice }} props `loaded`: the answer
+ *   the defaults came in (a fresh one after every read: what was just saved stays on screen until then)
  */
-function DefaultsPanel({ data, reload, notice }) {
+function DefaultsPanel({ data, reload, loaded, notice }) {
 	const dash = useDashboard();
 	const D = dash.texts.defaults;
 	/** @param {string} key */
 	const saveUrl = (key) => `/v1/dashboard/defaults/${encodeURIComponent(key)}`;
-	const settings = useSettingsEditor({ saveUrl, resetBody: true, reload });
-	const words = useTextsEditor({ saveUrl: (key) => saveUrl(`text.${key}`), resetBody: true, reload });
+	const settings = useSettingsEditor({ saveUrl, resetBody: true, reload, loaded });
+	const words = useTextsEditor({ saveUrl: (key) => saveUrl(`text.${key}`), resetBody: true, reload, loaded });
 	// the feature settings and the texts share the page's one Save bar
 	const edits = {
 		dirty: settings.dirty || words.dirty,
@@ -557,13 +564,15 @@ export function PricesTab() {
 	const { answer, reload } = useLoad('/v1/dashboard/prices');
 	const [draft, setDraft] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
+	// the prices just saved stay on screen until the read after the save has arrived
+	const kept = useHeld(answer, /** @type {Record<string, string>} */ ({}));
 	return (
 		<LoadedPage answer={answer} tab="prices" withNav>
 			{(data) => {
 				/** @type {Feature[]} */
 				const features = data.features;
 				const parsed = features.map((feature) => {
-					const text = draft[feature.key] ?? String(feature.millicreditsPerHour / 1000);
+					const text = draft[feature.key] ?? kept.values[feature.key] ?? String(feature.millicreditsPerHour / 1000);
 					return { feature, text, credits: parseCredits(text) };
 				});
 				const byKey = new Map(parsed.map((entry) => [entry.feature.key, entry]));
@@ -637,7 +646,10 @@ export function PricesTab() {
 								);
 								const next = await call('PUT', '/v1/dashboard/prices', { prices });
 								setResult(next);
-								if (next.ok) setDraft({});
+								if (next.ok) {
+									kept.keep(answer, (all) => ({ ...all, ...draft }));
+									setDraft({});
+								}
 								reload();
 							}}
 						/>
