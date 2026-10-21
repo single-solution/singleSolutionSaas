@@ -60,6 +60,7 @@ export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
 export { Toolbar, TOOLBAR_TEXTS } from './Toolbar.js';
 export { DataTable, DATA_TABLE_TEXTS, useRowSelection } from './DataTable.js';
+export { FiguresTable, FIGURES_TABLE_TEXTS } from './FiguresTable.js';
 export { Pagination, PaginationSkeleton } from './Pagination.js';
 export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
 export { Row } from './Row.js';
@@ -73,6 +74,7 @@ export {
 	InnerNavSkeleton,
 	ToolbarSkeleton,
 	DataTableSkeleton,
+	FiguresTableSkeleton,
 	RowListSkeleton,
 	PageSkeleton,
 	SettingsCardSkeleton,
@@ -140,6 +142,8 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./InnerNav.js').InnerNavItem} InnerNavItem */
 /** @typedef {import('./InnerNav.js').InnerNavGroup} InnerNavGroup */
 /** @typedef {import('./DataTable.js').RowSelection} RowSelection */
+/** @template [T=unknown] @typedef {import('./FiguresTable.js').FigureColumn<T>} FigureColumn */
+/** @typedef {import('./FiguresTable.js').FiguresTableTexts} FiguresTableTexts */
 /** @typedef {import('./layout-metrics.js').ColumnKind} ColumnKind */
 /** @typedef {import('./overlay.js').DrawerProps} DrawerProps */
 /** @typedef {import('./page-sections.js').PageSection} PageSection */

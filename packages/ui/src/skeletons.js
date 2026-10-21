@@ -13,6 +13,7 @@ import {
 	columnClass,
 	DRAWER,
 	DRAWER_WIDTH,
+	FIGURES_TABLE,
 	LIST,
 	METRICS,
 	NAV_PANEL,
@@ -124,6 +125,59 @@ export function DataTableSkeleton({ columns, rows = 8, selectable = false, menu 
 						</tr>
 					))}
 				</tbody>
+			</table>
+		</div>
+	);
+}
+
+/**
+ * The figures table while it loads: the same scrolling container, sticky header row, skeleton rows with the same column
+ * kinds and alignments, and an optional totals row.
+ * @param {{ columns: number | SkeletonColumn[], rows?: number, totals?: boolean,
+ *   label?: string, className?: string }} props
+ */
+export function FiguresTableSkeleton({ columns, rows = 6, totals = false, label = 'Loading', className }) {
+	/** @type {SkeletonColumn[]} */
+	const list = typeof columns === 'number' ? Array.from({ length: columns }, () => ({})) : columns;
+	return (
+		<div role="status" aria-label={label} aria-busy="true" className={cx(FIGURES_TABLE.scroller, 'animate-ss-fade', className)}>
+			<table className={FIGURES_TABLE.table}>
+				<thead>
+					<tr>
+						{list.map((column, i) => (
+							<th key={i} scope="col" className={cx(FIGURES_TABLE.th, columnClass(column))}>
+								{column.header ?? <SkeletonBlock className="inline-block h-3 w-14 align-middle" />}
+							</th>
+						))}
+					</tr>
+				</thead>
+				<tbody>
+					{Array.from({ length: rows }, (_, row) => (
+						<tr key={row}>
+							{list.map((column, i) => (
+								<td key={i} className={cx(FIGURES_TABLE.td, columnClass(column))}>
+									<SkeletonBlock
+										className={cx(
+											CELLS[column.kind ?? 'text'],
+											(column.kind ?? 'text') === 'text' && WIDTHS[(row + i) % WIDTHS.length],
+										)}
+									/>
+								</td>
+							))}
+						</tr>
+					))}
+				</tbody>
+				{totals ? (
+					<tfoot className={FIGURES_TABLE.tfoot}>
+						<tr>
+							{list.map((column, i) => (
+								<td key={i} className={cx(FIGURES_TABLE.tf, columnClass(column))}>
+									<SkeletonBlock className={cx(CELLS[column.kind ?? 'text'], i === 0 && 'w-12')} />
+								</td>
+							))}
+						</tr>
+					</tfoot>
+				) : null}
 			</table>
 		</div>
 	);

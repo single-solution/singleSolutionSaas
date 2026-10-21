@@ -80,6 +80,24 @@ export const TABLE = Object.freeze({
 	low: 'hidden @3xl:table-cell',
 });
 
+/** The parts of a figures table, shared by the real table and its skeleton. */
+export const FIGURES_TABLE = Object.freeze({
+	/** the one box that scrolls (both ways); a container for width-based column hiding */
+	scroller: 'ss-scroll @container min-h-0 flex-1 overflow-auto',
+	/** separate borders, so the hairlines stay with the sticky header row; no forced min-width so phones don't scroll horizontally */
+	table: 'w-full border-separate border-spacing-0 text-sm',
+	/** a header cell: sticky, opaque */
+	th: `sticky top-0 z-10 border-b border-line-soft bg-surface text-xs font-medium whitespace-nowrap text-muted ${METRICS.thead}`,
+	/** a body cell: one fixed-height row with a hairline under it */
+	td: `border-b border-line-soft align-middle text-fg ${METRICS.row}`,
+	/** a total row in the footer: prominent border above, bold text */
+	tfoot: 'sticky bottom-0 z-10 border-t-2 border-line-strong bg-surface font-semibold',
+	/** a total cell: matches cell height */
+	tf: `border-t-2 border-line-strong bg-surface align-middle font-semibold text-fg ${METRICS.row}`,
+	/** low-priority columns hide below this container width */
+	low: 'hidden @3xl:table-cell',
+});
+
 /** @type {Record<'left' | 'right' | 'center', string>} */
 const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' };
 

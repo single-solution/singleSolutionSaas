@@ -138,4 +138,14 @@ describe('kit only: screens are built from the kit', () => {
 			expect(uses, file).toEqual(KINDS.filter((kind) => uses.includes(kind)));
 		}
 	});
+
+	it('K-1e: allows FiguresTable while refusing DataTable, Table and raw <table>', () => {
+		expect(BANNED_IMPORTS).toContain('DataTable');
+		expect(BANNED_IMPORTS).toContain('Table');
+		expect(BANNED_IMPORTS).not.toContain('FiguresTable');
+		expect(BANNED_TAGS).toContain('<table');
+		expect(offences("import { FiguresTable } from '@ss/ui';\nexport const x = <FiguresTable />;")).toEqual([]);
+		expect(offences("import { DataTable } from '@ss/ui';\nexport const x = <DataTable />;")).toEqual(['DataTable']);
+		expect(offences('export const x = <table><tbody /></table>;')).toEqual(['<table']);
+	});
 });

@@ -150,14 +150,16 @@ One component per job. The window never scrolls; every pane has its own thin scr
   (label as `aria-label`). Numbers and button labels cut their own text, so nothing overlaps.
 - `InnerNav`: the only sub-page navigation (groups, items with count, dot, locked, `href` or `onSelect`; search above
   10 items; a dropdown on phones). `Toolbar`: search (debounced), filters, sort, view switch, count; it becomes the
-  bulk bar in select mode. `DataTable` (+ `useRowSelection`): the old table of records (sticky header, sort, column
-  kinds, row menu, whole-row selection, skeleton rows, empty state); new screens use `ListColumn` instead (see "How to
+  bulk bar in select mode. `FiguresTable`: the ONE table in the kit, only for figures (owner 2026-10-21 19:47, K-1e) —
+  comparing numbers across rows and columns (usage, finance sums, reports, order lines); sticky header, numbers on the
+  right (tabular figures), accessible sort with `aria-sort`, five states, totals row, and clean stacked rows on phones so the
+  page never scrolls sideways. `DataTable` (+ `useRowSelection`): the old table of records; new screens use `ListColumn` instead (see "How to
   build a screen") and the screens still on `DataTable` are listed in `test/kit-only-todo.js`. `Pagination`: the Page footer.
 - `Drawer` (`size="md"` about 480 px, `"lg"` about 760 px, full screen on phones; `Dialog` on the right is the same
   drawer), `SaveBar` (the only save control), `AppShell` nav items with `badge: { count, tone }` and `dot`, and the
   account with its `role`.
 - Skeletons at the real sizes: `PageSkeleton`, `InnerNavSkeleton`, `ToolbarSkeleton`, `DataTableSkeleton`,
-  `PaginationSkeleton`, `SettingsCardSkeleton`, `StatGridSkeleton`, `DrawerSkeleton`, `DrawerBodySkeleton`.
+  `FiguresTableSkeleton`, `PaginationSkeleton`, `SettingsCardSkeleton`, `StatGridSkeleton`, `DrawerSkeleton`, `DrawerBodySkeleton`.
 
 ## The premium frame and blocks (owner 2026-10-16)
 
