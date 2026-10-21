@@ -14,6 +14,105 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 | `@ss/ui/theme.css`   | the design tokens                                                                                                          |
 | `@ss/ui/testing`     | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
 
+## How to build a screen
+
+Every screen is made of the same few kit parts. You do not draw boxes, tables or tabs yourself: you pick the part for the
+job and fill in its props. Read this page first, then the JSDoc at the top of each file named here.
+
+| The job                              | The part                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| A whole screen                       | `Page` (`Page.js`): `crumbs`, `status`, `facts`, `actions`, `info`, the body. Always the outermost part      |
+| A list of things (customers, orders) | `Page list={<ListColumn …>}` with `useListSelection`; each row is a `Row`                                    |
+| The parts of the picked thing        | `Page sections`: every part open at once, one save bar for the page                                          |
+| Settings                             | `Card` with `toggle`, `help`, `meter`, and the kit fields inside (`Input`, `Select`, `TextArea`, `Switch` …) |
+| Numbers                              | `Stat` in a `StatGrid`; the live ones in the header `facts`                                                  |
+| A thing that is not finished         | `NextStep`: one colored line that says what to do next, with one action                                      |
+| A list with nothing in it yet        | `EmptyState` with one action (pass it to `ListColumn` as `empty`)                                            |
+
+**A list page.** The list is a column of rich rows beside the page; the page is the picked row.
+
+- `useListSelection({ ids, param?, initial? })` keeps the picked id in the address (`?id=…`), so it can be linked to and
+  the browser's Back button works. It returns `[selected, select]`. With no id in the address the first row is picked.
+- `ListColumn` takes `label` (for screen readers), `items`, `idOf(item)` and `rowOf(item)`. It sets `selected` and
+  `onSelect` on each `Row` for you. Add `search`, `filters` (chips with counts), `loading`, `empty`, and `hasMore` +
+  `onMore` for a long list. Give it `selected={selected}`, `onSelect={select}` and `onBack={() => select(null)}`: on a
+  phone the page shows the list or the picked item, one at a time, and its Back button calls `onBack`.
+- `rowOf` returns the props of a `Row`: `lead` (`{ avatar: name }`, `{ icon, tone }` or any node), `title`, `status`
+  (`{ tone, label }`, a colored dot after the title), `meta` (one line, or an array joined with " · "), `warning`
+  (`{ text, tone? }`, shown in place of `meta`), `value` and `time` (right side), `trailing` (a control such as a
+  `Switch`), and `href` or `onSelect` to make the row a link or a button.
+- Set `bodyKey` on the `Page` to the picked id, so the body fades in again when the pick changes.
+
+**The picked thing.** Give the page `sections={[{ id, label, icon?, dot?, body }]}` instead of children. All sections are
+drawn at once, all open. Every `SaveBar` inside a section hands over to the page, which draws one bar while any section
+has changes. From four sections up the inner navigation lists them as jumps.
+
+**Settings.** One `Card` per topic: `title`, `subtitle`, and for the rich parts `lead` (an icon chip or avatar), `status`,
+`help` (one muted line), `toggle` (a `Switch` at the right of the title: when it is off the body is muted), `meter`
+(`{ percent, label }`, a thin bar with its words) and `action` (one link or button at the bottom). Do not put boxes
+inside a card: use rows with hairlines (`SettingRow`, or the kit fields, which become rows by themselves).
+
+**Next steps and empty lists.** `NextStep` takes `icon`, `tone`, `action` (`{ label, href }` or `{ label, onClick }`),
+`onDismiss`, and its sentence as children. `EmptyState` takes `title`, `description` and one `action`.
+
+An example, a list of merchants. The rows of the list are `Row`s, made from what `rowOf` returns:
+
+```js
+'use client';
+import { Button, Card, ListColumn, Page, Stat, StatGrid, Switch, useListSelection } from '@ss/ui';
+
+export function Merchants({ merchants, onAdd, onToggle }) {
+	const [selected, select] = useListSelection({ ids: merchants.map((m) => m.id) });
+	const merchant = merchants.find((m) => m.id === selected);
+	return (
+		<Page
+			crumbs={[{ label: 'Merchants' }]}
+			facts={[{ label: 'Active', value: merchants.filter((m) => m.active).length }]}
+			actions={{ primary: { label: 'Add merchant', onClick: onAdd } }}
+			bodyKey={selected ?? ''}
+			list={
+				<ListColumn
+					label="Merchants"
+					items={merchants}
+					idOf={(m) => m.id}
+					rowOf={(m) => ({
+						lead: { avatar: m.name },
+						title: m.name,
+						status: { tone: m.active ? 'success' : 'neutral', label: m.active ? 'Active' : 'Paused' },
+						meta: `${m.sites} websites`,
+					})}
+					selected={selected}
+					onSelect={select}
+					onBack={() => select(null)}
+					empty={{ title: 'No merchants yet', action: <Button onClick={onAdd}>Add merchant</Button> }}
+				/>
+			}>
+			{merchant ? (
+				<>
+					<StatGrid label="This merchant">
+						<Stat label="Websites" value={merchant.sites} />
+					</StatGrid>
+					<Card
+						title="Checkout"
+						help="Shoppers can pay on this merchant's websites."
+						toggle={
+							<Switch checked={merchant.active} onChange={(on) => onToggle(merchant.id, on)} label="Active" hideLabel />
+						}
+					/>
+				</>
+			) : null}
+		</Page>
+	);
+}
+```
+
+**Never** draw a table (`DataTable`, `Table` or a raw `<table>`), a closed box (`Disclosure`) or small tabs
+(`PillTabs`), and never write a raw `<select>`, `<input>` or `<textarea>`: use `ListColumn` + `Row`, `Page sections` and
+`Card`, and the kit fields (`Select`, `Input`, `TextArea`). The test `test/kit-only.test.js` reads every screen under
+`platform/src`, `platform/app` and `products/*/app` and fails when one does. The screens that still do are listed in
+`test/kit-only-todo.js`; that list only shrinks (a new screen on it, or a cleaned one left on it, fails the test), and
+the screens move off it as they are rebuilt.
+
 ## Color rule (redesign 2, owner 2026-10-17: 60-30-10, colors carry meaning)
 
 60 % the off-white canvas (`canvas` #F7F8F5; dark: navy #0A1C40), 30 % white surfaces and navy text (`fg` #0A1C40),
@@ -51,8 +150,9 @@ One component per job. The window never scrolls; every pane has its own thin scr
   (label as `aria-label`). Numbers and button labels cut their own text, so nothing overlaps.
 - `InnerNav`: the only sub-page navigation (groups, items with count, dot, locked, `href` or `onSelect`; search above
   10 items; a dropdown on phones). `Toolbar`: search (debounced), filters, sort, view switch, count; it becomes the
-  bulk bar in select mode. `DataTable` (+ `useRowSelection`): the only list of records (sticky header, sort, column
-  kinds, row menu, whole-row selection, skeleton rows, empty state). `Pagination`: the Page footer.
+  bulk bar in select mode. `DataTable` (+ `useRowSelection`): the old table of records (sticky header, sort, column
+  kinds, row menu, whole-row selection, skeleton rows, empty state); new screens use `ListColumn` instead (see "How to
+  build a screen") and the screens still on `DataTable` are listed in `test/kit-only-todo.js`. `Pagination`: the Page footer.
 - `Drawer` (`size="md"` about 480 px, `"lg"` about 760 px, full screen on phones; `Dialog` on the right is the same
   drawer), `SaveBar` (the only save control), `AppShell` nav items with `badge: { count, tone }` and `dot`, and the
   account with its `role`.
@@ -206,7 +306,7 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
 - Every standard tab draws through `Page` (layout contract 2026-10-17): crumbs `Product > Section > sub-page`, the old
   description behind the (i), the actions in the header, and a section with parts shows them in the `InnerNav`
   (`SectionsPage` in `dashboard-page.js`, each sub-page its own `#hash`, counts and status dots in the sidebar).
-  Lists are `DataTable` pages (the Texts, Defaults, Changes and Developers docs tables) and a record edit opens in a
+  Lists are `DataTable` pages for now (the Texts, Defaults, Changes and Developers docs tables; they move to rows) and a record edit opens in a
   `Drawer`; the loading states are the matching skeletons (`OverviewSkeleton` is built from `StatGridSkeleton` and
   `SettingsCardSkeleton`).
 - Standard tabs, each taking the product's parts as props: `OverviewTab` (`useMore(overview, props)`, a hook that
