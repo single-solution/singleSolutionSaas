@@ -13,6 +13,7 @@
  * @module
  */
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Button } from './Button.js';
 import { cx } from './cx.js';
 import { EmptyState, SkeletonBlock } from './display.js';
 import { Icon } from './icons.js';
@@ -22,7 +23,7 @@ import { Spinner } from './Spinner.js';
 import { PickKeepsEditsContext, askLeave } from './unsaved.js';
 
 /** @typedef {Parameters<typeof Row>[0]} RowProps */
-/** @typedef {{ search: string, filters: string, loading: string, more: string, back: string }} ListColumnTexts */
+/** @typedef {{ search: string, filters: string, loading: string, more: string, back: string, clearSearch: string, clearFilter: string, noFilterMatch: string, noMatch?: (query: string) => string }} ListColumnTexts */
 
 /** The words the list column says itself (replace them to translate). @type {Readonly<ListColumnTexts>} */
 export const LIST_COLUMN_TEXTS = Object.freeze({
@@ -31,6 +32,9 @@ export const LIST_COLUMN_TEXTS = Object.freeze({
 	loading: 'Loading',
 	more: 'Loading more',
 	back: 'Back to the list',
+	clearSearch: 'Clear search',
+	clearFilter: 'Clear filter',
+	noFilterMatch: 'No match for filter',
 });
 
 /** How long the pointer rests on a row before `onPrefetch` is called (ms). */
@@ -92,6 +96,14 @@ export function ListColumn({
 	const ids = items.map((item) => String(idOf(item)));
 	const shown = !loading && items.length > 0;
 	const searchable = search !== undefined;
+	const query = search?.value?.trim() ?? '';
+	const hasSearch = Boolean(query);
+	const activeFilter =
+		filters && filters.options && filters.options.length > 0
+			? filters.value !== 'all' &&
+				filters.value !== (filters.options.find((o) => o.id === 'all')?.id ?? filters.options[0]?.id)
+			: false;
+	const isFiltered = hasSearch || activeFilter;
 
 	// the one highlight slides to the picked row
 	useLayoutEffect(() => {
@@ -232,7 +244,39 @@ export function ListColumn({
 						))}
 					</div>
 				) : items.length === 0 ? (
-					empty ? (
+					isFiltered ? (
+						<EmptyState
+							compact
+							icon={hasSearch ? 'search' : 'filter'}
+							title={
+								hasSearch
+									? typeof words.noMatch === 'function'
+										? words.noMatch(query)
+										: `No match for "${query}"`
+									: (words.noFilterMatch ?? 'No match for filter')
+							}
+							action={
+								<div className="flex flex-wrap items-center justify-center gap-2">
+									{hasSearch && search ? (
+										<Button size="sm" variant="secondary" onClick={() => search.onChange('')}>
+											{words.clearSearch}
+										</Button>
+									) : null}
+									{activeFilter && filters ? (
+										<Button
+											size="sm"
+											variant="secondary"
+											onClick={() => {
+												const allId = filters.options.find((o) => o.id === 'all')?.id ?? filters.options[0]?.id;
+												if (allId !== undefined) filters.onChange(allId);
+											}}>
+											{words.clearFilter}
+										</Button>
+									) : null}
+								</div>
+							}
+						/>
+					) : empty ? (
 						<EmptyState compact {...empty} />
 					) : null
 				) : (

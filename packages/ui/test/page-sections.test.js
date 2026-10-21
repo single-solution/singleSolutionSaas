@@ -142,6 +142,15 @@ describe('Page sections', () => {
 		expect(jumps(container)[1]?.getAttribute('aria-current')).toBe('true');
 	});
 
+	it('point 257: a link to a section that no longer exists shows a note and never opens the first section quietly', () => {
+		window.history.replaceState(null, '', '/#deleted-section');
+		const { container } = render(<Page crumbs={crumbs} sections={parts(['a', 'b', 'c', 'd'])} />);
+		for (const jump of jumps(container)) {
+			expect(jump.getAttribute('aria-current')).toBeNull();
+		}
+		expect(container.textContent).toContain('That section was moved or removed.');
+	});
+
 	it('highlights the section in the top of the body while scrolling, and the last one at the very end', () => {
 		const { container } = render(<Page crumbs={crumbs} sections={parts(['a', 'b', 'c', 'd'])} />);
 		const pane = scroller(container);

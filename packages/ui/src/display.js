@@ -556,6 +556,25 @@ export function ErrorState({ title = 'This could not be loaded', message, action
 }
 
 /**
+ * Shown when a deep link points to an item or record that was deleted or is not accessible.
+ * @param {{ title?: ReactNode, message?: ReactNode, action?: ReactNode, className?: string }} props
+ */
+export function RemovedState({ title, message = 'This item was removed or you no longer have access.', action, className }) {
+	return (
+		<div role="status" className={cx('flex flex-col items-center gap-3 px-6 py-12 text-center', className)}>
+			<span className="flex size-10 items-center justify-center rounded-xl bg-surface-2 text-muted">
+				<Icon name="box" size={18} />
+			</span>
+			<div className="max-w-md space-y-0.5">
+				{title ? <p className="text-sm font-medium text-fg">{title}</p> : null}
+				<p className="text-sm text-muted">{message}</p>
+			</div>
+			{action ? <div>{action}</div> : null}
+		</div>
+	);
+}
+
+/**
  * Loading placeholder blocks with a soft shimmer.
  * @param {{ className?: string, lines?: number, label?: string }} props
  */

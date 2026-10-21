@@ -4,7 +4,7 @@
  * that the value will not be shown again; the value is never persisted by the component).
  * @module
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from './Button.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
@@ -46,6 +46,21 @@ export const copyText = async (text) => {
  */
 export function CodeBlock({ code, label, secret = false, wrap = true, className }) {
 	const [copied, setCopied] = useState(/** @type {null | boolean} */ (null));
+	const [prevCode, setPrevCode] = useState(code);
+
+	if (code !== prevCode) {
+		setPrevCode(code);
+		setCopied(null);
+	}
+
+	useEffect(() => {
+		if (copied !== true) return undefined;
+		const timer = setTimeout(() => {
+			setCopied(null);
+		}, 2000);
+		return () => clearTimeout(timer);
+	}, [copied, code]);
+
 	const copy = async () => setCopied(await copyText(code));
 	return (
 		<div className={cx('space-y-2', className)}>

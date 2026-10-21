@@ -397,7 +397,8 @@ describe('website page (jsdom)', () => {
 				type(search, 'nothing');
 				search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 			});
-			expect(shows('No websites yet.')).toBe(true);
+			expect(shows('No match for "nothing"')).toBe(true);
+			expect(shows('Clear search')).toBe(true);
 			cleanup();
 
 			// Support: the admin launch with the website id; tokens, the Setup sheet and usage on the page

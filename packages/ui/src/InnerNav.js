@@ -79,7 +79,7 @@ export function InnerNav({
 	const marker = useRef(/** @type {HTMLSpanElement | null} */ (null));
 	const all = groups ?? [{ items: items ?? [] }];
 	const leaves = all.flatMap((group) => group.items);
-	const current = leaves.find((item) => item.id === value) ?? leaves[0];
+	const current = leaves.find((item) => item.id === value) ?? (value === undefined ? leaves[0] : undefined);
 	const needle = query.trim().toLowerCase();
 	const shown = all
 		.map((group) => ({

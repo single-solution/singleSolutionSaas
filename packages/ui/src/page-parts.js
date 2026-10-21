@@ -45,7 +45,7 @@ import { useShell } from './shell-state.js';
  * @typedef {{ primary?: PageAction, secondary?: PageAction[], more?: MenuItem[] }} PageActions
  */
 /** @typedef {{ status: import('./display.js').PillStatus, label: ReactNode, title?: string }} PageStatus */
-/** @typedef {{ breadcrumb: string, info: string, more: string, menu: string, facts: string }} PageTexts */
+/** @typedef {{ breadcrumb: string, info: string, more: string, menu: string, facts: string, sectionMoved: string, itemRemoved: string, back: string }} PageTexts */
 
 /** The words a page's header says itself (replace them to translate). @type {Readonly<PageTexts>} */
 export const PAGE_TEXTS = Object.freeze({
@@ -54,6 +54,9 @@ export const PAGE_TEXTS = Object.freeze({
 	more: 'More actions',
 	menu: 'Open navigation',
 	facts: 'Key numbers',
+	sectionMoved: 'That section was moved or removed.',
+	itemRemoved: 'This item was removed or you no longer have access.',
+	back: 'Back to the list',
 });
 
 /** Below this width the header has room for the title and the primary action only (Tailwind `sm`). */

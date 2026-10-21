@@ -9,6 +9,7 @@
  * @module
  */
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Callout } from './display.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -157,7 +158,11 @@ const JUMP_MS = 800;
 function useJumps(ids) {
 	const key = ids.join('|');
 	const body = useRef(/** @type {HTMLDivElement | null} */ (null));
-	const [active, setActive] = useState(ids[0] ?? '');
+	const initialHash = typeof window !== 'undefined' ? hashId(window.location.hash) : '';
+	const initialMissing = initialHash && !ids.includes(initialHash) ? initialHash : null;
+	const initialActive = initialMissing ? '' : ids.includes(initialHash) ? initialHash : (ids[0] ?? '');
+	const [active, setActive] = useState(initialActive);
+	const [missing, setMissing] = useState(/** @type {string | null} */ (initialMissing));
 	const busy = useRef(false);
 	const timer = useRef(/** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined));
 	const scrollTo = useCallback((/** @type {string} */ id, /** @type {boolean} */ instant) => {
@@ -171,6 +176,7 @@ function useJumps(ids) {
 		if (typeof pane.scrollTo === 'function') pane.scrollTo({ top, behavior: instant || reduced ? 'auto' : 'smooth' });
 		else pane.scrollTop = top;
 		setActive(id);
+		setMissing(null);
 		busy.current = true;
 		clearTimeout(timer.current);
 		timer.current = setTimeout(() => {
@@ -180,6 +186,7 @@ function useJumps(ids) {
 	/** A click on a jump: scroll there and name the section in the address (no history entry). */
 	const jump = useCallback(
 		(/** @type {string} */ id) => {
+			setMissing(null);
 			scrollTo(id, false);
 			try {
 				window.history.replaceState(window.history.state, '', `#${encodeURIComponent(id)}`);
@@ -192,8 +199,19 @@ function useJumps(ids) {
 	// an address with `#id` (on load, Back, Forward) scrolls to the section
 	useEffect(() => {
 		const read = () => {
-			const id = hashId(window.location.hash);
-			if (ids.includes(id)) scrollTo(id, true);
+			const hash = window.location.hash;
+			const id = hashId(hash);
+			if (!id) {
+				setMissing(null);
+				return;
+			}
+			if (ids.includes(id)) {
+				setMissing(null);
+				scrollTo(id, true);
+			} else if (ids.length > 0) {
+				setMissing(id);
+				setActive('');
+			}
 		};
 		read();
 		window.addEventListener('hashchange', read);
@@ -232,7 +250,7 @@ function useJumps(ids) {
 		};
 	}, [key]);
 	useEffect(() => () => clearTimeout(timer.current), []);
-	return { body, active: ids.includes(active) ? active : (ids[0] ?? ''), jump };
+	return { body, active: missing ? '' : ids.includes(active) ? active : (ids[0] ?? ''), jump, missing };
 }
 
 /**
@@ -240,11 +258,13 @@ function useJumps(ids) {
  * bars to the page, the props of the page's one `SaveBar` (null without sections) and of its inner navigation (the
  * jumps; null under {@link SECTION_JUMPS_FROM} sections).
  * @param {PageSection[] | undefined} sections
+ * @param {{ sectionMoved?: string }} [texts]
  */
-export function usePageSections(sections) {
+export function usePageSections(sections, texts) {
 	const list = sections ?? [];
 	const { scopes, view, onSave, onDiscard } = usePageSaves(list.length);
-	const { body, active, jump } = useJumps(list.map((section) => section.id));
+	const { body, active, jump, missing } = useJumps(list.map((section) => section.id));
+	const note = missing ? (texts?.sectionMoved ?? 'That section was moved or removed.') : null;
 	const { changed: orders, ...shown } = view;
 	/** The sections that have changes, in the order of the page (the bar keeps the last ones while it leaves). */
 	const named = orders ? orders.split(',').flatMap((order) => list[Number(order)] ?? []) : [];
@@ -270,6 +290,7 @@ export function usePageSections(sections) {
 		scopes,
 		nav,
 		changed,
+		note,
 		bar: sections
 			? {
 					...shown,
@@ -301,12 +322,17 @@ export function markChanged(nav, ids) {
 
 /**
  * The sections, each a `<section>` with its own name, stacked with the body's gap.
- * @param {{ sections: PageSection[], scopes: SaveScope[], changed?: string[] }} props `changed`: the ids of the sections
+ * @param {{ sections: PageSection[], scopes: SaveScope[], changed?: string[], note?: ReactNode }} props `changed`: the ids of the sections
  *   that have changes (each gets `data-changed`)
  */
-export function PageSectionList({ sections, scopes, changed = [] }) {
+export function PageSectionList({ sections, scopes, changed = [], note }) {
 	return (
 		<>
+			{note ? (
+				<Callout tone="info" className="mb-2">
+					{note}
+				</Callout>
+			) : null}
 			{sections.map((section, index) => (
 				<PageSavesContext.Provider key={section.id} value={scopes[index] ?? null}>
 					<section

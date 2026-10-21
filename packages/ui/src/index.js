@@ -36,6 +36,7 @@ export {
 	Callout,
 	EmptyState,
 	ErrorState,
+	RemovedState,
 	Skeleton,
 	SkeletonBlock,
 	LockedState,

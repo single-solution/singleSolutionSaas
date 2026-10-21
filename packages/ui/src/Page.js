@@ -30,9 +30,9 @@
  */
 import { useId } from 'react';
 import { cx } from './cx.js';
-import { ErrorState, StatusPill } from './display.js';
+import { ErrorState, RemovedState, StatusPill } from './display.js';
 import { SaveBar } from './blocks.js';
-import { IconButton } from './Button.js';
+import { Button, IconButton } from './Button.js';
 import { Icon } from './icons.js';
 import { InnerNav } from './InnerNav.js';
 import { PAGE, pageBody } from './layout-metrics.js';
@@ -54,7 +54,7 @@ export { PAGE_TEXTS };
 /** @typedef {import('./page-parts.js').PageTexts} PageTexts */
 /** @typedef {import('./page-sections.js').PageSection} PageSection */
 /** @typedef {Parameters<typeof InnerNav>[0]} PageNav */
-/** @typedef {import('react').ReactElement<{ selected?: string | number | null, onBack?: () => void, texts?: Partial<import('./ListColumn.js').ListColumnTexts> }>} PageList */
+/** @typedef {import('react').ReactElement<{ selected?: string | number | null, onBack?: () => void, onSelect?: (id: any) => void, items?: any[], idOf?: (item: any) => any, loading?: boolean, texts?: Partial<import('./ListColumn.js').ListColumnTexts> }>} PageList */
 
 /**
  * @param {{ crumbs: PageCrumb[], status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode,
@@ -99,8 +99,8 @@ export function Page({
 	const shell = useShell();
 	const narrow = useNarrow();
 	const titleId = useId();
-	const flow = usePageSections(sections);
 	const words = { ...PAGE_TEXTS, ...texts };
+	const flow = usePageSections(sections, words);
 	const link = linkAs ?? shell.linkAs;
 	// the sections with changes carry a mark in the navigation, in the words of the page's texts
 	const rail = list ? undefined : nav ? markChanged(nav, flow.changed) : flow.nav;
@@ -108,12 +108,18 @@ export function Page({
 	// on phones a list page shows the list or the picked item, one at a time
 	const picked = list?.props.selected;
 	const hasPick = picked !== null && picked !== undefined;
+	const listItems = list?.props.items;
+	const idOf = list?.props.idOf ?? ((/** @type {any} */ item) => item?.id);
+	const knownListIds = listItems && Array.isArray(listItems) ? listItems.map((item) => String(idOf(item))) : [];
+	const itemMissing =
+		Boolean(list) && !list?.props.loading && knownListIds.length > 0 && hasPick && !knownListIds.includes(String(picked));
 	const listOnly = Boolean(list) && narrow && !hasPick;
 	// a body with a key of its own that does not follow the pick stays mounted, so a pick loses no edit
 	const keepsEdits = Boolean(list) && bodyKey !== undefined && bodyKey !== String(picked ?? '');
 	// the Back button moves away from the picked item: with unsaved changes it asks first
 	const onBack = list && narrow && hasPick ? list.props.onBack : undefined;
 	const back = onBack ? (keepsEdits ? onBack : () => askLeave(onBack)) : undefined;
+	const listBack = list?.props.onBack ?? (list?.props.onSelect ? () => list.props.onSelect?.(null) : undefined);
 	if (loading)
 		return (
 			<PageSkeleton
@@ -203,8 +209,19 @@ export function Page({
 										message={failure.message}
 										{...(failure.action ? { action: failure.action } : {})}
 									/>
+								) : itemMissing ? (
+									<RemovedState
+										message={words.itemRemoved}
+										action={
+											listBack ? (
+												<Button size="sm" variant="secondary" onClick={listBack}>
+													{words.back}
+												</Button>
+											) : null
+										}
+									/>
 								) : sections ? (
-									<PageSectionList sections={sections} scopes={flow.scopes} changed={flow.changed} />
+									<PageSectionList sections={sections} scopes={flow.scopes} changed={flow.changed} note={flow.note} />
 								) : (
 									children
 								)}

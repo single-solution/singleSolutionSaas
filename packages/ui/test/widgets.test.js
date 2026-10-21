@@ -662,6 +662,38 @@ describe('toasts, code blocks and forms', () => {
 		expect(await copyText('x')).toBe(true);
 	});
 
+	it('point 162: goes back to Copy after 2 seconds, and at once when code changes', async () => {
+		vi.useFakeTimers();
+		const writeText = vi.fn(async () => undefined);
+		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+		const { container, rerender } = render(<CodeBlock code="sk_live_old" />);
+		await act(async () => {
+			byText(container, 'Copy', 'button').click();
+		});
+		expect(container.textContent).toContain('Copied');
+
+		// After 2 seconds, goes back to Copy
+		act(() => {
+			vi.advanceTimersByTime(2000);
+		});
+		expect(container.textContent).toContain('Copy');
+		expect(container.textContent).not.toContain('Copied');
+
+		// Copy again
+		await act(async () => {
+			byText(container, 'Copy', 'button').click();
+		});
+		expect(container.textContent).toContain('Copied');
+
+		// When code changes, at once goes back to Copy
+		rerender(<CodeBlock code="sk_live_new" />);
+		expect(container.textContent).toContain('Copy');
+		expect(container.textContent).not.toContain('Copied');
+
+		Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+		vi.useRealTimers();
+	});
+
 	it('lays fields out in a grid: short controls are cells, long text and wide ones span the row', () => {
 		const { container } = render(
 			<div>

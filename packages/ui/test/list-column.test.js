@@ -201,6 +201,56 @@ describe('ListColumn states', () => {
 		expect(byText(container, 'No merchants yet')).not.toBeNull();
 		expect(byText(container, 'Add the first one.')).not.toBeNull();
 	});
+
+	it('point 93: shows "No match for xyz" with Clear search/filter instead of normal empty state when filtered', () => {
+		const onSearchChange = vi.fn();
+		const onFilterChange = vi.fn();
+		const empty = { title: 'No merchants yet', description: 'Add the first one.' };
+
+		const { container, rerender } = render(
+			column({
+				items: [],
+				empty,
+				search: { value: 'xyz', onChange: onSearchChange },
+			}),
+		);
+		expect(container.textContent).toContain('No match for "xyz"');
+		expect(container.textContent).not.toContain('No merchants yet');
+		const clearSearchBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Clear search');
+		expect(clearSearchBtn).not.toBeUndefined();
+		clearSearchBtn?.click();
+		expect(onSearchChange).toHaveBeenCalledWith('');
+
+		rerender(
+			column({
+				items: [],
+				empty,
+				filters: {
+					value: 'active',
+					onChange: onFilterChange,
+					options: [
+						{ id: 'all', label: 'All' },
+						{ id: 'active', label: 'Active' },
+					],
+				},
+			}),
+		);
+		expect(container.textContent).toContain('No match for filter');
+		expect(container.textContent).not.toContain('No merchants yet');
+		const clearFilterBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Clear filter');
+		expect(clearFilterBtn).not.toBeUndefined();
+		clearFilterBtn?.click();
+		expect(onFilterChange).toHaveBeenCalledWith('all');
+
+		rerender(
+			column({
+				items: [],
+				empty,
+			}),
+		);
+		expect(container.textContent).toContain('No merchants yet');
+		expect(container.textContent).not.toContain('No match');
+	});
 });
 
 describe('ListColumn loading more', () => {
@@ -357,12 +407,12 @@ describe('useListSelection', () => {
 		expect(shown(container)).toBe('null');
 	});
 
-	it('picks the first id when the id in the address is not in the list, and keeps it while the list is on the way', () => {
+	it('point 295: keeps the id in the address even if not in the list (never silently picks the first id)', () => {
 		window.history.replaceState(null, '', '/merchants?id=gone');
 		const { container, rerender } = render(<Probe ids={[]} />);
 		expect(shown(container)).toBe('gone');
 		rerender(<Probe ids={['acme', 'bolt']} />);
-		expect(shown(container)).toBe('acme');
+		expect(shown(container)).toBe('gone');
 	});
 
 	it('pushes a history entry on select and keeps the rest of the address', () => {

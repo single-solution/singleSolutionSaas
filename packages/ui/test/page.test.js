@@ -732,4 +732,19 @@ describe('Page with a list', () => {
 		click(back);
 		expect(onBack).toHaveBeenCalledTimes(1);
 	});
+
+	it('point 295: a link to a list item that no longer exists shows "This item was removed or you no longer have access" with a way back to the list', () => {
+		const onBack = vi.fn();
+		const { container } = render(
+			<Page crumbs={crumbs} list={listOf({ selected: 'gone', onBack })}>
+				Acme page
+			</Page>,
+		);
+		expect(container.textContent).toContain('This item was removed or you no longer have access');
+		expect(container.textContent).not.toContain('Acme page');
+		const backBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Back to the list');
+		expect(backBtn).not.toBeUndefined();
+		click(/** @type {HTMLElement} */ (backBtn));
+		expect(onBack).toHaveBeenCalledTimes(1);
+	});
 });

@@ -47,7 +47,9 @@ export function LocalTime({ value }) {
 	const timeZone = useViewerTimeZone();
 	const locale = useDisplayLocale();
 	if (value === null || value === undefined || value === '') return <>—</>;
-	const iso = new Date(value).toISOString();
+	const d = value instanceof Date ? value : new Date(/** @type {any} */ (value));
+	if (Number.isNaN(d.getTime())) return <>—</>;
+	const iso = d.toISOString();
 	return (
 		<time dateTime={iso} title={formatDateTime(value, { locale })}>
 			{formatDateTime(value, timeZone ? { timeZone, locale } : { locale })}

@@ -32,7 +32,7 @@ const readAddress = (param) => {
  * @returns {string | null}
  */
 const pick = (address, known, initial) => {
-	if (address.id !== null && (known.length === 0 || known.includes(address.id))) return address.id;
+	if (address.id !== null) return address.id;
 	if (address.cleared || initial === null) return null;
 	const start = initial === undefined ? undefined : String(initial);
 	if (start !== undefined && known.includes(start)) return start;
