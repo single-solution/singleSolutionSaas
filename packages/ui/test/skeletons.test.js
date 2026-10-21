@@ -2,8 +2,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ROW_GRID, ROW_LABEL } from '../src/fields.js';
 import { Card, SettingRow, SettingsCard, Stat, StatGrid } from '../src/index.js';
-import { CARD, DRAWER, DRAWER_WIDTH, PAGE, pageBody } from '../src/layout-metrics.js';
-import { DrawerBodySkeleton, DrawerSkeleton, PageSkeleton, SettingsCardSkeleton, StatGridSkeleton } from '../src/skeletons.js';
+import { CARD, DRAWER, DRAWER_WIDTH, LIST, PAGE, pageBody } from '../src/layout-metrics.js';
+import {
+	DrawerBodySkeleton,
+	DrawerSkeleton,
+	PageSkeleton,
+	RowListSkeleton,
+	SettingsCardSkeleton,
+	StatGridSkeleton,
+} from '../src/skeletons.js';
 import { cleanup, render } from '../src/testing.js';
 
 afterEach(cleanup);
@@ -80,6 +87,17 @@ describe('StatGridSkeleton', () => {
 		const { container } = render(<StatGridSkeleton className="mt-2" />);
 		expect(container.querySelectorAll('[class~="rounded-card"]').length).toBe(4);
 		expect(cls(container.firstElementChild)).toContain('mt-2');
+	});
+});
+
+describe('RowListSkeleton', () => {
+	it('is one spoken status of rows with the height of a real row', () => {
+		const { container } = render(<RowListSkeleton rows={2} label="Loading consents" />);
+		const status = /** @type {HTMLElement} */ (container.firstElementChild);
+		expect(status.getAttribute('role')).toBe('status');
+		expect(status.getAttribute('aria-label')).toBe('Loading consents');
+		expect(status.children).toHaveLength(2);
+		expect(cls(status.firstElementChild)).toContain(LIST.row);
 	});
 });
 

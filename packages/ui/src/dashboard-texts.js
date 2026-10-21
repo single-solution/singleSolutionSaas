@@ -19,6 +19,7 @@ export const DASHBOARD_TEXTS = Object.freeze({
 	save: 'Save',
 	reset: 'Reset to default',
 	cancel: 'Cancel',
+	rowActions: 'Actions for {name}',
 	andMore: '{names} and {count} more',
 	categories: Object.freeze({ more: 'More' }),
 	managed: Object.freeze({

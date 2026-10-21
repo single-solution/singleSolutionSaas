@@ -7,7 +7,19 @@
 import { cx } from './cx.js';
 import { SkeletonBlock, STAT_GRID } from './display.js';
 import { ROW_GRID, ROW_LABEL, ROW_LIST } from './fields.js';
-import { BAR, CARD, columnClass, DRAWER, DRAWER_WIDTH, METRICS, NAV_PANEL, PAGE, pageBody, TABLE } from './layout-metrics.js';
+import {
+	BAR,
+	CARD,
+	columnClass,
+	DRAWER,
+	DRAWER_WIDTH,
+	LIST,
+	METRICS,
+	NAV_PANEL,
+	PAGE,
+	pageBody,
+	TABLE,
+} from './layout-metrics.js';
 import { Crumbs, ShellMenuButton } from './page-parts.js';
 import { PaginationSkeleton } from './Pagination.js';
 
@@ -113,6 +125,28 @@ export function DataTableSkeleton({ columns, rows = 8, selectable = false, menu 
 					))}
 				</tbody>
 			</table>
+		</div>
+	);
+}
+
+/**
+ * A list of rich rows while it loads (the real rows are `Row`s): the same fixed row height, a round lead, a title line and
+ * a fact line, and a value. One `role="status"` region, so a screen reader hears one word.
+ * @param {{ rows?: number, label?: string, className?: string }} props
+ */
+export function RowListSkeleton({ rows = 3, label = 'Loading', className }) {
+	return (
+		<div role="status" aria-label={label} aria-busy="true" className={cx('animate-ss-fade', className)}>
+			{Array.from({ length: rows }, (_, i) => (
+				<div key={i} aria-hidden="true" className={cx('flex items-center gap-3 px-2.5', LIST.row)}>
+					<SkeletonBlock className="size-8 shrink-0 rounded-full" />
+					<div className="min-w-0 flex-1 space-y-1.5">
+						<SkeletonBlock className={cx('h-3.5', i % 2 ? 'w-1/3' : 'w-2/5')} />
+						<SkeletonBlock className="h-3 w-3/4" />
+					</div>
+					<SkeletonBlock className="h-3 w-8 shrink-0" />
+				</div>
+			))}
 		</div>
 	);
 }

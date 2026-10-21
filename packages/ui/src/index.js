@@ -71,6 +71,7 @@ export {
 	InnerNavSkeleton,
 	ToolbarSkeleton,
 	DataTableSkeleton,
+	RowListSkeleton,
 	PageSkeleton,
 	SettingsCardSkeleton,
 	StatGridSkeleton,
