@@ -1,6 +1,7 @@
 /**
- * The parts of a website's own page (both consoles), each its own address segment after the website:
- * `` (Overview) · `products/:productId` · `settings/:section` · `install` · `setup` · `usage` · `changes`.
+ * The parts of a website's own address (both consoles), each its own address segment after the website:
+ * `` (the page) · `products/:productId` · `install` · `usage` · `changes` open the ONE page at their section (flat
+ * layout 2026-10-21); `settings/:section` and `setup` are pages of their own.
  * Plain module (no `'use client'`): the server views and the loaders read it too.
  * @module
  */
@@ -35,4 +36,19 @@ export const parseWebsitePart = (path) => {
 	}
 	const single = SINGLE.find((kind) => kind === head);
 	return single && !tail ? { kind: single } : null;
+};
+
+/**
+ * The element of the website page an address opens it at: a section (`status`, `products`, `activity`, `usage`) or one
+ * product's card; null for the top of the page and for the pages of their own (settings, setup).
+ * @param {ReturnType<typeof parseWebsitePart>} parsed
+ * @returns {string | null}
+ */
+export const sectionOf = (parsed) => {
+	if (parsed === null) return null;
+	if (parsed.kind === 'product') return `product-${parsed.id}`;
+	if (parsed.kind === 'install') return 'products';
+	if (parsed.kind === 'usage') return 'usage';
+	if (parsed.kind === 'changes') return 'activity';
+	return null;
 };

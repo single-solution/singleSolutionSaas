@@ -107,18 +107,20 @@ describe('merchant console smoke', () => {
 			expect(overviewText).toContain('Open');
 			expect(overviewText).toContain('Your admin adds products to this website.'); // the second website
 
-			// Websites with nothing in the URL: the table (domain, status, products, daily cost), each row a link to the
-			// website's own page
+			// Websites with nothing in the URL: one list of rich rows (domain, status, products or what is left to do,
+			// daily cost), each row a link to the website's own page, which stands beside it with its sections open
 			const websitesRaw = ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} branding={BRANDING} />);
 			const websitesText = text(websitesRaw);
 			expect(websitesText).toContain('www.shop.example.com');
 			expect(websitesRaw).toContain('data-ss-page');
 			expect(websitesRaw).toContain(`href="/websites/${site.websiteId}"`);
 			expect(websitesRaw).not.toContain('role="tab"');
-			expect(websitesText).not.toContain('Install and tokens'); // the card is on the website's page
+			expect(websitesText).toContain('No products yet'); // the second website's row says what it lacks
+			expect(websitesText).toContain('Chatty: no feature on yet');
+			expect(websitesText).toContain('Open dashboard'); // the first website's page is open beside the list
 
-			// a website: its own page, Websites › domain, the products as a table, the parts as inner navigation, no admin
-			// actions
+			// a website: its own page, Websites › domain, the list beside it, its sections all open (status, products,
+			// usage), no admin actions
 			const selected = await loaders.loadWebsitePage(merchant.api, merchantId, String(site.websiteId), '');
 			const selectedRaw = ssr(<WebsiteView {...selected} />);
 			const selectedText = text(selectedRaw);
@@ -127,11 +129,10 @@ describe('merchant console smoke', () => {
 			expect(selectedText).toContain('Notes');
 			expect(selectedText).toContain('Chatty');
 			expect(selectedText).toContain('No features on');
-			for (const word of ['Overview', 'Website settings', 'Install and tokens', 'Setup sheet', 'Usage', 'Recent changes'])
+			for (const word of ['Settings', 'Setup sheet', 'Daily cost', 'Open dashboard', 'Recent changes'])
 				expect(selectedText).toContain(word);
-			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}/products/notes"`);
-			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}/settings/brand"`);
-			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}/install"`);
+			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}"`); // its row in the list
+			expect(selectedRaw).toContain('id="product-notes"');
 			expect(selectedRaw).not.toContain('role="tab"');
 			expect(selectedText).not.toContain('Add product');
 			expect(selectedText).not.toContain('Remove website');

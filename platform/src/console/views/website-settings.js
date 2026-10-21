@@ -10,7 +10,7 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import { CardFlow, DataTable, EmptyState, LocalTime, describeProblem, useToast } from '@ss/ui';
+import { CardFlow, describeProblem, useToast } from '@ss/ui';
 import { WEBSITE_SETTINGS as T } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { api } from '../paths.js';
@@ -51,38 +51,6 @@ export const contextOf = (readiness, section) => {
 		? {}
 		: { dot: /** @type {const} */ ('warning'), dotLabel: T.needsSetup(waiting.map((item) => item.name).join(', ')) };
 };
-
-/** The Recent changes table: who changed what, when. @param {{ changes: Change[] }} props */
-export function ChangesTable({ changes }) {
-	return (
-		<DataTable
-			caption={T.changes.title}
-			rows={changes}
-			rowKey={(change) => `${change.version}-${change.at}`}
-			empty={<EmptyState compact icon="clock" title={T.changes.empty} />}
-			columns={[
-				{ key: 'at', header: T.savedAt, kind: 'date', render: (change) => <LocalTime value={change.at} /> },
-				{
-					key: 'section',
-					header: T.changes.sectionColumn,
-					render: (change) =>
-						T.changes.row(
-							/** @type {Record<string, string>} */ (T.sections)[change.section] ?? change.section,
-							change.version,
-						),
-				},
-				{
-					key: 'changed',
-					header: T.changes.fieldsColumn,
-					low: true,
-					wrap: true,
-					render: (change) => T.changes.fields(change.changed),
-				},
-				{ key: 'who', header: T.changes.byColumn, low: true, render: (change) => T.changes.by(change.who.name) },
-			]}
-		/>
-	);
-}
 
 /**
  * The state the settings sub-pages share, kept by the website page so its header and navigation show it too.

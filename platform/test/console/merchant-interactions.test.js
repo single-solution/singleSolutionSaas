@@ -30,6 +30,7 @@ import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
 	browserOf,
+	buttons,
 	button,
 	clickEl,
 	createWorld,
@@ -353,17 +354,21 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await world.connect();
 		await world.addProduct(beta.merchantId, site.websiteId, 'notes');
 		render(<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId)} branding={BRANDING} />);
-		// the list is a table; a row is a link to the website's page
+		// the list is rich rows; a row is a link to the website's page, which stands open beside it
 		expect(shows('beta.example.com')).toBe(true);
 		expect(document.querySelector(`a[href="/websites/${site.websiteId}"]`)).not.toBeNull();
+		expect(document.querySelector('h1')?.textContent).toBe('beta.example.com');
 		cleanup();
 		render(<WebsiteView {...await loaders.loadWebsitePage(e.api, beta.merchantId, String(site.websiteId), '')} />);
 		expect(document.querySelector('h1')?.textContent).toBe('beta.example.com');
-		// the parts are the inner navigation (each its own address); the More menu has only Visit and Copy for a merchant
-		for (const part of ['', 'products/notes', 'settings/business', 'install', 'setup', 'usage', 'changes'])
-			expect(document.querySelector(`a[href="/websites/${site.websiteId}${part ? `/${part}` : ''}"]`)).not.toBeNull();
+		// one page with its sections open (product card, usage, recent changes); Settings and the Setup sheet are
+		// header actions to their own addresses; the More menu has only those and Visit and Copy for a merchant
+		expect(document.querySelector('#product-notes')).not.toBeNull();
+		for (const label of ['Settings', 'Setup sheet', 'Open Notes']) expect(buttons(label).length).toBeGreaterThan(0);
+		expect(shows('Recent changes')).toBe(true);
 		await press('More actions');
-		expect(menuItems()).toEqual(['Visit website', 'Copy domain']);
+		// (the header's own actions repeat there on a narrow window)
+		expect(menuItems()).toEqual(['Settings', 'Setup sheet', 'Visit website', 'Copy domain']);
 		cleanup();
 		const open = vi.fn();
 		vi.stubGlobal('open', open);

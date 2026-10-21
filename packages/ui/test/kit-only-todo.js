@@ -18,9 +18,6 @@ export const KIT_ONLY_TODO = [
 	{ file: 'platform/src/console/views/range.js', uses: ['<input'] },
 	{ file: 'platform/src/console/views/setup.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/views/website-connections.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/views/website-page.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/views/website-settings-sections.js', uses: ['DataTable', 'Disclosure'] },
-	{ file: 'platform/src/console/views/website-settings.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/views/website.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/views/websites.js', uses: ['DataTable'] },
 ];

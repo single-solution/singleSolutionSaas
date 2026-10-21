@@ -7,7 +7,7 @@
  * Layout: the Overview is one page (the greeting behind the (i), the key numbers in the header, then its cards).
  * @module
  */
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import {
 	BarChart,
 	Button,
@@ -16,11 +16,12 @@ import {
 	DataTable,
 	EmptyState,
 	Icon,
+	IconBadge,
+	ListColumn,
 	NeedsList,
 	Page,
 	Stat,
 	StatGrid,
-	Toolbar,
 	describeProblem,
 	formatCredits,
 	useToast,
@@ -30,7 +31,15 @@ import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
 import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api, routes } from '../paths.js';
-import { DaysLeft, ProductStatusBadge, creditDayBars, formatChartCredits, receiptColumns } from './billing.js';
+import {
+	DaysLeft,
+	ProductStatusBadge,
+	creditDayBars,
+	formatChartCredits,
+	receiptColumns,
+	productStatusLabel,
+	productTone,
+} from './billing.js';
 import { FrameBilling } from './frame-billing.js';
 import { PageProblem, openDashboard } from './common.js';
 import { ActivityTimeline } from './login-settings.js';
@@ -272,7 +281,7 @@ export function OverviewView(props) {
 	);
 }
 
-/** How a website's worst product status reads in the table. */
+/** How a website's worst product status reads in the list and the header. */
 const SITE_PILLS = /** @type {const} */ ({
 	success: { status: 'active', label: MERCHANT.websiteStatus.success },
 	warning: { status: 'warning', label: MERCHANT.websiteStatus.warning },
@@ -280,124 +289,175 @@ const SITE_PILLS = /** @type {const} */ ({
 	neutral: { status: 'off', label: MERCHANT.websiteStatus.neutral },
 });
 
+/** The order of the status chips above the list. */
+const DOT_ORDER = /** @type {const} */ (['success', 'warning', 'danger', 'neutral']);
+
 /**
- * The merchant's Websites page: a table (website, status, products, daily cost) with a search, whose row opens the
- * website's own page. With no websites yet, the welcome.
- * @param {{ rows: Array<{ website: any, cards: ProductCard[] }>, branding?: BrandingSupport }} props
+ * Whether the window is a phone (the kit's breakpoint); false until the page is in the browser. On a phone the list
+ * stands alone until a website is picked.
  */
-function WebsitesPage({ rows, branding }) {
+const usePhone = () => {
+	const [phone, setPhone] = useState(false);
+	useLayoutEffect(() => {
+		if (!window.matchMedia) return undefined;
+		const media = window.matchMedia('(max-width: 639px)');
+		const read = () => setPhone(media.matches);
+		read();
+		media.addEventListener('change', read);
+		return () => media.removeEventListener('change', read);
+	}, []);
+	return phone;
+};
+
+/**
+ * The one thing a website still needs, for its row: a stopped or suspended product, one in grace, a product with no
+ * feature on yet, or no product at all; null when nothing is left.
+ * @param {ProductCard[]} cards
+ * @returns {{ tone: 'warning' | 'danger', text: string } | null}
+ */
+const troubleOf = (cards) => {
+	if (cards.length === 0) return { tone: 'warning', text: WEBSITE.noProductsYet };
+	const stopped = cards.find((card) => productTone(card) === 'danger');
+	if (stopped) return { tone: 'danger', text: WEBSITE.productTrouble(stopped.name, productStatusLabel(stopped)) };
+	const grace = cards.find((card) => productTone(card) === 'warning');
+	if (grace) return { tone: 'warning', text: WEBSITE.productTrouble(grace.name, productStatusLabel(grace)) };
+	const idle = cards.find((card) => card.status === 'active' && card.featuresOn.length === 0);
+	return idle ? { tone: 'warning', text: WEBSITE.setupLeft(idle.name) } : null;
+};
+
+/**
+ * The merchant's Websites screen (flat layout 2026-10-21): a column of rich rows (domain, status dot, its products or
+ * what is left to do, daily cost) beside the picked website's own page (`website-page.js`). A row is a link to the
+ * website's address, so the pick can be linked to and the browser's Back button works; on the list's own address
+ * (`fromList`) the first website is open straight away on wide screens, and a phone shows the list alone. A search and
+ * status chips narrow the list.
+ * @param {{ rows: Array<{ website: any, cards: ProductCard[] }>, websiteId: string, fromList?: boolean, part?: string,
+ *   settings?: any, setup?: any, merchantId: string }} props
+ */
+function WebsitesScreen({ rows, websiteId, fromList = false, part = '', settings = null, setup = null, merchantId }) {
 	const nav = useNavigation();
+	const phone = usePhone();
 	const [q, setQ] = useState('');
+	const [status, setStatus] = useState('all');
+	const crumbs = [{ label: MERCHANT.websitesTitle, href: routes.websites() }];
+	const entries = rows.map(({ website, cards }) => ({
+		id: String(website.websiteId),
+		domain: String(website.domain),
+		cards,
+		dot: websiteDot(cards),
+	}));
 	const needle = q.trim().toLowerCase();
-	const sites = rows
-		.filter((r) => !needle || String(r.website.domain).toLowerCase().includes(needle))
-		.map(({ website, cards }) => ({
-			id: String(website.websiteId),
-			domain: String(website.domain),
-			products: cards.length,
-			cost: dailyCostOf(cards),
-			dot: websiteDot(cards),
-		}));
-	return (
-		<Page
-			flush
-			crumbs={[{ label: MERCHANT.websitesTitle }]}
-			info={MERCHANT.websitesInfo}
-			linkAs={Link}
-			{...(rows.length > 0
+	const shown = entries.filter(
+		(entry) => (!needle || entry.domain.toLowerCase().includes(needle)) && (status === 'all' || entry.dot === status),
+	);
+	const present = DOT_ORDER.filter((dot) => entries.some((entry) => entry.dot === dot));
+	const selected = fromList ? (phone ? null : (entries[0]?.id ?? null)) : websiteId;
+	const list = (
+		<ListColumn
+			label={MERCHANT.websitesTitle}
+			items={shown}
+			idOf={(entry) => entry.id}
+			rowOf={(entry) => {
+				const trouble = troubleOf(entry.cards);
+				return {
+					lead: <IconBadge icon="globe" kind="website" size="sm" />,
+					title: entry.domain,
+					status: { tone: entry.dot, label: SITE_PILLS[entry.dot].label },
+					...(trouble ? { warning: trouble } : { meta: entry.cards.map((card) => card.name) }),
+					value: WEBSITE.perDay(formatCredits(dailyCostOf(entry.cards))),
+					href: routes.website(entry.id),
+					linkAs: Link,
+				};
+			}}
+			selected={selected}
+			onBack={() => nav.go(routes.websites())}
+			search={{ value: q, onChange: setQ, placeholder: WEBSITE.search }}
+			{...(present.length > 1
 				? {
-						toolbar: (
-							<Toolbar
-								label={MERCHANT.websitesTitle}
-								search={{ value: q, onSearch: setQ, label: WEBSITE.search, placeholder: WEBSITE.search }}
-								range={MORE.count(sites.length)}
-							/>
-						),
+						filters: {
+							value: status,
+							onChange: setStatus,
+							options: [
+								{ id: 'all', label: WEBSITE.filterAll, count: entries.length },
+								...present.map((dot) => ({
+									id: dot,
+									label: MERCHANT.websiteStatus[dot],
+									count: entries.filter((entry) => entry.dot === dot).length,
+								})),
+							],
+						},
 					}
-				: {})}>
-			{rows.length === 0 ? (
-				<Welcome branding={branding} />
-			) : (
-				<DataTable
-					caption={MERCHANT.websitesTitle}
-					rows={sites}
-					rowKey={(s) => s.id}
-					rowLabel={(s) => s.domain}
-					onRowClick={(s) => nav.go(routes.website(s.id))}
-					empty={<EmptyState compact icon="globe" kind="website" title={WEBSITE.none} />}
-					columns={[
-						{
-							key: 'domain',
-							header: MERCHANT.websiteColumns.website,
-							sortable: true,
-							render: (s) => (
-								<Link href={routes.website(s.id)} className="font-medium text-fg hover:underline">
-									{s.domain}
-								</Link>
-							),
-						},
-						{ key: 'status', header: MERCHANT.websiteColumns.status, kind: 'status', pill: (s) => SITE_PILLS[s.dot] },
-						{ key: 'products', header: MERCHANT.websiteColumns.products, kind: 'number', sortable: true },
-						{
-							key: 'cost',
-							header: MERCHANT.websiteColumns.dailyCost,
-							kind: 'money',
-							sortable: true,
-							render: (s) => WEBSITE.perDay(formatCredits(s.cost)),
-						},
-					]}
-				/>
-			)}
-		</Page>
+				: {})}
+			empty={{ icon: 'globe', kind: 'website', title: WEBSITE.none }}
+		/>
+	);
+	const picked = rows.find((r) => String(r.website.websiteId) === (fromList ? (entries[0]?.id ?? '') : websiteId));
+	if (!picked) return <Page linkAs={Link} list={list} crumbs={[...crumbs, { label: websiteId }]} error={WEBSITE.gone} />;
+	const id = String(picked.website.websiteId);
+	return (
+		<WebsitePageView
+			key={id}
+			website={picked.website}
+			cards={picked.cards}
+			part={part}
+			crumbs={crumbs}
+			hrefOf={(next) => routes.websitePart(id, next)}
+			can={{ manage: false, removeWebsite: false, tokens: true, open: true, settings: true }}
+			pills={SITE_PILLS}
+			launch={(productId) => ({ path: api.launch(merchantId, id, productId) })}
+			afterRemoved={routes.websites()}
+			settings={settings}
+			setup={setup}
+			list={list}
+		/>
 	);
 }
 
 /**
- * The merchant's Websites screen: the table of websites (or the welcome with none yet).
+ * The merchant's Websites screen: the list with the first website open beside it (or the welcome with none yet).
  * @param {any} props loader result of `loadWebsites` plus `branding`
  */
 export function WebsitesView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
+	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
 	return (
 		<>
 			<FrameBilling billing={props.billing} />
-			<WebsitesPage rows={props.rows} branding={props.branding} />
+			{rows.length === 0 ? (
+				<Page flush crumbs={[{ label: MERCHANT.websitesTitle }]} info={MERCHANT.websitesInfo} linkAs={Link}>
+					<Welcome branding={props.branding} />
+				</Page>
+			) : (
+				<WebsitesScreen
+					rows={rows}
+					websiteId={String(rows[0]?.website.websiteId)}
+					fromList
+					settings={props.settings}
+					merchantId={props.merchantId}
+				/>
+			)}
 		</>
 	);
 }
 
 /**
- * One website's own page in the merchant console (`Websites › domain`, its parts as inner navigation): the merchant
+ * One website's own page in the merchant console (`Websites › domain`, the list of websites beside it): the merchant
  * cannot add or remove products here, the admin does (PLAN 0.2).
  * @param {any} props loader result of `loadWebsitePage`
  */
 export function WebsiteView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
-	const websiteId = String(props.websiteId);
-	const selected = rows.find((r) => String(r.website.websiteId) === websiteId) ?? null;
-	const crumbs = [{ label: MERCHANT.websitesTitle, href: routes.websites() }];
 	return (
 		<>
 			<FrameBilling billing={props.billing} />
-			{selected ? (
-				<WebsitePageView
-					key={websiteId}
-					website={selected.website}
-					cards={selected.cards}
-					part={props.part}
-					crumbs={crumbs}
-					hrefOf={(part) => routes.websitePart(websiteId, part)}
-					can={{ manage: false, removeWebsite: false, tokens: true, open: true, settings: true }}
-					pills={SITE_PILLS}
-					launch={(productId) => ({ path: api.launch(props.merchantId, websiteId, productId) })}
-					afterRemoved={routes.websites()}
-					settings={props.settings}
-					setup={props.setup}
-				/>
-			) : (
-				<Page linkAs={Link} crumbs={[...crumbs, { label: websiteId }]} error={WEBSITE.gone} />
-			)}
+			<WebsitesScreen
+				rows={props.rows}
+				websiteId={String(props.websiteId)}
+				part={props.part}
+				settings={props.settings}
+				setup={props.setup}
+				merchantId={props.merchantId}
+			/>
 		</>
 	);
 }

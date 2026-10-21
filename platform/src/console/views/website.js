@@ -10,15 +10,14 @@ import { useEffect, useState } from 'react';
 import {
 	Button,
 	Callout,
-	Card,
 	CodeBlock,
-	DataTable,
 	Drawer,
 	Form,
 	FormError,
 	IconBadge,
 	Input,
 	PasswordConfirmDialog,
+	Row,
 	Skeleton,
 	TextLink,
 	copyText,
@@ -138,7 +137,7 @@ export function AddWebsiteDialog({ open, merchantId, onClose, onAdded }) {
 }
 
 /**
- * Add product (PLAN 0.5.9), in a drawer: the active connected products not yet on the website, a table with Add.
+ * Add product (PLAN 0.5.9), in a drawer: the active connected products not yet on the website, a row each with Add.
  * @param {{ open: boolean, merchantId: string, website: { websiteId: string, domain: string },
  *   products: Array<{ productId: string, name: string }>, onClose: () => void, onAdded: (card: ProductCard) => void }} props
  */
@@ -165,29 +164,26 @@ export function AddProductDrawer({ open, merchantId, website, products, onClose,
 			{products.length === 0 ? (
 				<p className="text-sm text-muted">{WEBSITE.noneToAdd}</p>
 			) : (
-				<DataTable
-					caption={WEBSITE.addProduct}
-					rows={products}
-					rowKey={(p) => p.productId}
-					columns={[
-						{ key: 'name', header: WEBSITE.productColumn, render: (p) => p.name },
-						{
-							key: 'add',
-							header: WEBSITE.add,
-							align: 'right',
-							render: (p) => (
-								<Button
-									size="sm"
-									loading={busy === p.productId}
-									disabled={busy !== null}
-									aria-label={`${WEBSITE.add} ${p.name}`}
-									onClick={() => void add(p.productId)}>
-									{WEBSITE.add}
-								</Button>
-							),
-						},
-					]}
-				/>
+				<div role="list" aria-label={WEBSITE.addProduct} className="-mx-2.5">
+					{products.map((p) => (
+						<div key={p.productId} role="listitem">
+							<Row
+								lead={<IconBadge product={p.productId} size="sm" />}
+								title={p.name}
+								trailing={
+									<Button
+										size="sm"
+										loading={busy === p.productId}
+										disabled={busy !== null}
+										aria-label={`${WEBSITE.add} ${p.name}`}
+										onClick={() => void add(p.productId)}>
+										{WEBSITE.add}
+									</Button>
+								}
+							/>
+						</div>
+					))}
+				</div>
 			)}
 			<FormError problem={problem} />
 		</Drawer>
@@ -195,13 +191,15 @@ export function AddProductDrawer({ open, merchantId, website, products, onClose,
 }
 
 /**
- * Loads a website's resource once when its dialog opens.
- * @param {string} path
+ * Loads a website's resource once when its dialog or page opens (and again when the path changes; `null`: not asked).
+ * @param {string | null} path
  */
 export const useOnce = (path) => {
 	const [result, setResult] = useState(/** @type {import('./common.js').ApiResult | null} */ (null));
 	useEffect(() => {
+		if (path === null) return undefined;
 		let live = true;
+		setResult(null);
 		void apiFetch(path).then((r) => {
 			if (live) setResult(r);
 		});
@@ -219,9 +217,9 @@ export const useOnce = (path) => {
 export const twoStepOnOf = (me) => me?.ok === true && me.data?.[me.data?.kind]?.twoStep?.enabled === true;
 
 /**
- * One product's install block: the widget script tag (products with widgets), the browser token, the server token
- * (reveal / copy / regenerate, each after the person's password in a dialog; regenerate also with a typed confirmation
- * of the product name) and the docs link (PLAN 0.4.4, 0.8.2).
+ * One product's install block, the body of the product's card on the website page: the widget script tag (products
+ * with widgets), the browser token, the server token (reveal / copy / regenerate, each after the person's password in a
+ * dialog; regenerate also with a typed confirmation of the product name) and the docs link (PLAN 0.4.4, 0.8.2).
  * @param {{ entry: TokenEntry, domain: string, merchantId: string, websiteId: string, twoStepOn?: boolean }} props
  */
 export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn = false }) {
@@ -294,23 +292,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn =
 	};
 
 	return (
-		<Card
-			title={
-				<span className="flex items-center gap-2.5">
-					<IconBadge product={entry.productId} size="sm" />
-					{entry.name}
-				</span>
-			}
-			{...(entry.docsUrl
-				? {
-						actions: (
-							<TextLink href={entry.docsUrl} external className="text-label font-medium">
-								{WEBSITE.docs}
-							</TextLink>
-						),
-					}
-				: {})}
-			bodyClassName="space-y-4">
+		<div className="space-y-4">
 			{entry.widgetScriptUrl ? (
 				<div className="space-y-1">
 					<CodeBlock
@@ -357,6 +339,11 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn =
 				</div>
 				<p className="text-xs text-muted">{WEBSITE.serverTokenHelp}</p>
 			</div>
+			{entry.docsUrl ? (
+				<TextLink href={entry.docsUrl} external className="text-label font-medium">
+					{WEBSITE.docs}
+				</TextLink>
+			) : null}
 			<PasswordConfirmDialog
 				open={asking !== null}
 				onClose={() => setAsking(null)}
@@ -376,6 +363,6 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn =
 				}}>
 				<p className="text-sm text-muted">{asking === 'regenerate' ? WEBSITE.regenerateHelp : WEBSITE.showHelp}</p>
 			</PasswordConfirmDialog>
-		</Card>
+		</div>
 	);
 }

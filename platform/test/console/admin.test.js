@@ -196,25 +196,16 @@ describe('admin console smoke', () => {
 			expect(raw).toContain('aria-label="More actions"');
 			expect(raw).not.toMatch(/>Suspend<\/button>/);
 			expect(raw).toContain('aria-label="Actions for shop.example.com"');
-			// a website is its own page: crumbs back to the merchant, the products as a table, its parts as inner navigation
+			// a website is its own page: crumbs back to the merchant, its sections (status, products, changes, usage) all open
 			const siteId = String(detail.rows[0]?.website.websiteId);
 			expect(raw).toContain(`href="/admin/merchants/${merchantId}/websites/${siteId}"`);
 			const siteDetail = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, siteId, '', owner);
 			const siteRaw = ssr(<AdminWebsiteView detail={siteDetail} admin={owner} />);
 			expect(text(siteRaw)).toContain('Notes');
 			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}"`);
-			for (const word of [
-				'Add product',
-				'Overview',
-				'Website settings',
-				'Install and tokens',
-				'Setup sheet',
-				'Usage',
-				'Recent changes',
-			])
+			for (const word of ['Add product', 'Status and spend', 'Settings', 'Setup sheet', 'Usage details', 'Recent changes'])
 				expect(text(siteRaw)).toContain(word);
-			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}/websites/${siteId}/products/notes"`);
-			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}/websites/${siteId}/settings/brand"`);
+			expect(siteRaw).toContain('id="product-notes"');
 			expect(siteRaw).toContain('aria-label="Actions for Notes"');
 			const unknownSite = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, 'web_none', '', owner);
 			expect(text(ssr(<AdminWebsiteView detail={unknownSite} admin={owner} />))).toContain('No such website.');
@@ -416,7 +407,7 @@ describe('admin console smoke', () => {
 				/** @type {any} */ (await admin.loadBilling(world.ownerBrowser.api)).attention.length,
 			);
 
-			// Support: the website cards with every admin action and Install and tokens; Products read-only
+			// Support: the website cards with every admin action, the Setup sheet and Settings; Products read-only
 			const supportDetail = await admin.loadMerchant(supportBrowser.api, merchantId, support);
 			expect(supportDetail.ok && supportDetail.addable).toEqual([{ productId: 'notes', name: 'Notes' }]);
 			if (!supportDetail.ok) throw new Error('support merchant');
@@ -425,13 +416,7 @@ describe('admin console smoke', () => {
 			expect(ssr(<MerchantsView detail={supportDetail} admin={support} />)).toContain('Add website');
 			const supportSiteDetail = await admin.loadAdminWebsite(supportBrowser.api, merchantId, supportSite, '', support);
 			const supportHtml = ssr(<AdminWebsiteView detail={supportSiteDetail} admin={support} />);
-			for (const word of [
-				'Add product',
-				'aria-label="Actions for Notes"',
-				'Install and tokens',
-				'Setup sheet',
-				'Website settings',
-			])
+			for (const word of ['Add product', 'aria-label="Actions for Notes"', 'Setup sheet', 'Settings', 'Recent changes'])
 				expect(supportHtml).toContain(word);
 			expect(supportHtml).not.toContain('Add credits');
 			const supportProducts = await admin.loadProducts(supportBrowser.api);
@@ -456,14 +441,7 @@ describe('admin console smoke', () => {
 			expect(financeHtml).toContain('Notes');
 			expect(financeHtml).toContain('Usage'); // Usage stays
 			expect(ssr(<MerchantsView detail={financeDetail} admin={finance} />)).toContain('Add credits');
-			for (const word of [
-				'Install and tokens',
-				'Setup sheet',
-				'Website settings',
-				'Add product',
-				'Add website',
-				'Edit merchant',
-			])
+			for (const word of ['Setup sheet', 'Settings', 'Recent changes', 'Add product', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);
 			// Activity filters: Support has no list of admins, so no Admin filter; the Owner picks a name
 			const supportActivity = await admin.loadActivity(supportBrowser.api, {}, support);

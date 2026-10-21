@@ -118,19 +118,21 @@ export const loadOverview = async (api, merchantId) => {
 };
 
 /**
- * Websites (PLAN 0.8.2 Merchant): the table of the merchant's websites, each with its products (cards); the billing
- * summary (checked) for the frame.
+ * Websites (PLAN 0.8.2 Merchant): the list of the merchant's websites, each with its products (cards), and the first
+ * website's Website settings (the page beside the list opens on it); the billing summary (checked) for the frame.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadWebsites = async (api, merchantId) => {
 	const [websites, billing] = await Promise.all([loadWebsiteRows(api, merchantId), api.get(paths.billing(merchantId))]);
 	if (websites.failed) return websites.failed;
+	const first = websites.rows[0]?.website?.websiteId;
 	return {
 		ok: /** @type {const} */ (true),
 		merchantId,
 		rows: websites.rows,
 		billing: /** @type {any} */ (orElse(billing, null)),
+		settings: first ? await loadWebsiteSettings(api, merchantId, String(first)) : null,
 	};
 };
 

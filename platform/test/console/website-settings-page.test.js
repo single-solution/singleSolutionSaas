@@ -95,9 +95,11 @@ describe('Website settings (jsdom)', () => {
 			expect(shows('Notes needs: currency, country.')).toBe(true);
 			const nav = /** @type {HTMLElement} */ (document.querySelector('nav[aria-label="Website pages"]'));
 			const links = [...nav.querySelectorAll('a')].map((a) => a.textContent?.replace(/\s+/g, ' ').trim());
+			// the website page is one page now (its products, usage and changes are sections on it); the settings and the
+			// Setup sheet keep their own addresses, with a way back to it
 			expect(links).toEqual([
 				'Overview',
-				'NotesNo features on',
+				'Setup sheet',
 				'Business',
 				'Brand and look',
 				'Region and formatNeeded by Notes',
@@ -105,10 +107,6 @@ describe('Website settings (jsdom)', () => {
 				'Team and alerts',
 				'Data and files',
 				'Between your products',
-				'Install and tokens',
-				'Setup sheet',
-				'Usage',
-				'Recent changes',
 			]);
 			const region = `a[href="/websites/${x.websiteId}/settings/region"]`;
 			expect(
@@ -167,7 +165,7 @@ describe('Website settings (jsdom)', () => {
 			await openPage(x, 'changes');
 			await until(() => shows('Region and format · version 1'));
 			expect(shows('currency')).toBe(true);
-			expect(shows('by Shop & Co')).toBe(true);
+			expect(shows('Shop & Co · Region and format · version 1')).toBe(true);
 			// the preview of the Format follows the currency
 			await openPage(x, 'settings/region');
 			expect(document.querySelector('[data-preview="money"]')?.textContent).toContain('USD');
@@ -318,23 +316,24 @@ describe('Website settings (jsdom)', () => {
 		try {
 			const x = await world('wsp_menu');
 			await openPage(x, '');
-			expect(document.querySelector(`a[href="/websites/${x.websiteId}/settings/business"]`)).not.toBeNull();
+			// the header's Settings action leads to the settings address; the page lists Recent changes as a section
+			expect(buttons('Settings').length).toBeGreaterThan(0);
+			expect(shows('Recent changes')).toBe(true);
 			cleanup();
 			// the admin's website page: the same items for the Owner; Finance has no Website settings and no such page
-			const base = `/admin/merchants/${x.merchantId}/websites/${x.websiteId}`;
 			const owner = x.w.owner;
 			x.w.ownerBrowser.use();
 			const detail = await admin.loadAdminWebsite(x.w.ownerBrowser.api, x.merchantId, x.websiteId, '', owner);
 			withToasts(<AdminWebsiteView detail={detail} admin={owner} />);
-			expect(document.querySelector(`a[href="${base}/settings/business"]`)).not.toBeNull();
-			expect(document.querySelector(`a[href="${base}/changes"]`)).not.toBeNull();
+			expect(buttons('Settings').length).toBeGreaterThan(0);
+			expect(shows('Recent changes')).toBe(true);
 			cleanup();
 			const { admin: finance, b: financeBrowser } = await x.w.adminOf('finance');
 			financeBrowser.use();
 			const financeDetail = await admin.loadAdminWebsite(financeBrowser.api, x.merchantId, x.websiteId, '', finance);
 			withToasts(<AdminWebsiteView detail={financeDetail} admin={finance} />);
-			expect(document.querySelector(`a[href="${base}/settings/business"]`)).toBeNull();
-			expect(document.querySelector(`a[href="${base}/changes"]`)).toBeNull();
+			expect(buttons('Settings')).toHaveLength(0);
+			expect(shows('Recent changes')).toBe(false);
 			cleanup();
 			const settingsAddress = await admin.loadAdminWebsite(
 				financeBrowser.api,

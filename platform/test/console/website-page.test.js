@@ -127,21 +127,18 @@ describe('website page (jsdom)', () => {
 			expect(shows('No features on')).toBe(true);
 
 			// ---------------------------------------------------------------- Open: the admin launch for this website
-			await pressMenu('Actions for Notes', 'Open Notes');
+			await press('Open Notes');
 			const launched = await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/launch', (st) => st === 200);
 			expect(open).toHaveBeenCalledWith(launched.body.url, '_blank', 'noopener,noreferrer');
 			expect(claimsOf(launched.body.url)).toMatchObject({ kind: 'admin', admin: { role: 'owner', websiteId } });
 
-			// ---------------------------------------------------------------- a row opens the product's page; its page has Open and Remove
-			const row = /** @type {HTMLElement} */ (
-				[...document.querySelectorAll('tbody tr')].find((tr) => tr.textContent?.includes('Notes'))
-			);
-			await clickEl(row);
-			expect(testRouter.push).toHaveBeenLastCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}/products/notes`);
+			// ---------------------------------------------------------------- a product's old address is the same page at its card; the card has Open and Remove
+			expect(document.querySelector('#product-notes')).not.toBeNull();
 			cleanup();
 			const notesPage = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'products/notes', owner);
 			if (!notesPage.ok) throw new Error('product page');
 			withToasts(<AdminWebsiteView detail={notesPage} admin={owner} />);
+			expect(document.querySelector('#product-notes')).not.toBeNull();
 			open.mockClear();
 			await press('Open Notes');
 			await until(() => open.mock.calls.length === 1);
@@ -285,10 +282,11 @@ describe('website page (jsdom)', () => {
 			);
 			cleanup();
 
-			// ---------------------------------------------------------------- Usage, its own page
+			// ---------------------------------------------------------------- Usage, a section of the page (its old address opens it)
 			const usageDetail = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'usage', owner);
 			withToasts(<AdminWebsiteView detail={usageDetail} admin={owner} />);
-			await until(() => shows('Spend per UTC day'));
+			await until(() => shows('Usage details'));
+			expect(document.querySelector('#usage')).not.toBeNull();
 			cleanup();
 
 			// ---------------------------------------------------------------- Remove website once its products are removed
@@ -306,7 +304,7 @@ describe('website page (jsdom)', () => {
 			cleanup();
 			const emptyInstall = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'install', owner);
 			withToasts(<AdminWebsiteView detail={emptyInstall} admin={owner} />);
-			await until(() => shows('Tokens appear here once a product is on this website.'));
+			await until(() => shows('No products on this website yet.')); // no cards, so no tokens either
 			cleanup();
 			const empty = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, '', owner);
 			withToasts(<AdminWebsiteView detail={empty} admin={owner} />);
@@ -314,6 +312,10 @@ describe('website page (jsdom)', () => {
 			expect(menuItem('Remove website').disabled).toBe(false);
 			await clickEl(menuItem('Remove website'));
 			expect(shows('Remove shop.example.com')).toBe(true);
+			await closeDialog();
+			expect(dialog).toThrow();
+			await menu('More actions');
+			await clickEl(menuItem('Remove website'));
 			type(confirmInput(), 'shop.example.co');
 			expect(button('Remove website', dialog()).disabled).toBe(true);
 			type(confirmInput(), 'shop.example.com');
@@ -351,25 +353,23 @@ describe('website page (jsdom)', () => {
 			const open = vi.fn();
 			vi.stubGlobal('open', open);
 
-			// the merchant: the website page; Install and tokens; no admin actions
+			// the merchant: the website page with the product cards and their install blocks; no admin actions
 			merchant.use();
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, websiteId, '')} />);
 			expect(document.querySelector('h1')?.textContent).toBe('shop.example.com');
 			expect(document.querySelector('nav[aria-label="Breadcrumb"] a')?.getAttribute('href')).toBe('/websites');
-			expect(document.querySelector(`a[href="/websites/${websiteId}/install"]`)).not.toBeNull();
+			expect(document.querySelector('#product-notes')).not.toBeNull();
 			expect(buttons('Add product')).toHaveLength(0);
 			// the merchant's website menu: Visit website and Copy domain, never Remove website
 			await menu('More actions');
 			expect(menuItem('Visit website')).toBeTruthy();
 			expect(menuItem('Remove website')).toBeUndefined();
 			keydown(document, 'Escape');
-			// a product's menu: Open only, never Remove
-			await menu('Actions for Notes');
-			expect(menuItem('Open Notes')).toBeTruthy();
-			expect(menuItem('Remove')).toBeUndefined();
-			keydown(document, 'Escape');
+			// a product's card: Open only, never Remove (it has no menu for a merchant)
+			expect(buttons('Open Notes')).toHaveLength(1);
+			expect(buttons('Actions for Notes')).toHaveLength(0);
 			expect(shows('Your admin adds products to this website.')).toBe(false);
-			await pressMenu('Actions for Notes', 'Open Notes');
+			await press('Open Notes');
 			const mine = await merchant.waitCall(
 				'POST',
 				`/v1/merchants/${merchantId}/websites/${websiteId}/products/notes/launch`,
@@ -377,7 +377,7 @@ describe('website page (jsdom)', () => {
 			);
 			expect(open).toHaveBeenLastCalledWith(mine.body.url, '_blank', 'noopener,noreferrer');
 			cleanup();
-			// Install and tokens is its own page
+			// the old Install and tokens address is the same page at its install blocks
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, websiteId, 'install')} />);
 			await until(() => buttons('Reveal').length === 1);
 			await press('Reveal');
@@ -400,21 +400,21 @@ describe('website page (jsdom)', () => {
 			expect(shows('No websites yet.')).toBe(true);
 			cleanup();
 
-			// Support: the admin launch with the website id; tokens, the Setup sheet and usage in the inner nav
+			// Support: the admin launch with the website id; tokens, the Setup sheet and usage on the page
 			const { admin: support, b: supportBrowser } = await world.adminOf('support');
 			supportBrowser.use();
-			const base = `/admin/merchants/${merchantId}/websites/${websiteId}`;
 			withToasts(
 				<AdminWebsiteView
 					detail={await admin.loadAdminWebsite(supportBrowser.api, merchantId, websiteId, '', support)}
 					admin={support}
 				/>,
 			);
-			await pressMenu('Actions for Notes', 'Open Notes');
+			await press('Open Notes');
 			const theirs = await supportBrowser.waitCall('POST', '/v1/admin/products/notes/launch', (st) => st === 200);
 			expect(open).toHaveBeenLastCalledWith(theirs.body.url, '_blank', 'noopener,noreferrer');
-			expect(document.querySelector(`a[href="${base}/install"]`)).not.toBeNull();
-			expect(document.querySelector(`a[href="${base}/usage"]`)).not.toBeNull();
+			await until(() => buttons('Reveal').length === 1); // the install block of the card
+			expect(buttons('Setup sheet').length).toBeGreaterThan(0);
+			expect(document.querySelector('#usage')).not.toBeNull();
 			cleanup();
 
 			// Finance: no Install and tokens, no Open, no admin actions
@@ -432,9 +432,10 @@ describe('website page (jsdom)', () => {
 			await menu('More actions');
 			expect(menuItem('Remove website')).toBeUndefined();
 			keydown(document, 'Escape');
-			expect(document.querySelector(`a[href="${base}/install"]`)).toBeNull();
-			expect(document.querySelector(`a[href="${base}/setup"]`)).toBeNull();
-			expect(document.querySelector(`a[href="${base}/usage"]`)).not.toBeNull();
+			expect(buttons('Open Notes')).toHaveLength(0);
+			expect(buttons('Reveal')).toHaveLength(0);
+			expect(buttons('Setup sheet')).toHaveLength(0);
+			expect(document.querySelector('#usage')).not.toBeNull();
 			expect(financeBrowser.calls.some((c) => c.path.endsWith('/tokens'))).toBe(false);
 			cleanup();
 			// Finance has no Install and tokens page: the address says so
@@ -453,7 +454,7 @@ describe('website page (jsdom)', () => {
 			merchant.use();
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, websiteId, '')} />);
 			await world.ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/suspend`, { reason: 'check' });
-			await pressMenu('Actions for Notes', 'Open Notes');
+			await press('Open Notes');
 			await merchant.waitCall(
 				'POST',
 				`/v1/merchants/${merchantId}/websites/${websiteId}/products/notes/launch`,
@@ -461,6 +462,111 @@ describe('website page (jsdom)', () => {
 			);
 			expect(open.mock.calls.length).toBe(calls);
 			cleanup();
+		} finally {
+			await world.close();
+			restore();
+		}
+	});
+
+	it('lists the websites as rich rows beside the open page; chips and search narrow them; old addresses open at their section', async () => {
+		const restore = quiet();
+		const world = await createWorld({ db: mongo.db('website_list') });
+		try {
+			const { b: merchant, merchantId } = await world.signup('owner@shop.test', 'Shop & Co');
+			const shop = await world.addWebsite(merchantId, 'shop.example.com');
+			const bare = await world.addWebsite(merchantId, 'bare.example.com');
+			const notes = await world.connect();
+			await world.addProduct(merchantId, String(shop.websiteId), 'notes');
+			await world.switchFeatures(notes, shop.websiteId, ['notes']);
+			merchant.use();
+
+			// the list's own address: a row per website (a link, its status, what it has or lacks), the first one open
+			withToasts(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} />);
+			await settle(2);
+			const rowOf = (/** @type {string} */ id) => document.querySelector(`a[href="/websites/${id}"]`);
+			const rowText = (/** @type {string} */ id) =>
+				rowOf(id)?.closest('li, [role="listitem"], div')?.parentElement?.textContent;
+			expect(rowText(String(shop.websiteId))).toContain('Notes');
+			expect(rowText(String(bare.websiteId))).toContain('No products yet');
+			expect(document.querySelector('#product-notes') ?? document.querySelector('#status')).not.toBeNull();
+			expect(shows('Recent changes')).toBe(true);
+			// the chips filter by status, the search by domain
+			expect(buttons('No features on1')).toHaveLength(1);
+			await clickEl(/** @type {HTMLElement} */ (buttons('No features on1')[0]));
+			expect(rowOf(String(shop.websiteId))).toBeNull();
+			expect(rowOf(String(bare.websiteId))).not.toBeNull();
+			await clickEl(/** @type {HTMLElement} */ (buttons('All2')[0]));
+			expect(rowOf(String(shop.websiteId))).not.toBeNull();
+			const search = /** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Search domains"]'));
+			await act(async () => {
+				type(search, 'bare');
+			});
+			expect(rowOf(String(shop.websiteId))).toBeNull();
+			expect(rowOf(String(bare.websiteId))).not.toBeNull();
+			cleanup();
+
+			// Settings and the Setup sheet are header actions to their own addresses
+			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, String(shop.websiteId), '')} />);
+			await settle(2);
+			await press('Settings');
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/websites/${shop.websiteId}/settings`);
+			await press('Setup sheet');
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/websites/${shop.websiteId}/setup`);
+			cleanup();
+
+			// on a phone the list stands alone until a website is picked
+			const listeners = new Set();
+			vi.stubGlobal('matchMedia', () => ({
+				matches: true,
+				addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ fn) => listeners.add(fn),
+				removeEventListener: (/** @type {string} */ _type, /** @type {() => void} */ fn) => listeners.delete(fn),
+			}));
+			withToasts(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} />);
+			await settle(2);
+			expect(rowOf(String(shop.websiteId))).not.toBeNull();
+			expect(listeners.size).toBeGreaterThan(0);
+			cleanup();
+			// ...and a picked website has a Back button to it
+			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, String(shop.websiteId), '')} />);
+			await settle(2);
+			await press('Back to the list');
+			expect(testRouter.push).toHaveBeenLastCalledWith('/websites');
+			cleanup();
+			expect(listeners.size).toBe(0);
+			vi.unstubAllGlobals();
+
+			// an old product address opens the page at that product's card
+			const scrolled = vi.fn();
+			/** @this {HTMLElement} */
+			const scrollIntoView = function () {
+				scrolled(this.id);
+			};
+			Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true });
+			try {
+				withToasts(
+					<WebsiteView
+						{...await loaders.loadWebsitePage(merchant.api, merchantId, String(shop.websiteId), 'products/notes')}
+					/>,
+				);
+				await settle(2);
+				expect(scrolled).toHaveBeenCalledWith('product-notes');
+				cleanup();
+				withToasts(
+					<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, String(shop.websiteId), 'changes')} />,
+				);
+				await settle(2);
+				expect(scrolled).toHaveBeenLastCalledWith('activity');
+				cleanup();
+			} finally {
+				// @ts-expect-error jsdom has no scrollIntoView of its own
+				delete HTMLElement.prototype.scrollIntoView;
+			}
+
+			// a website that is not there says so and leaves the list
+			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, 'web_none', '')} />);
+			await settle(2);
+			expect(shows('This website does not exist or was removed.')).toBe(true);
+			expect(rowOf(String(shop.websiteId))).not.toBeNull();
 		} finally {
 			await world.close();
 			restore();

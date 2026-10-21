@@ -273,14 +273,13 @@ export const WEBSITE = Object.freeze({
 	wrongCode: 'That code is not right. Try the next code from your app, or a recovery code.',
 	needsCode: 'Two-step sign-in is on for you: enter a code from your app, or a recovery code.',
 	docs: 'Docs',
-	noTokens: 'Tokens appear here once a product is on this website.',
 	tokens: 'Install and tokens',
 	usage: 'Usage',
 	setup: 'Setup',
 	websiteSettings: 'Website settings',
 	// the website's own page: its header facts, its inner navigation and its parts
 	pageInfo:
-		'The products on this website and what they cost, its settings, the install code and tokens, the setup sheet, usage and recent changes.',
+		'The website’s status and spend, its products with their install code and tokens, its recent changes and its usage. The settings and the setup sheet have their own pages.',
 	navLabel: 'Website pages',
 	overview: 'Overview',
 	productsTitle: 'Products',
@@ -293,6 +292,20 @@ export const WEBSITE = Object.freeze({
 	noFeaturesOn: 'No features on',
 	noSuchPage: 'This page does not exist.',
 	noSuchProduct: 'This product is not on this website.',
+	// the website page as one page: its sections and the list of websites beside it
+	statusSpend: 'Status and spend',
+	settingsAction: 'Settings',
+	openDashboard: 'Open dashboard',
+	usageDetails: 'Usage details',
+	filterAll: 'All',
+	noProductsYet: 'No products yet',
+	bySystem: 'The system',
+	/** the one line under a product’s name: what is on and what it costs */
+	productHelp: (/** @type {string[]} */ features, /** @type {string} */ cost) =>
+		`${features.length > 0 ? features.join(', ') : 'No features on'} · ${cost}`,
+	/** the warning of a website in the list: which product needs what */
+	productTrouble: (/** @type {string} */ name, /** @type {string} */ status) => `${name}: ${status}`,
+	setupLeft: (/** @type {string} */ name) => `${name}: no feature on yet`,
 });
 
 /** The Setup sheet of a website and its share links (`ss.blueprint/1`). */
@@ -1634,13 +1647,8 @@ export const WEBSITE_SETTINGS = Object.freeze({
 	}),
 	// recent changes
 	changes: Object.freeze({
-		title: 'Recent changes',
 		intro: 'Who changed these settings and when. Values are not shown here.',
 		empty: 'Nothing has been changed yet.',
-		sectionColumn: 'Section',
-		fieldsColumn: 'What changed',
-		byColumn: 'Who',
-		by: (/** @type {string | null} */ name) => (name ? `by ${name}` : 'by the system'),
 		fields: (/** @type {string[]} */ names) => (names.length === 0 ? 'No fields' : names.join(', ')),
 		row: (/** @type {string} */ section, /** @type {number} */ version) => `${section} · version ${version}`,
 	}),

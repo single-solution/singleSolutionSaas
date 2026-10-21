@@ -182,17 +182,20 @@ export function BillingBanner({ summary, contact }) {
 
 /**
  * Usage (0.5.11): spend per UTC day and one row per product × website × day × feature.
- * @param {{ usage: any, showWebsite?: boolean, chartTitle?: string }} props
+ * @param {{ usage: any, showWebsite?: boolean, chartTitle?: string, chart?: boolean }} props `chart`: false when the page
+ *   draws the chart itself and this shows the rows only
  */
-export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usageChart }) {
+export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usageChart, chart = true }) {
 	const rows = /** @type {any[]} */ (usage?.rows ?? []);
 	return (
 		<div className="space-y-6">
-			<Card
-				title={chartTitle}
-				subtitle={BILLING.usageChartIntro(`${usage?.from ?? ''} – ${usage?.to ?? ''}`, formatCredits(usage?.total ?? 0))}>
-				<BarChart label={chartTitle} data={creditDayBars(usage?.days)} format={formatChartCredits} />
-			</Card>
+			{chart ? (
+				<Card
+					title={chartTitle}
+					subtitle={BILLING.usageChartIntro(`${usage?.from ?? ''} – ${usage?.to ?? ''}`, formatCredits(usage?.total ?? 0))}>
+					<BarChart label={chartTitle} data={creditDayBars(usage?.days)} format={formatChartCredits} />
+				</Card>
+			) : null}
 			<Table
 				caption={BILLING.usageTitle}
 				rows={rows}

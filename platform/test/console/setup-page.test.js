@@ -223,16 +223,15 @@ describe('Setup page (jsdom)', () => {
 		const { w, merchantId, websiteId } = await world('setup_page_admin');
 		try {
 			const { ownerBrowser, owner } = w;
-			const base = `/admin/merchants/${merchantId}/websites/${websiteId}`;
 			ownerBrowser.use();
-			// the Setup sheet is an item of the website page's inner nav
+			// the Setup sheet is an action in the website page's header (its own address)
 			withToasts(
 				<AdminWebsiteView
 					detail={await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, '', owner)}
 					admin={owner}
 				/>,
 			);
-			expect(document.querySelector(`a[href="${base}/setup"]`)?.textContent).toContain('Setup sheet');
+			expect(buttons('Setup sheet').length).toBeGreaterThan(0);
 			cleanup();
 			withToasts(
 				<AdminWebsiteView
@@ -246,14 +245,14 @@ describe('Setup page (jsdom)', () => {
 			await until(() => dialog().textContent?.includes('Share link created'));
 			await closeDialog();
 			await until(() => shows('Made by an admin · Shows everything'));
-			// Finance sees no Setup sheet (no Install and tokens either): not in the nav, no page, no request for it
+			// Finance sees no Setup sheet (no Install and tokens either): not in the header, no page, no request for it
 			cleanup();
 			const finance = await w.adminOf('finance');
 			finance.b.use();
 			const financeDetail = await admin.loadAdminWebsite(finance.b.api, merchantId, websiteId, '', finance.admin);
 			withToasts(<AdminWebsiteView detail={financeDetail} admin={finance.admin} />);
-			expect(document.querySelector(`a[href="${base}/setup"]`)).toBeNull();
-			expect(document.querySelector(`a[href="${base}/install"]`)).toBeNull();
+			expect(buttons('Setup sheet')).toHaveLength(0);
+			expect(shows('Server token')).toBe(false);
 			cleanup();
 			const financeSetup = await admin.loadAdminWebsite(finance.b.api, merchantId, websiteId, 'setup', finance.admin);
 			withToasts(<AdminWebsiteView detail={financeSetup} admin={finance.admin} />);

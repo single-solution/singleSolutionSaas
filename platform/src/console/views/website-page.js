@@ -1,15 +1,17 @@
 'use client';
 /**
- * A website's own page, the same in both consoles (layout contract; LY-2b): one `Page` whose header carries the domain
+ * A website's own page, the same in both consoles (flat layout 2026-10-21): ONE `Page` whose header carries the domain
  * (crumbs `Websites › domain` for a merchant, `Merchants › name › domain` for an admin), the status pill, the daily
- * cost, the products on and (on the settings pages) the settings version and when they were saved, the one primary
- * action and the ⋯ More menu. Its parts are the inner navigation, each its own address (`website-parts.js`):
- * **Overview** (the products as a table, the 30-day spend) · **Products** (one item per product: its status, features,
- * cost, Open dashboard and Remove) · **Website settings** (Business, Brand and look, Region and format, Domains, pages
- * and legal, Team and alerts, Data and files, Between your products; the floating Save bar is the only save) ·
- * **Install and tokens** · **Setup sheet** · **Usage** · **Recent changes**. Add product and Add website are drawers; a
- * short yes/no stays a dialog. What each person may do follows the `can` the console passes; the Portal checks every
- * right again.
+ * cost, the products on, the one primary action and the ⋯ More menu. Its body shows every section at once, all open:
+ * **Status and spend** (the key numbers and the 30-day spend) · **Products** (one rich card per product: its status,
+ * one line of help, Open dashboard, Remove and its install block with the widget script tag and tokens) · **Recent
+ * changes** (a timeline) · **Usage details**. In the merchant console the list of websites stands beside it
+ * (`list`). The old addresses (`products/:id`, `install`, `usage`, `changes`) open this page at their section.
+ * **Website settings** (Business, Brand and look, Region and format, Domains, pages and legal, Team and alerts, Data
+ * and files, Between your products; the floating Save bar is the only save) and the **Setup sheet** are big, so each
+ * stays its own address, reached by an action in the header and by the inner navigation. Add product and Add website
+ * are drawers; a short yes/no stays a dialog. What each person may do follows the `can` the console passes; the Portal
+ * checks every right again.
  * @module
  */
 import { useEffect, useState } from 'react';
@@ -19,13 +21,14 @@ import {
 	Button,
 	Callout,
 	Card,
-	CardFlow,
-	DataTable,
 	EmptyState,
-	KeyValueList,
+	IconBadge,
 	LocalTime,
 	Page,
 	Skeleton,
+	Stat,
+	StatGrid,
+	Timeline,
 	TypedConfirmDialog,
 	copyText,
 	describeProblem,
@@ -38,19 +41,11 @@ import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api } from '../paths.js';
-import { parseWebsitePart, SETTINGS_SECTIONS } from '../website-parts.js';
-import {
-	ProductStatusBadge,
-	UsageView,
-	creditDayBars,
-	formatChartCredits,
-	productPill,
-	productStatusLabel,
-	productTone,
-} from './billing.js';
+import { parseWebsitePart, sectionOf, SETTINGS_SECTIONS } from '../website-parts.js';
+import { UsageView, creditDayBars, formatChartCredits, productStatusLabel, productTone } from './billing.js';
 import { openDashboard } from './common.js';
 import { SetupView, useSetupSheet } from './setup.js';
-import { ChangesTable, SettingsSectionBody, contextOf, readinessLines, useWebsiteSettings } from './website-settings.js';
+import { SettingsSectionBody, contextOf, readinessLines, useWebsiteSettings } from './website-settings.js';
 import { AddProductDrawer, InstallBlock, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from './website.js';
 
 /** @typedef {import('./website.js').ProductCard} ProductCard */
@@ -65,63 +60,21 @@ import { AddProductDrawer, InstallBlock, dailyCostOf, twoStepOnOf, useOnce, webs
 const NO_CHANGES = /** @type {any[]} */ ([]);
 
 /**
- * The spend on one website over the last 30 UTC days (all its products).
- * @param {{ merchantId: string, websiteId: string }} props
+ * Recent changes of the website settings as a timeline: who changed which section, what changed and when.
+ * @param {{ changes: Array<{ at: string, version: number, section: string, changed: string[], who: { name: string | null } | null }> }} props
  */
-function WebsiteSpend({ merchantId, websiteId }) {
-	const result = useOnce(api.usage(merchantId, { websiteId }));
-	const usage = result?.ok ? result.data : null;
-	const bars = creditDayBars(usage?.days);
+function ChangesTimeline({ changes }) {
 	return (
-		<>
-			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
-			{usage && !isEmptySeries(bars) ? (
-				<Card title={MORE.websiteSpend} subtitle={formatCredits(usage.total ?? 0)}>
-					<BarChart label={MORE.websiteSpend} data={bars} format={formatChartCredits} height={120} />
-				</Card>
-			) : null}
-		</>
+		<Timeline
+			empty={T.changes.empty}
+			items={changes.map((change) => ({
+				key: `${change.version}-${change.at}`,
+				who: change.who?.name || WEBSITE.bySystem,
+				what: `${T.changes.row(/** @type {Record<string, string>} */ (T.sections)[change.section] ?? change.section, change.version)} · ${T.changes.fields(change.changed)}`,
+				at: change.at,
+			}))}
+		/>
 	);
-}
-
-/**
- * Install and tokens: every product's install block (widget script tag, browser token, server token).
- * @param {{ merchantId: string, website: any }} props
- */
-function InstallPart({ merchantId, website }) {
-	const websiteId = String(website.websiteId);
-	const result = useOnce(api.tokens(merchantId, websiteId));
-	// two-step on: the confirmation of a server token asks for the code at once
-	const twoStepOn = twoStepOnOf(useOnce('/v1/me'));
-	const tokens = /** @type {import('./website.js').TokenEntry[]} */ (result?.ok ? (result.data?.items ?? []) : []);
-	if (!result) return <Skeleton lines={4} />;
-	if (!result.ok) return <Callout tone="danger">{describeProblem(result.problem)}</Callout>;
-	if (tokens.length === 0) return <EmptyState compact icon="key" kind="developer" title={WEBSITE.noTokens} />;
-	return (
-		<div className="space-y-4">
-			{tokens.map((entry) => (
-				<InstallBlock
-					key={entry.productId}
-					entry={entry}
-					domain={website.domain}
-					merchantId={merchantId}
-					websiteId={websiteId}
-					twoStepOn={twoStepOn}
-				/>
-			))}
-		</div>
-	);
-}
-
-/**
- * Usage of the website: the last 30 UTC days by product and feature.
- * @param {{ merchantId: string, websiteId: string }} props
- */
-function UsagePart({ merchantId, websiteId }) {
-	const result = useOnce(api.usage(merchantId, { websiteId }));
-	if (!result) return <Skeleton lines={4} />;
-	if (!result.ok) return <Callout tone="danger">{describeProblem(result.problem)}</Callout>;
-	return <UsageView usage={result.data} showWebsite={false} chartTitle={BILLING.usageChart} />;
 }
 
 /**
@@ -130,7 +83,7 @@ function UsagePart({ merchantId, websiteId }) {
  * @property {ProductCard[]} cards its products
  * @property {string} part the part of the address after the website (`website-parts.js`)
  * @property {import('@ss/ui').PageCrumb[]} crumbs the steps above the website's domain
- * @property {(part: string) => string} hrefOf the address of a part (`''` = Overview)
+ * @property {(part: string) => string} hrefOf the address of a part (`''` = the page)
  * @property {WebsiteCan} can
  * @property {Record<'success' | 'warning' | 'danger' | 'neutral', SitePill>} pills how the website's worst product status reads
  * @property {Array<{ productId: string, name: string }> | null} [addable] active connected products (Add product)
@@ -139,7 +92,65 @@ function UsagePart({ merchantId, websiteId }) {
  * @property {any} [settings] the loaded Website settings (`loadWebsiteSettings`), a failure, or null when not asked
  * @property {any} [setup] the loaded Setup sheet (`loadSetup`), a failure, or null when not asked
  * @property {boolean} [canSwitch] the admin console switches recommended features on
+ * @property {import('react').ReactElement<any>} [list] the list of websites beside the page (a `ListColumn`, merchant console)
+ * @property {string} [error] what stands in place of the page (a missing website: the list stays)
  */
+
+/**
+ * One product on the website as a rich card: its icon, name and status, one line of help (what is on and what it
+ * costs), Open dashboard and its menu in the header, and its install block as the body.
+ * @param {{ card: ProductCard, domain: string, merchantId: string, websiteId: string, can: WebsiteCan,
+ *   tokens: any, pending: boolean, twoStepOn: boolean, opening: boolean, onOpen: () => void, onRemove: () => void }} props
+ *   `tokens`: the entry of this product in the loaded tokens (null: none); `pending`: the tokens are still loading
+ */
+function ProductSection({ card, domain, merchantId, websiteId, can, tokens, pending, twoStepOn, opening, onOpen, onRemove }) {
+	return (
+		<Card
+			id={`product-${card.productId}`}
+			lead={<IconBadge product={card.productId} size="sm" />}
+			title={card.name}
+			status={{ tone: productTone(card), label: productStatusLabel(card) }}
+			help={WEBSITE.productHelp(card.featuresOn, WEBSITE.perDay(formatCredits(card.dailyCost)))}
+			{...(can.open || can.manage
+				? {
+						actions: (
+							<>
+								{can.open ? (
+									<Button
+										variant="secondary"
+										size="sm"
+										loading={opening}
+										aria-label={WEBSITE.openLabel(card.name)}
+										title={WEBSITE.openHelp}
+										onClick={onOpen}>
+										{WEBSITE.openDashboard}
+									</Button>
+								) : null}
+								{can.manage ? (
+									<ActionMenu
+										label={WEBSITE.productActions(card.name)}
+										items={[{ label: WEBSITE.remove, danger: true, onSelect: onRemove }]}
+									/>
+								) : null}
+							</>
+						),
+					}
+				: {})}>
+			{tokens ? (
+				<InstallBlock
+					key={`${websiteId}:${card.productId}`}
+					entry={tokens}
+					domain={domain}
+					merchantId={merchantId}
+					websiteId={websiteId}
+					twoStepOn={twoStepOn}
+				/>
+			) : pending ? (
+				<Skeleton lines={3} />
+			) : null}
+		</Card>
+	);
+}
 
 /**
  * The website page.
@@ -159,6 +170,8 @@ export function WebsitePageView({
 	settings = null,
 	setup = null,
 	canSwitch = false,
+	list,
+	error: missing,
 }) {
 	const toast = useToast();
 	const nav = useNavigation();
@@ -190,16 +203,47 @@ export function WebsitePageView({
 	const hasSettings = can.settings && state.settings !== null;
 	const productId = parsed?.kind === 'product' ? parsed.id : null;
 	const shown = productId ? (cards.find((c) => c.productId === productId) ?? null) : null;
-	const current =
-		parsed === null
-			? ''
-			: parsed.kind === 'overview'
-				? 'overview'
-				: parsed.kind === 'product'
-					? `products/${parsed.id}`
-					: parsed.kind === 'settings'
-						? `settings/${parsed.section}`
-						: parsed.kind;
+	// the page itself, or one of the two big pages of their own (Website settings, the Setup sheet)
+	const own = kind === 'settings' ? 'settings' : kind === 'setup' ? 'setup' : null;
+	const onSetup = own === 'setup' && setupState.sheet !== null;
+
+	// what stands in place of the body when the address is not a page of this website or the person may not see it
+	/** @type {string | null} */
+	let error = missing ?? null;
+	if (error) {
+		// a missing website
+	} else if (parsed === null) error = WEBSITE.noSuchPage;
+	else if (parsed.kind === 'product' && !shown) error = WEBSITE.noSuchProduct;
+	else if (parsed.kind === 'settings')
+		error = !can.settings ? WEBSITE.noSuchPage : settings && !settings.ok ? describeProblem(settings.problem) : null;
+	else if (parsed.kind === 'changes') error = !can.settings ? WEBSITE.noSuchPage : null;
+	else if (parsed.kind === 'install' || parsed.kind === 'setup') {
+		error = !can.tokens
+			? WEBSITE.noSuchPage
+			: parsed.kind === 'setup' && setup && !setup.ok
+				? describeProblem(setup.problem)
+				: null;
+	}
+
+	// what the page loads for itself: the spend, and the tokens of its products (never for a person without tokens)
+	const onPage = own === null && !error && !gone;
+	const usage = useOnce(onPage ? api.usage(merchantId, { websiteId }) : null);
+	const tokens = useOnce(onPage && can.tokens ? api.tokens(merchantId, websiteId) : null);
+	// two-step on: the confirmation of a server token asks for the code at once
+	const twoStepOn = twoStepOnOf(useOnce(onPage && can.tokens ? '/v1/me' : null));
+
+	// an old address opens the page at its section (or at the product's card)
+	const target = onPage ? sectionOf(parsed) : null;
+	useEffect(() => {
+		if (target) document.getElementById(target)?.scrollIntoView?.({ block: 'start' });
+	}, [target]);
+	// the list picked another website: nothing of the last one stays open
+	useEffect(() => {
+		setDialog(null);
+		setRemoving(null);
+		setProblem(null);
+		setGone(false);
+	}, [websiteId]);
 
 	/** @param {ProductCard[]} next */
 	const setCards = (next) => setCardsState(next);
@@ -246,73 +290,12 @@ export function WebsitePageView({
 		toast.show(copied ? { title: MORE.copied } : { tone: 'danger', title: website.domain });
 	};
 
-	// the inner navigation: Overview, the products (each with its status dot), the settings sections (a dot where a
-	// product still needs something, a count of links), then the rest
-	/** @type {import('@ss/ui').InnerNavGroup[]} */
-	const groups = [
-		{ items: [{ id: 'overview', label: WEBSITE.overview, icon: 'home' }] },
-		...(cards.length > 0
-			? [
-					{
-						label: WEBSITE.productsTitle,
-						items: cards.map((card) => ({
-							id: `products/${card.productId}`,
-							label: card.name,
-							dot: productTone(card),
-							dotLabel: productStatusLabel(card),
-						})),
-					},
-				]
-			: []),
-		...(hasSettings
-			? [
-					{
-						label: WEBSITE.websiteSettings,
-						items: SETTINGS_SECTIONS.filter(
-							(section) => (section !== 'connections' && section !== 'links') || state.connections !== null,
-						).map((section) => ({
-							id: `settings/${section}`,
-							label: T.sections[section],
-							...(section === 'connections'
-								? connectionsMark(state.connections)
-								: section === 'links'
-									? state.connections && state.connections.links.length > 0
-										? { count: state.connections.links.length }
-										: {}
-									: contextOf(state.readiness, section)),
-						})),
-					},
-				]
-			: []),
-		{
-			items: [
-				...(can.tokens ? [{ id: 'install', label: WEBSITE.tokens, icon: /** @type {const} */ ('key') }] : []),
-				...(can.tokens ? [{ id: 'setup', label: WEBSITE.setupSheet, icon: /** @type {const} */ ('layers') }] : []),
-				{ id: 'usage', label: WEBSITE.usage, icon: /** @type {const} */ ('trendingUp') },
-				...(hasSettings
-					? [
-							{
-								id: 'changes',
-								label: WEBSITE.recentChanges,
-								icon: /** @type {const} */ ('clock'),
-								...(state.changes.length > 0 ? { count: state.changes.length } : {}),
-							},
-						]
-					: []),
-			],
-		},
-	];
-
-	const onSettings = kind === 'settings' || kind === 'changes';
-	const onSetup = kind === 'setup' && setupState.sheet !== null;
+	const dot = websiteDot(cards);
+	const dailyCost = WEBSITE.perDay(formatCredits(dailyCostOf(cards)));
 	const facts = [
-		{ label: WEBSITE.dailyCost, value: WEBSITE.perDay(formatCredits(dailyCostOf(cards))) },
-		{
-			label: WEBSITE.productsTitle,
-			value: cards.length,
-			href: hrefOf(cards[0] ? `products/${cards[0].productId}` : ''),
-		},
-		...(onSettings && state.settings
+		{ label: WEBSITE.dailyCost, value: dailyCost },
+		{ label: WEBSITE.productsTitle, value: cards.length },
+		...(kind === 'settings' && state.settings
 			? [
 					{ label: WEBSITE.settingsVersion, value: state.settings.version },
 					{
@@ -336,7 +319,30 @@ export function WebsitePageView({
 						{ label: SETUP.refresh, loading: setupState.refreshing, onClick: setupState.refresh },
 					],
 				}
-			: {}),
+			: own === null && (hasSettings || can.tokens)
+				? {
+						secondary: [
+							...(hasSettings
+								? [
+										{
+											label: WEBSITE.settingsAction,
+											icon: /** @type {const} */ ('sliders'),
+											onClick: () => nav.go(hrefOf('settings')),
+										},
+									]
+								: []),
+							...(can.tokens
+								? [
+										{
+											label: WEBSITE.setupSheet,
+											icon: /** @type {const} */ ('layers'),
+											onClick: () => nav.go(hrefOf('setup')),
+										},
+									]
+								: []),
+						],
+					}
+				: {}),
 		more: [
 			{
 				label: MORE.visitWebsite,
@@ -362,192 +368,184 @@ export function WebsitePageView({
 		],
 	};
 
-	/** @param {ProductCard} card */
-	const productMenu = (card) => [
-		...(can.open
-			? [{ label: WEBSITE.openLabel(card.name), icon: /** @type {const} */ ('external'), onSelect: () => void open(card) }]
-			: []),
-		...(can.manage
+	// the pages of their own (Website settings, the Setup sheet) keep the inner navigation: back to the page, the Setup
+	// sheet, and the settings sections (a dot where a product still needs something, a count of links)
+	/** @type {import('@ss/ui').InnerNavGroup[]} */
+	const groups = [
+		{
+			items: [
+				{ id: 'overview', label: WEBSITE.overview, icon: 'home' },
+				...(can.tokens ? [{ id: 'setup', label: WEBSITE.setupSheet, icon: /** @type {const} */ ('layers') }] : []),
+			],
+		},
+		...(hasSettings
 			? [
 					{
-						label: WEBSITE.remove,
-						danger: true,
-						onSelect: () => {
-							setProblem(null);
-							setRemoving(card);
-						},
+						label: WEBSITE.websiteSettings,
+						items: SETTINGS_SECTIONS.filter(
+							(section) => (section !== 'connections' && section !== 'links') || state.connections !== null,
+						).map((section) => ({
+							id: `settings/${section}`,
+							label: T.sections[section],
+							...(section === 'connections'
+								? connectionsMark(state.connections)
+								: section === 'links'
+									? state.connections && state.connections.links.length > 0
+										? { count: state.connections.links.length }
+										: {}
+									: contextOf(state.readiness, section)),
+						})),
 					},
 				]
 			: []),
 	];
-
-	// what stands in place of the body when the address is not a page of this website or the person may not see it
-	/** @type {string | null} */
-	let error = null;
-	if (parsed === null) error = WEBSITE.noSuchPage;
-	else if (parsed.kind === 'product' && !shown) error = WEBSITE.noSuchProduct;
-	else if (parsed.kind === 'settings' || parsed.kind === 'changes')
-		error = !can.settings ? WEBSITE.noSuchPage : settings && !settings.ok ? describeProblem(settings.problem) : null;
-	else if (parsed.kind === 'install' || parsed.kind === 'setup') {
-		error = !can.tokens
-			? WEBSITE.noSuchPage
-			: parsed.kind === 'setup' && setup && !setup.ok
-				? describeProblem(setup.problem)
-				: null;
-	}
+	const current = parsed?.kind === 'settings' ? `settings/${parsed.section}` : 'setup';
 
 	/** @type {import('react').ReactNode} */
 	let body = null;
-	if (!error && parsed) {
-		if (parsed.kind === 'overview')
-			body = (
-				<CardFlow>
-					<Card padded={false} title={WEBSITE.productsTitle} subtitle={WEBSITE.productsCount(cards.length)}>
+	/** @type {import('@ss/ui').PageSection[] | undefined} */
+	let sections;
+	if (!error && parsed && own === 'settings')
+		body = (
+			<div className="space-y-6">
+				{readinessLines(state.readiness).length > 0 ? (
+					<Callout tone="attention" title={T.readyTitle}>
+						<ul className="list-disc space-y-0.5 pl-5">
+							{readinessLines(state.readiness).map((line) => (
+								<li key={line}>{line}</li>
+							))}
+						</ul>
+					</Callout>
+				) : null}
+				<SettingsSectionBody section={/** @type {{ section: string }} */ (parsed).section} state={state} />
+			</div>
+		);
+	else if (!error && own === 'setup' && setup?.ok)
+		body = (
+			<SetupView
+				state={setupState}
+				links={setup.links}
+				manage={manage}
+				canSwitch={canSwitch}
+				settingsHref={hrefOf('settings')}
+			/>
+		);
+	else if (onPage) {
+		const days = usage?.ok ? usage.data : null;
+		const bars = creditDayBars(days?.days);
+		const entries = /** @type {import('./website.js').TokenEntry[]} */ (tokens?.ok ? (tokens.data?.items ?? []) : []);
+		sections = [
+			{
+				id: 'status',
+				label: WEBSITE.statusSpend,
+				icon: 'activity',
+				body: (
+					<>
+						<StatGrid label={WEBSITE.statusSpend}>
+							<Stat label={WEBSITE.statusColumn} value={pills[dot].label} tone={dot} icon="activity" />
+							<Stat label={WEBSITE.productsTitle} value={cards.length} icon="box" kind="product" />
+							<Stat label={WEBSITE.dailyCost} value={dailyCost} icon="trendingUp" kind="credit" />
+						</StatGrid>
+						{usage && !usage.ok ? <Callout tone="danger">{describeProblem(usage.problem)}</Callout> : null}
+						{days && !isEmptySeries(bars) ? (
+							<Card title={MORE.websiteSpend} subtitle={formatCredits(days.total ?? 0)}>
+								<BarChart label={MORE.websiteSpend} data={bars} format={formatChartCredits} height={120} />
+							</Card>
+						) : null}
+					</>
+				),
+			},
+			{
+				id: 'products',
+				label: WEBSITE.productsTitle,
+				icon: 'box',
+				body: (
+					<>
+						{tokens && !tokens.ok ? <Callout tone="danger">{describeProblem(tokens.problem)}</Callout> : null}
 						{cards.length === 0 ? (
 							<EmptyState compact icon="box" title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant} />
 						) : (
-							<DataTable
-								caption={WEBSITE.productsOf(website.domain)}
-								rows={cards}
-								rowKey={(card) => card.productId}
-								rowLabel={(card) => card.name}
-								onRowClick={(card) => nav.go(hrefOf(`products/${card.productId}`))}
-								{...(can.open || can.manage ? { rowMenu: productMenu } : {})}
-								columns={[
-									{
-										key: 'name',
-										header: WEBSITE.productColumn,
-										sortable: true,
-										render: (card) => (
-											<Link
-												href={hrefOf(`products/${card.productId}`)}
-												className="font-medium text-fg hover:underline">
-												{card.name}
-											</Link>
-										),
-									},
-									{ key: 'status', header: WEBSITE.statusColumn, kind: 'status', pill: productPill },
-									{
-										key: 'features',
-										header: WEBSITE.featuresColumn,
-										kind: 'number',
-										sortValue: (card) => card.featuresOn.length,
-										render: (card) => card.featuresOn.length,
-									},
-									{
-										key: 'dailyCost',
-										header: BILLING.dailyCost,
-										kind: 'money',
-										sortable: true,
-										render: (card) => WEBSITE.perDay(formatCredits(card.dailyCost)),
-									},
-								]}
-							/>
+							cards.map((card) => (
+								<ProductSection
+									key={card.productId}
+									card={card}
+									domain={website.domain}
+									merchantId={merchantId}
+									websiteId={websiteId}
+									can={can}
+									tokens={entries.find((entry) => entry.productId === card.productId) ?? null}
+									pending={can.tokens && !tokens}
+									twoStepOn={twoStepOn}
+									opening={opening === card.productId}
+									onOpen={() => void open(card)}
+									onRemove={() => {
+										setProblem(null);
+										setRemoving(card);
+									}}
+								/>
+							))
 						)}
+					</>
+				),
+			},
+			...(can.settings
+				? [
+						{
+							id: 'activity',
+							label: WEBSITE.recentChanges,
+							icon: /** @type {const} */ ('clock'),
+							body: (
+								<Card title={WEBSITE.recentChanges} subtitle={T.changes.intro}>
+									{settings && !settings.ok ? (
+										<Callout tone="danger">{describeProblem(settings.problem)}</Callout>
+									) : (
+										<ChangesTimeline changes={state.changes} />
+									)}
+								</Card>
+							),
+						},
+					]
+				: []),
+			{
+				id: 'usage',
+				label: WEBSITE.usageDetails,
+				icon: 'trendingUp',
+				body: !usage ? (
+					<Skeleton lines={4} />
+				) : usage.ok ? (
+					<Card title={WEBSITE.usageDetails}>
+						<UsageView usage={usage.data} showWebsite={false} chart={false} />
 					</Card>
-					<WebsiteSpend key={`spend-${websiteId}`} merchantId={merchantId} websiteId={websiteId} />
-				</CardFlow>
-			);
-		else if (parsed.kind === 'product' && shown)
-			body = (
-				<CardFlow>
-					<Card
-						title={shown.name}
-						actions={
-							<>
-								{can.open ? (
-									<Button
-										variant="secondary"
-										size="sm"
-										loading={opening === shown.productId}
-										aria-label={WEBSITE.openLabel(shown.name)}
-										title={WEBSITE.openHelp}
-										onClick={() => void open(shown)}>
-										{WEBSITE.open}
-									</Button>
-								) : null}
-								{can.manage ? (
-									<ActionMenu
-										label={WEBSITE.productActions(shown.name)}
-										items={[
-											{
-												label: WEBSITE.remove,
-												danger: true,
-												onSelect: () => {
-													setProblem(null);
-													setRemoving(shown);
-												},
-											},
-										]}
-									/>
-								) : null}
-							</>
-						}>
-						<KeyValueList
-							items={[
-								{
-									label: WEBSITE.statusColumn,
-									value: <ProductStatusBadge status={shown.status} featuresOn={shown.featuresOn} />,
-								},
-								{ label: BILLING.dailyCost, value: WEBSITE.perDay(formatCredits(shown.dailyCost)) },
-								{
-									label: WEBSITE.featuresColumn,
-									value: shown.featuresOn.length > 0 ? shown.featuresOn.join(', ') : WEBSITE.noFeaturesOn,
-								},
-							]}
-						/>
-					</Card>
-				</CardFlow>
-			);
-		else if (parsed.kind === 'settings')
-			body = (
-				<div className="space-y-6">
-					{readinessLines(state.readiness).length > 0 ? (
-						<Callout tone="attention" title={T.readyTitle}>
-							<ul className="list-disc space-y-0.5 pl-5">
-								{readinessLines(state.readiness).map((line) => (
-									<li key={line}>{line}</li>
-								))}
-							</ul>
-						</Callout>
-					) : null}
-					<SettingsSectionBody section={parsed.section} state={state} />
-				</div>
-			);
-		else if (parsed.kind === 'changes') body = <ChangesTable changes={state.changes} />;
-		else if (parsed.kind === 'install') body = <InstallPart merchantId={merchantId} website={website} />;
-		else if (parsed.kind === 'usage') body = <UsagePart merchantId={merchantId} websiteId={websiteId} />;
-		else if (parsed.kind === 'setup' && setup?.ok)
-			body = (
-				<SetupView
-					state={setupState}
-					links={setup.links}
-					manage={manage}
-					canSwitch={canSwitch}
-					settingsHref={hrefOf('settings')}
-				/>
-			);
+				) : null,
+			},
+		];
 	}
 
 	return (
 		<>
 			<Page
 				linkAs={Link}
-				flush={kind === 'changes'}
-				bodyKey={part}
+				flush={false}
+				bodyKey={own === null ? websiteId : part}
 				crumbs={[...crumbs, { label: website.domain }]}
-				status={[pills[websiteDot(cards)]]}
+				status={[pills[dot]]}
 				facts={facts}
 				actions={actions}
-				info={onSettings ? T.intro : WEBSITE.pageInfo}
-				nav={{
-					groups: groups.map((group) => ({
-						...group,
-						items: group.items.map((item) => ({ ...item, href: hrefOf(item.id === 'overview' ? '' : item.id) })),
-					})),
-					value: current,
-					label: WEBSITE.navLabel,
-				}}
+				info={kind === 'settings' ? T.intro : WEBSITE.pageInfo}
+				{...(own !== null
+					? {
+							nav: {
+								groups: groups.map((group) => ({
+									...group,
+									items: group.items.map((item) => ({ ...item, href: hrefOf(item.id === 'overview' ? '' : item.id) })),
+								})),
+								value: current,
+								label: WEBSITE.navLabel,
+							},
+						}
+					: {})}
+				{...(list && own === null ? { list } : {})}
+				{...(sections ? { sections } : {})}
 				loading={gone}
 				{...(error ? { error } : {})}>
 				{body}
