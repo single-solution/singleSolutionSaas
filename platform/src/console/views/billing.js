@@ -5,7 +5,7 @@
  * are UTC and labeled so; single timestamps show in the viewer's local time.
  * @module
  */
-import { Badge, BarChart, Callout, Card, EmptyState, LocalTime, Stat, StatGrid, Table, formatCredits } from '@ss/ui';
+import { Badge, BarChart, Callout, Card, EmptyState, FiguresTable, LocalTime, Stat, StatGrid, formatCredits } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 
 /** @typedef {Array<{ key: string, header: string, kind?: 'number' | 'money' | 'date' | 'status', sortable?: boolean, low?: boolean, render?: (row: any) => import('react').ReactNode }>} Columns */
@@ -196,26 +196,29 @@ export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usag
 					<BarChart label={chartTitle} data={creditDayBars(usage?.days)} format={formatChartCredits} />
 				</Card>
 			) : null}
-			<Table
+			<FiguresTable
 				caption={BILLING.usageTitle}
 				rows={rows}
 				rowKey={(r) => `${r.day}:${r.websiteId}:${r.productId}:${r.feature}`}
 				empty={<EmptyState compact icon="trendingUp" kind="credit" title={BILLING.noUsage} />}
-				defaultSort={{ key: 'day', direction: 'desc' }}
+				defaultSort={{ key: 'day', dir: 'desc' }}
 				columns={[
-					{ key: 'day', header: BILLING.usageColumns.day, sortable: true, rowHeader: true },
+					{ key: 'day', header: BILLING.usageColumns.day, kind: 'date', sortable: true, rowHeader: true },
 					...(showWebsite ? [{ key: 'domain', header: BILLING.usageColumns.website, sortable: true }] : []),
 					{ key: 'product', header: BILLING.usageColumns.product, sortable: true },
 					{ key: 'featureName', header: BILLING.usageColumns.feature, sortable: true },
-					{ key: 'hours', header: BILLING.usageColumns.hours, align: 'right', sortable: true },
+					{ key: 'hours', header: BILLING.usageColumns.hours, kind: 'number', sortable: true },
 					{
 						key: 'amount',
 						header: BILLING.usageColumns.credits,
-						align: 'right',
+						kind: 'money',
 						sortable: true,
 						render: (r) => formatCredits(r.amount),
 					},
 				]}
+				totals={{
+					amount: formatCredits(usage?.total ?? 0),
+				}}
 			/>
 		</div>
 	);
@@ -227,7 +230,7 @@ export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usag
  * @returns {Columns}
  */
 export const usageColumns = (showWebsite = true) => [
-	{ key: 'day', header: BILLING.usageColumns.day, sortable: true },
+	{ key: 'day', header: BILLING.usageColumns.day, kind: /** @type {const} */ ('date'), sortable: true, rowHeader: true },
 	...(showWebsite ? [{ key: 'domain', header: BILLING.usageColumns.website, sortable: true }] : []),
 	{ key: 'product', header: BILLING.usageColumns.product, sortable: true },
 	{ key: 'featureName', header: BILLING.usageColumns.feature, sortable: true, low: true },

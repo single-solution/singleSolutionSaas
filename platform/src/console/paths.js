@@ -51,8 +51,8 @@ export const routes = Object.freeze({
 	websiteSettings: (/** @type {string} */ id, /** @type {string} */ section = '') =>
 		section ? `/websites/${e(id)}/settings/${e(section)}` : `/websites/${e(id)}/settings`,
 	credits: () => '/credits',
-	/** the receipts sub-page of Usage and credits */
-	creditsReceipts: () => '/credits/receipts',
+	/** the receipts section of Usage and credits */
+	creditsReceipts: () => '/credits#receipts',
 	account: () => '/account',
 	/** a part of the Account page: details (the page's own address), sign-in, two-step or activity */
 	accountPart: (/** @type {string} */ part) => (part === 'details' ? '/account' : `/account#${e(part)}`),

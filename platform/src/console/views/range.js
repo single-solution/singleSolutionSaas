@@ -5,7 +5,7 @@
  * Custom dates.
  * @module
  */
-import { Select } from '@ss/ui';
+import { Input, Select } from '@ss/ui';
 import { MORE } from '../../texts/console.js';
 import { useNavigation } from '../navigation.js';
 
@@ -114,17 +114,23 @@ const DATE_FIELD =
 export function DateFields({ from = null, to = null, hrefFor, fromLabel, toLabel, go }) {
 	return (
 		<div className="hidden items-center gap-2 md:flex">
-			<input
+			<Input
 				type="date"
+				label={fromLabel}
 				aria-label={fromLabel}
+				hideLabel
 				value={from ?? ''}
+				fieldClassName="w-36"
 				className={DATE_FIELD}
 				onChange={(e) => go(hrefFor({ from: e.currentTarget.value || null, to }))}
 			/>
-			<input
+			<Input
 				type="date"
+				label={toLabel}
 				aria-label={toLabel}
+				hideLabel
 				value={to ?? ''}
+				fieldClassName="w-36"
 				className={DATE_FIELD}
 				onChange={(e) => go(hrefFor({ from, to: e.currentTarget.value || null }))}
 			/>

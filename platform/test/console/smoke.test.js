@@ -151,9 +151,9 @@ describe('merchant console smoke', () => {
 			const credits = await loaders.loadCredits(merchant.api, merchantId, { from: '2026-01-01', websiteId: site.websiteId });
 			const creditsRaw = ssr(<CreditsView {...credits} />);
 			const creditsText = text(creditsRaw);
-			// the page: Usage and credits with the money numbers in the header, Usage and Receipts as addresses
+			// the page: Usage and credits with the money numbers in the header, Usage and Receipts as sections
 			expect(creditsRaw).toContain('aria-label="Breadcrumb"');
-			expect(creditsRaw).toContain('href="/credits/receipts"');
+			expect(creditsRaw).toContain('id="receipts"');
 			expect(creditsText).toContain('Credit receipts');
 			expect(creditsText).toContain('credits in total');
 			expect(creditsText).not.toContain('Amount paid'); // admins only

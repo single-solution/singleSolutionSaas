@@ -1,10 +1,9 @@
-import { loadCredits } from '../../../src/console/loaders.js';
-import { CreditsView } from '../../../src/console/views/credits.js';
-import { merchantContext } from '../_lib/server.js';
+import { redirect } from 'next/navigation';
+import { routes } from '../../../src/console/paths.js';
 
 export const metadata = { title: 'Credit receipts' };
 
+/** The old receipts sub-page address redirects to the receipts section on the Credits page. */
 export default async function CreditReceiptsPage() {
-	const { api, merchantId } = await merchantContext('/credits/receipts');
-	return <CreditsView {...await loadCredits(api, merchantId, {}, 'receipts')} />;
+	redirect(routes.creditsReceipts());
 }
