@@ -12,9 +12,4 @@ export const KIT_ONLY_TODO = [
 	{ file: 'platform/src/console/admin/views/overview.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/admin/views/products.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/admin/views/settings.js', uses: ['Disclosure'] },
-	{ file: 'platform/src/console/views/login-settings.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/views/setup.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/views/website-connections.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/views/website-settings-sections.js', uses: ['DataTable', 'Disclosure'] },
-	{ file: 'platform/src/console/views/websites.js', uses: ['DataTable'] },
 ];

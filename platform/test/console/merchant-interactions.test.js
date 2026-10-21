@@ -533,7 +533,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 			expect(timeline.container.querySelector('time')?.textContent).toBe('Oct 4, 2026, 10:30 AM EDT');
 			expect(timeline.container.querySelector('[aria-hidden="true"]')?.textContent).toBe('SL');
 			const table = render(<ActivityTable items={[entry]} empty="None" />);
-			expect(table.container.querySelector('td time, th time')?.textContent).toBe('Oct 4, 2026, 10:30 AM EDT');
+			expect(table.container.querySelector('time')?.textContent).toBe('Oct 4, 2026, 10:30 AM EDT');
 			expect(render(<ActivityTimeline items={[]} empty="No activity yet." />).container.textContent).toContain(
 				'No activity yet.',
 			);

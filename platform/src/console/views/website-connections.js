@@ -15,13 +15,14 @@
  */
 import { useState } from 'react';
 import {
+	ActionMenu,
 	Badge,
 	Button,
 	Callout,
-	DataTable,
 	EmptyState,
 	FormError,
 	Input,
+	Row,
 	Select,
 	SettingRow,
 	SettingsCard,
@@ -354,50 +355,33 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 				{view.products.length === 0 ? (
 					<EmptyState compact icon="box" title={T.data.noProducts} />
 				) : (
-					<DataTable
-						caption={T.data.productsTitle}
-						rows={view.products}
-						rowKey={(product) => product.productId}
-						columns={[
-							{ key: 'name', header: T.data.productColumn, render: (product) => product.name },
-							{
-								key: 'database',
-								header: T.data.databaseColumn,
-								render: (product) =>
-									product.database ? (
-										<span className="flex flex-wrap items-center gap-2">
-											<code>{T.data.databaseName(product.database.name)}</code>
-											{product.database.overridden ? (
-												<span className="text-help text-muted">{T.data.renamed}</span>
-											) : null}
+					<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+						{view.products.map((product) => (
+							<Row
+								key={product.productId}
+								lead={{ icon: 'box' }}
+								title={product.name}
+								meta={[
+									product.database
+										? `${T.data.databaseName(product.database.name)}${product.database.overridden ? ` (${T.data.renamed})` : ''}`
+										: null,
+									product.storage ? T.data.folder(product.storage.folder) : null,
+									product.ai ? T.data.aiColumn : null,
+								].filter(Boolean)}
+								trailing={
+									<div className="flex flex-wrap items-center gap-2">
+										{product.database ? (
 											<StateBadge state={product.database.state} message={product.database.message} />
-										</span>
-									) : null,
-							},
-							{
-								key: 'storage',
-								header: T.data.storageColumn,
-								render: (product) =>
-									product.storage ? (
-										<span className="flex flex-wrap items-center gap-2">
-											<code>{T.data.folder(product.storage.folder)}</code>
+										) : null}
+										{product.storage ? (
 											<StateBadge state={product.storage.state} message={product.storage.message} />
-										</span>
-									) : null,
-							},
-							// only when a product on the website asks for the AI key
-							...(view.products.some((product) => product.ai)
-								? [
-										{
-											key: 'ai',
-											header: T.data.aiColumn,
-											render: (/** @type {ConnectionsView['products'][number]} */ product) =>
-												product.ai ? <StateBadge state={product.ai.state} message={product.ai.message} /> : null,
-										},
-									]
-								: []),
-						]}
-					/>
+										) : null}
+										{product.ai ? <StateBadge state={product.ai.state} message={product.ai.message} /> : null}
+									</div>
+								}
+							/>
+						))}
+					</div>
 				)}
 			</SettingsCard>
 		</div>
@@ -439,66 +423,58 @@ export function LinksSection({ view, manage, canWrite, onChanged }) {
 			{view.links.length === 0 ? (
 				<EmptyState compact icon="link" title={T.links.empty} />
 			) : (
-				<DataTable
-					caption={T.links.title}
-					rows={view.links}
-					rowKey={(link) => `${link.caller}>${link.callee}`}
-					rowLabel={(link) => T.links.sentence(link.callerName, link.calleeName)}
-					columns={[
-						{
-							key: 'sentence',
-							header: T.links.title,
-							wrap: true,
-							render: (link) => T.links.sentence(link.callerName, link.calleeName),
-						},
-						{
-							key: 'state',
-							header: T.links.stateColumn,
-							render: (link) => <StateBadge state={link.state} words={T.links.state} />,
-						},
-						{
-							key: 'allows',
-							header: T.links.allowsColumn,
-							low: true,
-							wrap: true,
-							render: (link) =>
-								link.state === 'on' ? (
-									<span className="flex flex-col gap-1">
-										<span>{link.scopes.map((scope) => scope.name).join(', ')}</span>
-										<span className="text-help text-muted">{link.delivered ? T.links.delivered : T.links.waiting}</span>
-									</span>
-								) : null,
-						},
-					]}
-					{...(canWrite
-						? {
-								rowMenu: (/** @type {ConnectionsView['links'][number]} */ link) => [
-									...(link.state === 'off'
-										? [
-												{
-													label: T.links.switchOn,
-													onSelect: () => setAsking({ link, action: /** @type {const} */ ('on') }),
-												},
-											]
-										: [
-												...(link.state === 'on'
+				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+					{view.links.map((link) => (
+						<Row
+							key={`${link.caller}>${link.callee}`}
+							lead={{ icon: 'link' }}
+							title={T.links.sentence(link.callerName, link.calleeName)}
+							meta={
+								link.state === 'on'
+									? [
+											link.scopes.map((scope) => scope.name).join(', '),
+											link.delivered ? T.links.delivered : T.links.waiting,
+										]
+									: []
+							}
+							trailing={
+								<div className="flex items-center gap-2">
+									<StateBadge state={link.state} words={T.links.state} />
+									{canWrite ? (
+										<ActionMenu
+											floating
+											label={`Actions for ${T.links.sentence(link.callerName, link.calleeName)}`}
+											items={[
+												...(link.state === 'off'
 													? [
 															{
-																label: T.links.regenerate,
-																onSelect: () => setAsking({ link, action: /** @type {const} */ ('regenerate') }),
+																label: T.links.switchOn,
+																onSelect: () => setAsking({ link, action: /** @type {const} */ ('on') }),
 															},
 														]
-													: []),
-												{
-													label: T.links.switchOff,
-													danger: true,
-													onSelect: () => setAsking({ link, action: /** @type {const} */ ('off') }),
-												},
-											]),
-								],
+													: [
+															...(link.state === 'on'
+																? [
+																		{
+																			label: T.links.regenerate,
+																			onSelect: () => setAsking({ link, action: /** @type {const} */ ('regenerate') }),
+																		},
+																	]
+																: []),
+															{
+																label: T.links.switchOff,
+																danger: true,
+																onSelect: () => setAsking({ link, action: /** @type {const} */ ('off') }),
+															},
+														]),
+											]}
+										/>
+									) : null}
+								</div>
 							}
-						: {})}
-				/>
+						/>
+					))}
+				</div>
 			)}
 			<ConfirmChange
 				open={asking !== null}

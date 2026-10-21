@@ -13,17 +13,17 @@ import { formatDate, formatMoney } from '@ss/contracts/format';
 import { callingCodeOf } from '@ss/contracts/phone';
 import { ADDRESS_REQUIRED_PARTS, WEBSITE_UNITS } from '@ss/contracts/website-settings';
 import {
+	ActionMenu,
 	Button,
 	CheckboxGroup,
 	ChoicePicker,
-	DataTable,
-	Disclosure,
 	Drawer,
 	EmptyState,
 	Icon,
 	IconButton,
 	Input,
 	ListEditor,
+	Row,
 	SegmentedControl,
 	Select,
 	SettingList,
@@ -550,7 +550,7 @@ export function BrandSection(props) {
 						error={form.error(['theme', 'radius'])}
 						onChange={(event) => form.change(['theme', 'radius'], valueOf(event) === '' ? 0 : Number(valueOf(event)))}
 					/>
-					<Disclosure title={B.advancedTitle}>
+					<SettingRow label={B.advancedTitle}>
 						<TextArea
 							label={B.customCss}
 							help={B.customCssHelp}
@@ -560,7 +560,7 @@ export function BrandSection(props) {
 							error={form.error(['theme', 'customCss'])}
 							onChange={(event) => form.change(['theme', 'customCss'], valueOf(event))}
 						/>
-					</Disclosure>
+					</SettingRow>
 				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.colorsTitle} description={B.colorsHelp}>
@@ -1014,39 +1014,35 @@ export function PagesSection(props) {
 					{d.documents.length === 0 ? (
 						<EmptyState compact icon="list" title={P.noDocuments} />
 					) : (
-						<DataTable
-							caption={P.legalTitle}
-							rows={d.documents.map((document, index) => ({ document, index }))}
-							rowKey={(row) => String(row.index)}
-							rowLabel={(row) => row.document.title || row.document.key || String(row.index + 1)}
-							onRowClick={(row) => setEditing(row.index)}
-							columns={[
-								{
-									key: 'title',
-									header: P.documentTitle,
-									render: (row) => row.document.title || row.document.key || String(row.index + 1),
-								},
-								{ key: 'key', header: P.documentKey, low: true, render: (row) => row.document.key },
-								{
-									key: 'size',
-									header: P.documentSize,
-									low: true,
-									render: (row) => P.documentSummary(row.document.text.length),
-								},
-							]}
-							rowMenu={(row) => [
-								{ label: T.edit, onSelect: () => setEditing(row.index) },
-								{
-									label: P.remove,
-									danger: true,
-									onSelect: () =>
-										form.change(
-											['documents'],
-											d.documents.filter((_document, at) => at !== row.index),
-										),
-								},
-							]}
-						/>
+						<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+							{d.documents.map((document, index) => (
+								<Row
+									key={document.key || String(index)}
+									lead={{ icon: 'fileText' }}
+									title={document.title || document.key || String(index + 1)}
+									meta={[document.key, P.documentSummary(document.text.length)].filter(Boolean)}
+									onSelect={() => setEditing(index)}
+									trailing={
+										<ActionMenu
+											floating
+											label={`Actions for ${document.title || document.key || String(index + 1)}`}
+											items={[
+												{ label: T.edit, onSelect: () => setEditing(index) },
+												{
+													label: P.remove,
+													danger: true,
+													onSelect: () =>
+														form.change(
+															['documents'],
+															d.documents.filter((_document, at) => at !== index),
+														),
+												},
+											]}
+										/>
+									}
+								/>
+							))}
+						</div>
 					)}
 					{form.error(['documents']) ? (
 						<p role="alert" className="text-help text-danger">
@@ -1123,34 +1119,35 @@ export function TeamSection(props) {
 					{d.recipients.length === 0 ? (
 						<EmptyState compact icon="users" title={M.noPeople} />
 					) : (
-						<DataTable
-							caption={M.peopleTitle}
-							rows={d.recipients.map((entry, index) => ({ entry, index }))}
-							rowKey={(row) => String(row.index)}
-							rowLabel={(row) => row.entry.name || row.entry.email || row.entry.phone || String(row.index + 1)}
-							onRowClick={(row) => setEditing(row.index)}
-							columns={[
-								{
-									key: 'name',
-									header: M.name,
-									render: (row) => row.entry.name || row.entry.email || row.entry.phone || String(row.index + 1),
-								},
-								{ key: 'email', header: M.email, low: true, render: (row) => row.entry.email },
-								{ key: 'phone', header: M.phone, low: true, render: (row) => row.entry.phone },
-							]}
-							rowMenu={(row) => [
-								{ label: T.edit, onSelect: () => setEditing(row.index) },
-								{
-									label: T.pages.remove,
-									danger: true,
-									onSelect: () =>
-										form.change(
-											['recipients'],
-											d.recipients.filter((_entry, at) => at !== row.index),
-										),
-								},
-							]}
-						/>
+						<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+							{d.recipients.map((entry, index) => (
+								<Row
+									key={entry.email || entry.phone || String(index)}
+									lead={{ avatar: entry.name || entry.email || 'Person' }}
+									title={entry.name || entry.email || entry.phone || String(index + 1)}
+									meta={[entry.email, entry.phone].filter(Boolean)}
+									onSelect={() => setEditing(index)}
+									trailing={
+										<ActionMenu
+											floating
+											label={`Actions for ${entry.name || entry.email || entry.phone || String(index + 1)}`}
+											items={[
+												{ label: T.edit, onSelect: () => setEditing(index) },
+												{
+													label: T.pages.remove,
+													danger: true,
+													onSelect: () =>
+														form.change(
+															['recipients'],
+															d.recipients.filter((_entry, at) => at !== index),
+														),
+												},
+											]}
+										/>
+									}
+								/>
+							))}
+						</div>
 					)}
 					{Object.keys(form.errors).some((key) => key.startsWith('recipients')) ? (
 						<p role="alert" className="text-help text-danger">

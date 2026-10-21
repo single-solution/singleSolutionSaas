@@ -14,13 +14,13 @@
 import { useEffect, useState } from 'react';
 import { OTHER_MAX, PROFILE_CHOICES, PROFILE_NONE, PROFILE_OTHER } from '@ss/contracts/profile';
 import {
+	ActionMenu,
 	Badge,
 	Button,
 	Callout,
 	Card,
 	CheckboxGroup,
 	CodeBlock,
-	DataTable,
 	Drawer,
 	EmptyState,
 	FieldGrid,
@@ -31,6 +31,7 @@ import {
 	KeyValueList,
 	LocalTime,
 	Page,
+	Row,
 	SegmentedControl,
 	Section,
 	StatusBadge,
@@ -480,53 +481,38 @@ function Recommendations({ sheet, actions }) {
 					<p className="text-sm text-fg">{off.length === 0 ? SETUP.allRecommendedOn : SETUP.recommendedOn(onCount)}</p>
 					{off.length > 0 ? (
 						<Part title={SETUP.recommendedOff}>
-							<DataTable
-								caption={SETUP.recommendedOff}
-								rows={off}
-								rowKey={({ product, entry }) => `${product.productId}:${entry.feature}`}
-								rowLabel={({ product, entry }) => titleOf(product, entry.feature)}
-								{...(actions?.switchOn
-									? {
-											rowMenu: (/** @type {(typeof off)[number]} */ { product, entry }) => [
-												{
-													label: SETUP.switchOn,
-													disabled: actions.switching !== null,
-													onSelect: () => actions.switchOn?.(product, entry.feature),
-												},
-											],
-										}
-									: {})}
-								columns={[
-									{
-										key: 'feature',
-										header: SETUP.featureColumn,
-										wrap: true,
-										render: ({ product, entry }) => (
-											<span className="flex flex-wrap items-center gap-2">
-												<span className="font-medium text-fg">{titleOf(product, entry.feature)}</span>
-												<Badge>{product.name}</Badge>
-											</span>
-										),
-									},
-									{
-										key: 'why',
-										header: SETUP.whyColumn,
-										low: true,
-										wrap: true,
-										render: ({ product, entry }) => {
-											const needed = neededOff(product, entry.feature);
-											return (
-												<>
-													<span className="block">{entry.why}</span>
-													{needed.length > 0 ? (
-														<span className="block">{SETUP.alsoSwitches(needed.join(', '))}</span>
-													) : null}
-												</>
-											);
-										},
-									},
-								]}
-							/>
+							<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+								{off.map(({ product, entry }) => {
+									const needed = neededOff(product, entry.feature);
+									return (
+										<Row
+											key={`${product.productId}:${entry.feature}`}
+											lead={{ icon: 'sparkles' }}
+											title={titleOf(product, entry.feature)}
+											meta={[
+												product.name,
+												entry.why,
+												needed.length > 0 ? SETUP.alsoSwitches(needed.join(', ')) : null,
+											].filter(Boolean)}
+											trailing={
+												actions?.switchOn ? (
+													<ActionMenu
+														floating
+														label={`Actions for ${titleOf(product, entry.feature)}`}
+														items={[
+															{
+																label: SETUP.switchOn,
+																disabled: actions.switching !== null,
+																onSelect: () => actions.switchOn?.(product, entry.feature),
+															},
+														]}
+													/>
+												) : null
+											}
+										/>
+									);
+								})}
+							</div>
 							{actions ? (
 								<p className="text-xs text-muted">{actions.switchOn ? SETUP.billedNote : SETUP.recommendedOffAsk}</p>
 							) : null}
@@ -918,57 +904,41 @@ function ShareLinks({ manage, initial }) {
 			{links.length === 0 ? (
 				<EmptyState compact icon="link" title={SETUP.noLinks} />
 			) : (
-				<DataTable
-					caption={SETUP.linksTitle}
-					rows={links}
-					rowKey={(link) => link.linkId}
-					rowLabel={(link) => `${SETUP.expires} ${link.expiresAt}`}
-					rowMenu={(link) => [
-						{
-							label: SETUP.revoke,
-							danger: true,
-							disabled: link.status !== 'active' || busy !== null,
-							onSelect: () => void revoke(link),
-						},
-					]}
-					columns={[
-						{
-							key: 'expiresAt',
-							header: SETUP.expires,
-							kind: 'date',
-							render: (link) => <LocalTime value={link.expiresAt} />,
-						},
-						{
-							key: 'status',
-							header: SETUP.websiteStatus,
-							render: (link) => <StatusBadge status={link.status} label={SETUP.linkStatus[link.status]} />,
-						},
-						{
-							key: 'shows',
-							header: SETUP.linkShows,
-							low: true,
-							wrap: true,
-							render: (link) => `${SETUP.createdBy[link.createdBy]} · ${SETUP.shows(link.values, link.install)}`,
-						},
-						{
-							key: 'opens',
-							header: SETUP.linkOpens,
-							low: true,
-							wrap: true,
-							render: (link) => (
-								<>
-									{SETUP.opens(link.opens)}
-									{link.openedAt ? (
-										<>
-											{' '}
-											· {SETUP.lastOpened} <LocalTime value={link.openedAt} />
-										</>
-									) : null}
-								</>
-							),
-						},
-					]}
-				/>
+				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+					{links.map((link) => (
+						<Row
+							key={link.linkId}
+							lead={{ icon: 'link' }}
+							title={`${SETUP.createdBy[link.createdBy]} · ${SETUP.shows(link.values, link.install)}`}
+							meta={[
+								SETUP.opens(link.opens),
+								link.openedAt ? (
+									<>
+										{SETUP.lastOpened} <LocalTime value={link.openedAt} />
+									</>
+								) : null,
+							].filter(Boolean)}
+							time={<LocalTime value={link.expiresAt} />}
+							trailing={
+								<div className="flex items-center gap-2">
+									<StatusBadge status={link.status} label={SETUP.linkStatus[link.status]} />
+									<ActionMenu
+										floating
+										label={`Actions for ${SETUP.expires} ${link.expiresAt}`}
+										items={[
+											{
+												label: SETUP.revoke,
+												danger: true,
+												disabled: link.status !== 'active' || busy !== null,
+												onSelect: () => void revoke(link),
+											},
+										]}
+									/>
+								</div>
+							}
+						/>
+					))}
+				</div>
 			)}
 			{creating ? (
 				<CreateLinkDialog

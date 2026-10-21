@@ -13,7 +13,6 @@ import {
 	Callout,
 	Checkbox,
 	CodeBlock,
-	DataTable,
 	Drawer,
 	EmptyState,
 	FieldLayoutContext,
@@ -545,64 +544,37 @@ export function ActivityTable({
 	const C = MORE.activityColumns;
 	return (
 		<>
-			<DataTable
-				caption={caption}
-				rows={items}
-				rowKey={(e) => e.activityId}
-				rowLabel={(e) => `${actorName(e)} · ${actionLabel(e.action)}`}
-				{...(details ? { onRowClick: (/** @type {any} */ e) => setOpen(e) } : {})}
-				empty={<EmptyState compact icon="activity" kind="activity" title={empty} />}
-				columns={[
-					{ key: 'at', header: C.when, kind: 'date', render: (e) => <LocalTime value={e.at} /> },
-					{
-						key: 'who',
-						header: C.who,
-						rowHeader: true,
-						render: (e) => {
-							const name = actorName(e);
-							if (!filterHref || !e.actor?.id) return name;
-							return e.actor.type === 'admin'
-								? filterLink(name, filterHref({ adminId: e.actor.id }))
-								: e.actor.type === 'merchant'
-									? filterLink(name, filterHref({ merchantId: e.actor.id }))
-									: name;
-						},
-					},
-					{
-						key: 'what',
-						header: C.what,
-						render: (e) => (
-							<span className="block truncate">
-								{actionLabel(e.action)}
-								{e.reason ? <span className="text-muted"> · {e.reason}</span> : null}
-							</span>
-						),
-					},
-					...(showMerchant
-						? [
-								{
-									key: 'merchant',
-									header: C.merchant,
-									render: (/** @type {any} */ e) =>
-										e.merchantName ? (
-											<span>
-												{filterHref && e.merchantId
-													? filterLink(e.merchantName, filterHref({ merchantId: e.merchantId }))
-													: e.merchantName}
-												{e.merchantDeleted ? (
-													<Badge tone="neutral" className="ml-1">
-														{C.deleted}
-													</Badge>
-												) : null}
-											</span>
-										) : (
-											'—'
-										),
-								},
-							]
-						: []),
-				]}
-			/>
+			{items.length === 0 ? (
+				<EmptyState compact icon="activity" kind="activity" title={empty} />
+			) : (
+				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+					{items.map((e) => {
+						const name = actorName(e);
+						const who =
+							filterHref && e.actor?.id
+								? e.actor.type === 'admin'
+									? filterLink(name, filterHref({ adminId: e.actor.id }))
+									: e.actor.type === 'merchant'
+										? filterLink(name, filterHref({ merchantId: e.actor.id }))
+										: name
+								: name;
+						return (
+							<Row
+								key={e.activityId}
+								lead={{ avatar: name }}
+								title={actionLabel(e.action)}
+								meta={[
+									who !== name ? who : null,
+									showMerchant && e.merchantName ? e.merchantName : null,
+									e.reason,
+								].filter(Boolean)}
+								time={<LocalTime value={e.at} />}
+								{...(details ? { onSelect: () => setOpen(e) } : {})}
+							/>
+						);
+					})}
+				</div>
+			)}
 			{details ? (
 				<Drawer open={Boolean(open)} onClose={() => setOpen(null)} title={MORE.entryTitle}>
 					{open ? (

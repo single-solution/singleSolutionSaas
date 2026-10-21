@@ -13,13 +13,14 @@ import {
 	Button,
 	ButtonLink,
 	Card,
-	DataTable,
 	EmptyState,
 	Icon,
 	IconBadge,
 	ListColumn,
+	LocalTime,
 	NeedsList,
 	Page,
+	Row,
 	Stat,
 	StatGrid,
 	describeProblem,
@@ -37,7 +38,6 @@ import {
 	ProductStatusBadge,
 	creditDayBars,
 	formatChartCredits,
-	receiptColumns,
 	productStatusLabel,
 	productTone,
 } from './billing.js';
@@ -207,46 +207,30 @@ export function OverviewView(props) {
 									{MORE.viewAll}
 								</ButtonLink>
 							}>
-							<DataTable
-								caption={MERCHANT.websitesTitle}
-								rows={productRows}
-								rowKey={(r) => r.key}
-								empty={WEBSITE.noProductsMerchant}
-								columns={[
-									{
-										key: 'domain',
-										header: MERCHANT.websiteColumns.website,
-										render: (r) => (
-											<TextLink
-												as={Link}
-												tone="plain"
-												href={routes.website(r.website.websiteId)}
-												title={r.website.domain}>
-												{r.website.domain}
-											</TextLink>
-										),
-									},
-									{
-										key: 'product',
-										header: MERCHANT.websiteColumns.products,
-										wrap: true,
-										render: (r) => r.card?.name ?? <span className="text-muted">{WEBSITE.noProductsMerchant}</span>,
-									},
-									{
-										key: 'status',
-										header: MERCHANT.websiteColumns.status,
-										kind: 'status',
-										render: (r) =>
-											r.card ? <ProductStatusBadge status={r.card.status} featuresOn={r.card.featuresOn} /> : null,
-									},
-									{
-										key: 'open',
-										header: WEBSITE.open,
-										align: 'right',
-										render: (r) => (r.card ? openButton(r.website, r.card) : null),
-									},
-								]}
-							/>
+							{productRows.length === 0 ? (
+								<p className="p-4 text-sm text-muted">{WEBSITE.noProductsMerchant}</p>
+							) : (
+								<div className="divide-y divide-line-soft">
+									{productRows.map((r) => (
+										<Row
+											key={r.key}
+											lead={{ icon: 'globe' }}
+											href={routes.website(r.website.websiteId)}
+											title={r.website.domain}
+											meta={[r.card?.name ?? WEBSITE.noProductsMerchant, r.card ? productStatusLabel(r.card) : null].filter(Boolean)}
+											status={
+												r.card
+													? {
+															tone: r.card.status === 'active' ? 'success' : 'neutral',
+															label: productStatusLabel(r.card),
+														}
+													: undefined
+											}
+											trailing={r.card ? openButton(r.website, r.card) : null}
+										/>
+									))}
+								</div>
+							)}
 						</Card>
 						<Card
 							flow
@@ -267,13 +251,22 @@ export function OverviewView(props) {
 									{MORE.viewAll}
 								</ButtonLink>
 							}>
-							<DataTable
-								caption={MORE.latestReceipts}
-								rows={props.receipts ?? []}
-								rowKey={(r) => r.receiptId}
-								empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
-								columns={receiptColumns({ receipts: props.receipts ?? [] })}
-							/>
+							{(props.receipts ?? []).length === 0 ? (
+								<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />
+							) : (
+								<div className="divide-y divide-line-soft">
+									{(props.receipts ?? []).map((r) => (
+										<Row
+											key={r.receiptId}
+											lead={{ icon: 'receipt' }}
+											title={r.method ?? BILLING.receiptsTitle}
+											meta={[r.reference].filter(Boolean)}
+											value={formatCredits(r.credits)}
+											time={<LocalTime value={r.at} />}
+										/>
+									))}
+								</div>
+							)}
 						</Card>
 					</div>
 				)}
