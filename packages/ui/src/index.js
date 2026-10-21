@@ -62,6 +62,7 @@ export { DataTable, DATA_TABLE_TEXTS, useRowSelection } from './DataTable.js';
 export { Pagination, PaginationSkeleton } from './Pagination.js';
 export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
 export { Row } from './Row.js';
+export { NextStep, NEXT_STEP_TEXTS } from './NextStep.js';
 export { ListColumn, LIST_COLUMN_TEXTS } from './ListColumn.js';
 export { useListSelection } from './list-selection.js';
 export { Page, PAGE_TEXTS } from './Page.js';
