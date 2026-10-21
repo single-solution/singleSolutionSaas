@@ -13,7 +13,7 @@ import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import manifest from '../manifest.json' with { type: 'json' };
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
-import { drawerButton, drawerOf, openRow, openRowMenu, rowMenu, rowNames, rowOf } from './dashboard-table.js';
+import { editorButton, editorOf, factsOf, openRow, openRowMenu, rowMenu, rowNames, rowOf } from './dashboard-rows.js';
 
 /** The dashboard keeps each answer it loaded for the page: each test opens its own website. */
 let website = 0;
@@ -198,9 +198,6 @@ describe("Accounts's dashboard Overview", () => {
 	});
 });
 
-/** @param {HTMLElement} row the texts of a table row's cells */
-const cellsOf = (row) => [...row.querySelectorAll('th, td')].slice(0, -1).map((cell) => cell.textContent);
-
 /**
  * The record lists of Settings: a faked list that answers every write with an empty list.
  * @param {string} name `fields` or `consents`
@@ -247,33 +244,36 @@ describe('Settings → Custom fields (A6)', () => {
 		return view;
 	};
 
-	it('shows a table skeleton while the fields load', async () => {
+	it('shows skeleton rows while the fields load', async () => {
 		const view = await open([]);
-		expect(view.container.querySelector('[role="status"] table')).not.toBeNull();
+		expect(view.container.querySelector('[role="status"][aria-busy]')).not.toBeNull();
 		await settle();
-		expect(view.container.querySelector('[role="status"] table')).toBeNull();
+		expect(view.container.querySelector('[role="status"][aria-busy]')).toBeNull();
 		expect(view.container.textContent).toContain(TEXTS.settings.field.none);
 	});
 
-	it('lists the fields as a table with their type, who sees them and a Required pill', async () => {
+	it('lists the fields as rows with their type, who sees them, the key and a Required dot', async () => {
 		const { container } = await open([field('first', 'edit', { required: true }), field('second', 'staff')]);
 		await settle();
 		expect(rowNames(container)).toEqual(['FIRST', 'SECOND']);
-		expect(cellsOf(rowOf(container, 'FIRST'))).toEqual([
-			'FIRST',
-			'first',
-			TEXTS.settings.fieldTypes.boolean,
-			TEXTS.settings.fieldVisibility.edit,
-			F.required_badge,
-		]);
-		expect(cellsOf(rowOf(container, 'SECOND'))[3]).toBe(TEXTS.settings.fieldVisibility.staff);
-		expect(cellsOf(rowOf(container, 'SECOND'))[4]).toBe('');
+		expect(factsOf(rowOf(container, 'FIRST'))).toEqual({
+			meta: `${TEXTS.settings.fieldTypes.boolean} · ${TEXTS.settings.fieldVisibility.edit}`,
+			value: 'first',
+			status: F.required_badge,
+		});
+		expect(factsOf(rowOf(container, 'SECOND'))).toEqual({
+			meta: `${TEXTS.settings.fieldTypes.boolean} · ${TEXTS.settings.fieldVisibility.staff}`,
+			value: 'second',
+			status: '',
+		});
 	});
 
-	it("says there are no fields yet, and an unconnected database's way out", async () => {
+	it("says there are no fields yet with the one Add action, and an unconnected database's way out", async () => {
 		const { container } = await open([]);
 		await settle();
 		expect(container.textContent).toContain(F.none);
+		expect(container.querySelectorAll('button')).toHaveLength(1);
+		expect(byText(container, F.add, 'button')).toBeDefined();
 		cleanup();
 		vi.stubGlobal(
 			'fetch',
@@ -316,17 +316,19 @@ describe('Settings → Custom fields (A6)', () => {
 		]);
 	});
 
-	it('opens a field in a drawer on a click on its row, saves it by itself and closes', async () => {
-		const { container } = await open([field('first', 'edit', { help: 'Old help' })]);
+	it('opens a field in place under its row on a click, saves it by itself and closes', async () => {
+		const { container } = await open([field('first', 'edit', { help: 'Old help' }), field('second', 'staff')]);
 		await settle();
-		const drawer = await openRow(container, 'FIRST');
-		expect(drawer.textContent).toContain(F.editTitle);
+		const form = await openRow(container, 'FIRST');
+		// the editor sits right under the row it edits
+		expect(rowOf(container, 'FIRST').nextElementSibling).toBe(form);
+		expect(form.getAttribute('aria-label')).toBe(F.editTitle);
 		// the key of a saved field cannot change
-		expect(byLabel(drawer, F.key).disabled).toBe(true);
-		expect(byLabel(drawer, F.key).value).toBe('first');
-		await type(byLabel(drawer, F.label), '  Company  ');
-		await type(byLabel(drawer, F.help), 'New help');
-		await click(drawerButton(TEXTS.save));
+		expect(byLabel(form, F.key).disabled).toBe(true);
+		expect(byLabel(form, F.key).value).toBe('first');
+		await type(byLabel(form, F.label), '  Company  ');
+		await type(byLabel(form, F.help), 'New help');
+		await click(editorButton(container, TEXTS.save));
 		await settle();
 		const [put] = writes();
 		expect(put?.[0]).toMatch(/\/fields\/first$/);
@@ -338,31 +340,34 @@ describe('Settings → Custom fields (A6)', () => {
 			visibility: 'edit',
 			help: 'New help',
 		});
-		expect(drawerOf()).toBeNull();
+		expect(editorOf(container)).toBeNull();
 	});
 
-	it('Cancel closes the drawer and nothing is sent', async () => {
+	it('Cancel and a second click on the row close the editor and nothing is sent', async () => {
 		const { container } = await open([field('first', 'edit')]);
 		await settle();
 		await openRow(container, 'FIRST');
-		await click(drawerButton(TEXTS.cancel));
+		await click(editorButton(container, TEXTS.cancel));
 		await settle();
-		expect(drawerOf()).toBeNull();
+		expect(editorOf(container)).toBeNull();
 		expect(writes()).toEqual([]);
+		await openRow(container, 'FIRST');
+		await openRow(container, 'FIRST');
+		expect(editorOf(container)).toBeNull();
 	});
 
-	it('adds a new field in the drawer: Save waits for a key and a label, and choices take their options', async () => {
+	it('adds a new field at the top: Save waits for a key and a label, and choices take their options', async () => {
 		const { container } = await open([]);
 		await settle();
 		await click(byText(container, F.add, 'button'));
-		const drawer = drawerOf();
-		expect(drawerButton(TEXTS.save).disabled).toBe(true);
-		await type(byLabel(drawer, F.key), 'size');
-		await type(byLabel(drawer, F.label), 'Size');
-		expect(drawerButton(TEXTS.save).disabled).toBe(false);
-		await type(byLabel(drawer, F.type), 'choice');
-		await type(byLabel(drawer, F.options), 'S, M\nL');
-		await click(drawerButton(TEXTS.save));
+		const form = editorOf(container);
+		expect(editorButton(container, TEXTS.save).disabled).toBe(true);
+		await type(byLabel(form, F.key), 'size');
+		await type(byLabel(form, F.label), 'Size');
+		expect(editorButton(container, TEXTS.save).disabled).toBe(false);
+		await type(byLabel(form, F.type), 'choice');
+		await type(byLabel(form, F.options), 'S, M\nL');
+		await click(editorButton(container, TEXTS.save));
 		await settle();
 		const [put] = writes();
 		expect(put?.[0]).toMatch(/\/fields\/size$/);
@@ -391,19 +396,29 @@ describe('Settings → Consents (A2)', () => {
 		);
 	};
 
-	it('lists the consents as a table with their purpose and a Required pill', async () => {
+	it('lists the consents as rows with their purpose, key, version and a Required dot', async () => {
 		const { container } = await open([consent('terms', 'agreement'), consent('news', 'marketing')]);
-		expect(container.querySelector('[role="status"] table')).not.toBeNull();
+		expect(container.querySelector('[role="status"][aria-busy]')).not.toBeNull();
 		await settle();
 		expect(rowNames(container)).toEqual(['TERMS', 'NEWS']);
-		expect(cellsOf(rowOf(container, 'TERMS'))).toEqual([
-			'TERMS',
-			'terms',
-			'1',
-			TEXTS.settings.consentPurposes.agreement,
-			C.required_badge,
-		]);
-		expect(cellsOf(rowOf(container, 'NEWS'))).toEqual(['NEWS', 'news', '1', TEXTS.settings.consentPurposes.marketing, '']);
+		expect(factsOf(rowOf(container, 'TERMS'))).toEqual({
+			meta: `${TEXTS.settings.consentPurposes.agreement} · terms`,
+			value: `${C.columns.version} 1`,
+			status: C.required_badge,
+		});
+		expect(factsOf(rowOf(container, 'NEWS'))).toEqual({
+			meta: `${TEXTS.settings.consentPurposes.marketing} · news`,
+			value: `${C.columns.version} 1`,
+			status: '',
+		});
+	});
+
+	it('says there are no consents yet with the one Add action', async () => {
+		const { container } = await open([]);
+		await settle();
+		expect(container.textContent).toContain(C.none);
+		expect(container.querySelectorAll('button')).toHaveLength(1);
+		expect(byText(container, C.add, 'button')).toBeDefined();
 	});
 
 	it("moves a consent in the row's menu and saves the new order", async () => {
@@ -426,18 +441,18 @@ describe('Settings → Consents (A2)', () => {
 		expect(call?.[0]).toMatch(/\/consents\/terms$/);
 	});
 
-	it('opens a consent in a drawer, and a marketing one is never required', async () => {
+	it('opens a consent in place, and a marketing one is never required', async () => {
 		const { container } = await open([consent('terms', 'agreement')]);
 		await settle();
-		const drawer = await openRow(container, 'TERMS');
-		expect(drawer.textContent).toContain(C.editTitle);
-		expect(byLabel(drawer, C.key).disabled).toBe(true);
-		expect(byLabel(drawer, C.required).checked).toBe(true);
-		await type(byLabel(drawer, C.url), 'https://shop.example.com/terms');
-		await type(byLabel(drawer, C.purpose), 'marketing');
+		const form = await openRow(container, 'TERMS');
+		expect(form.getAttribute('aria-label')).toBe(C.editTitle);
+		expect(byLabel(form, C.key).disabled).toBe(true);
+		expect(byLabel(form, C.required).checked).toBe(true);
+		await type(byLabel(form, C.url), 'https://shop.example.com/terms');
+		await type(byLabel(form, C.purpose), 'marketing');
 		// a marketing consent has no Required box, and is saved as not required
-		expect(() => byLabel(drawer, C.required)).toThrow();
-		await click(drawerButton(TEXTS.save));
+		expect(() => byLabel(form, C.required)).toThrow();
+		await click(editorButton(container, TEXTS.save));
 		await settle();
 		const [put] = writes();
 		expect(put?.[0]).toMatch(/\/consents\/terms$/);
@@ -448,21 +463,21 @@ describe('Settings → Consents (A2)', () => {
 			required: false,
 			purpose: 'marketing',
 		});
-		expect(drawerOf()).toBeNull();
+		expect(editorOf(container)).toBeNull();
 	});
 
-	it('Cancel closes the drawer and nothing is sent; a new consent needs a key, words and a version', async () => {
+	it('Cancel closes the editor and nothing is sent; a new consent needs a key, words and a version', async () => {
 		const { container } = await open([consent('terms', 'agreement')]);
 		await settle();
 		await openRow(container, 'TERMS');
-		await click(drawerButton(TEXTS.cancel));
+		await click(editorButton(container, TEXTS.cancel));
 		await settle();
-		expect(drawerOf()).toBeNull();
+		expect(editorOf(container)).toBeNull();
 		expect(writes()).toEqual([]);
 		await click(byText(container, C.add, 'button'));
-		expect(drawerButton(TEXTS.save).disabled).toBe(true);
-		await type(byLabel(drawerOf(), C.key), 'privacy');
-		await type(byLabel(drawerOf(), C.label), 'Privacy policy');
-		expect(drawerButton(TEXTS.save).disabled).toBe(false);
+		expect(editorButton(container, TEXTS.save).disabled).toBe(true);
+		await type(byLabel(editorOf(container), C.key), 'privacy');
+		await type(byLabel(editorOf(container), C.label), 'Privacy policy');
+		expect(editorButton(container, TEXTS.save).disabled).toBe(false);
 	});
 });

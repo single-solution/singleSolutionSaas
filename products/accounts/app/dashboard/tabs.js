@@ -7,7 +7,7 @@
  * message templates), which also hold the connections: the social sign-in key forms and the help line of each one.
  * @module
  */
-import { Badge, Button, Card, CodeBlock, DataTable, Section, Stat } from '@ss/ui';
+import { Button, Card, CodeBlock, Row, Section, Stat } from '@ss/ui';
 import { DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
@@ -175,28 +175,19 @@ function AccountsDevelopers(props) {
 					icon: 'mail',
 					content: (
 						<Section title={D.templates} description={D.templatesHelp}>
-							<Card padded={false} className="overflow-hidden">
-								<DataTable
-									caption={D.templates}
-									columns={[
-										{ key: 'key', header: D.templateColumns.key, render: (message) => <code>{message.key}</code> },
-										{
-											key: 'values',
-											header: D.templateColumns.values,
-											wrap: true,
-											render: (message) => (
-												<span className="flex flex-wrap gap-1">
-													{message.values.map((name) => (
-														<Badge key={name} tone="info">{`{${name}}`}</Badge>
-													))}
-												</span>
-											),
-										},
-									]}
-									rows={messages.messages}
-									rowKey={(message) => message.key}
-									rowLabel={(message) => message.key}
-								/>
+							<Card padded={false} bodyClassName="p-2">
+								{messages.messages.map((message) => (
+									<Row
+										key={message.key}
+										lead={{ icon: 'mail', tone: 'primary' }}
+										title={message.key}
+										meta={
+											message.values.length > 0
+												? `${D.templateColumns.values}: ${message.values.map((name) => `{${name}}`).join(', ')}`
+												: ''
+										}
+									/>
+								))}
 							</Card>
 						</Section>
 					),
