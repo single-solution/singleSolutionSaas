@@ -12,13 +12,14 @@
  * `onPrefetch`, so the item's page can load before the click.
  * @module
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { EmptyState, SkeletonBlock } from './display.js';
 import { Icon } from './icons.js';
 import { LIST, STAGGER } from './layout-metrics.js';
 import { Row } from './Row.js';
 import { Spinner } from './Spinner.js';
+import { PickKeepsEditsContext, askLeave } from './unsaved.js';
 
 /** @typedef {Parameters<typeof Row>[0]} RowProps */
 /** @typedef {{ search: string, filters: string, loading: string, more: string, back: string }} ListColumnTexts */
@@ -45,13 +46,15 @@ const typing = (target) =>
 /**
  * @template T
  * @param {{ label: string, items: T[], idOf: (item: T) => string | number, rowOf: (item: T) => Omit<RowProps, 'selected' | 'onSelect'>,
- *   selected?: string | number | null, onSelect?: (id: string) => void, onBack?: () => void,
+ *   selected?: string | number | null, onSelect?: (id: string) => void, onBack?: () => void, guard?: boolean,
  *   search?: { value: string, onChange: (value: string) => void, placeholder?: string },
  *   filters?: { value: string, onChange: (id: string) => void, options: { id: string, label: string, count?: number }[] },
  *   loading?: boolean, empty?: Parameters<typeof EmptyState>[0], hasMore?: boolean, onMore?: () => void,
  *   onPrefetch?: (item: T) => void, texts?: Partial<ListColumnTexts>, className?: string }} props `label`: the name of
  *   the list for screen readers; `rowOf`: the `Row` props of an item (the column sets `selected` and `onSelect`);
  *   `selected`: the id of the picked item; `onBack`: read by a `Page` on phones (its Back button, named by `texts.back`, shows the list again);
+ *   `guard`: picking another row asks "You have unsaved changes" first while a save bar has changes (on by default, off
+ *   when the `Page` around the list keeps its views mounted, so no edit is lost by picking another);
  *   `search`: a box above the rows (`/` focuses it); `filters`: chips under it, the one whose `id` is `value` on; `empty`:
  *   what to say when there are no items; `hasMore` + `onMore`: the list has more rows to load (called once each time the
  *   end comes into view)
@@ -63,6 +66,7 @@ export function ListColumn({
 	rowOf,
 	selected,
 	onSelect,
+	guard,
 	search,
 	filters,
 	loading = false,
@@ -74,6 +78,8 @@ export function ListColumn({
 	className,
 }) {
 	const words = { ...LIST_COLUMN_TEXTS, ...texts };
+	const keepsEdits = useContext(PickKeepsEditsContext);
+	const asks = guard ?? !keepsEdits;
 	const scroller = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const list = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const slide = useRef(/** @type {HTMLSpanElement | null} */ (null));
@@ -248,7 +254,7 @@ export function ListColumn({
 									tabIndex={on || (picked === null && index === 0) ? 0 : -1}
 									data-ss-id={id}
 									selected={on}
-									onSelect={() => onSelect?.(id)}
+									onSelect={() => (asks && !on ? askLeave(() => onSelect?.(id)) : onSelect?.(id))}
 									className={cx(look.className, entering && 'ss-stagger')}
 									{...(entering ? { style: /** @type {import('react').CSSProperties} */ ({ '--ss-i': index }) } : {})}
 									{...(onPrefetch

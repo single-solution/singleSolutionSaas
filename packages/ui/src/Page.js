@@ -41,6 +41,7 @@ import { Crumbs, Fact, HeaderActions, InfoButton, PAGE_TEXTS, ShellMenuButton, u
 import { PageSectionList, usePageSections } from './page-sections.js';
 import { useShell } from './shell-state.js';
 import { PageSkeleton } from './skeletons.js';
+import { PickKeepsEditsContext, askLeave } from './unsaved.js';
 
 export { PAGE_TEXTS };
 
@@ -105,7 +106,11 @@ export function Page({
 	const picked = list?.props.selected;
 	const hasPick = picked !== null && picked !== undefined;
 	const listOnly = Boolean(list) && narrow && !hasPick;
-	const back = list && narrow && hasPick ? list.props.onBack : undefined;
+	// a body with a key of its own that does not follow the pick stays mounted, so a pick loses no edit
+	const keepsEdits = Boolean(list) && bodyKey !== undefined && bodyKey !== String(picked ?? '');
+	// the Back button moves away from the picked item: with unsaved changes it asks first
+	const onBack = list && narrow && hasPick ? list.props.onBack : undefined;
+	const back = onBack ? (keepsEdits ? onBack : () => askLeave(onBack)) : undefined;
 	if (loading)
 		return (
 			<PageSkeleton
@@ -168,7 +173,9 @@ export function Page({
 				</div>
 			</header>
 			<div className={list ? PAGE.listArea : PAGE.area}>
-				{list && !(narrow && hasPick) ? list : null}
+				{list && !(narrow && hasPick) ? (
+					<PickKeepsEditsContext.Provider value={keepsEdits}>{list}</PickKeepsEditsContext.Provider>
+				) : null}
 				{rail ? <InnerNav {...(link ? { linkAs: link } : {})} {...rail} /> : null}
 				{listOnly ? null : (
 					<section className={PAGE.main}>

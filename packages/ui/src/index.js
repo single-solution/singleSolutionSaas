@@ -83,6 +83,7 @@ export { METRICS } from './layout-metrics.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { PasswordConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
 export { TOAST_TEXTS, ToastOnce, ToastProvider, useToast } from './Toast.js';
+export { UNSAVED_TEXTS, askLeave, hasUnsaved } from './unsaved.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell, ScrollArea, SwitcherSelect, useShell } from './AppShell.js';
 // the frame and its scrolling panes by the names of the design spec (owner 2026-10-17)

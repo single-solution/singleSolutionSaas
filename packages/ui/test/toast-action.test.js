@@ -8,7 +8,7 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-/** @param {Parameters<ReturnType<typeof useToast>['show']>[0]} toast @param {(id: unknown) => void} [seen] */
+/** @param {{ toast: Parameters<ReturnType<typeof useToast>['show']>[0], seen?: (id: unknown) => void }} props */
 const Trigger = ({ toast, seen }) => {
 	const api = useToast();
 	return (
@@ -50,7 +50,9 @@ describe('a toast with an action button', () => {
 			</ToastProvider>,
 		);
 		click(byText(container, 'go', 'button'));
-		const buttons = [...container.querySelectorAll('[aria-live] button')].map((b) => b.getAttribute('aria-label') ?? b.textContent);
+		const buttons = [...container.querySelectorAll('[aria-live] button')].map(
+			(b) => b.getAttribute('aria-label') ?? b.textContent,
+		);
 		expect(buttons).toEqual(['Dismiss notification']);
 	});
 

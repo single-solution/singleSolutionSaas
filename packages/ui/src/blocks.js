@@ -9,7 +9,7 @@
  * Nothing here stretches a card to the height of its neighbor: the grids align their cells to the start ({@link NO_STRETCH}).
  * @module
  */
-import { useCallback, useContext, useEffect, useId, useState } from 'react';
+import { Fragment, useCallback, useContext, useEffect, useId, useState } from 'react';
 import { cx } from './cx.js';
 import { Button } from './Button.js';
 import { Card } from './display.js';
@@ -17,7 +17,10 @@ import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, rowControl } from '.
 import { Icon } from './icons.js';
 import { SAVE_BAR } from './layout-metrics.js';
 import { usePresence } from './motion.js';
+import { Dialog } from './overlay.js';
 import { PageSavesContext } from './page-sections.js';
+import { useToast } from './Toast.js';
+import { UNDO_MS, UNSAVED_TEXTS, answerLeave, dropBar, setBar, useLeaveQuestion } from './unsaved.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -170,6 +173,39 @@ export function SettingRow({ label, description, htmlFor, children, stacked = fa
 }
 
 /**
+ * The question that opens when someone leaves while a save bar has changes (see `unsaved.js`). The first save bar on the
+ * page draws it; the others draw nothing.
+ * @param {{ id: string, words: import('./unsaved.js').UnsavedTexts }} props
+ */
+function LeaveGuard({ id, words }) {
+	const ask = useLeaveQuestion(id);
+	if (!ask) return null;
+	return (
+		<Dialog
+			open={ask.open}
+			size="sm"
+			title={words.title}
+			description={words.body}
+			dismissible={!ask.busy}
+			onClose={() => void answerLeave('stay')}
+			footer={
+				<>
+					<Button variant="ghost" disabled={ask.busy} onClick={() => void answerLeave('discard')}>
+						{words.discard}
+					</Button>
+					<Button variant="secondary" data-autofocus="" disabled={ask.busy} onClick={() => void answerLeave('stay')}>
+						{words.stay}
+					</Button>
+					<Button loading={ask.busy} disabled={!ask.canSave} onClick={() => void answerLeave('save')}>
+						{words.save}
+					</Button>
+				</>
+			}
+		/>
+	);
+}
+
+/**
  * The only save control: a bar that floats at the bottom centre of the page area and offers Save and Discard once
  * something changed (and is not on screen otherwise). It also does the job of a list editor's Save and Cancel
  * buttons: `disabled` keeps Save off for an entry the server would refuse, and a save that returns a promise shows
@@ -177,13 +213,20 @@ export function SettingRow({ label, description, htmlFor, children, stacked = fa
  * on screen so the person can try again. Place it anywhere in the page; it is fixed to the window.
  *
  * Inside a `Page` with `sections` it draws nothing: it tells the page what it has (`show`, the handlers, the words) and
- * the page draws ONE bar for all its sections. That bar shows while any section has changes (with the words of the
- * first), Save runs the `onSave` of each section with changes in the page's order and stops at the first that throws,
- * rejects or returns `false` (its own error stays where the section shows it), Discard runs every one's `onDiscard`,
- * Save is off while any section's Save is `disabled`, and the bar is busy while any section is `saving`.
- * @param {{ show: boolean, onSave: () => unknown, onDiscard: () => void, saving?: boolean, disabled?: boolean,
- *   message?: ReactNode, saveLabel?: string, discardLabel?: string, className?: string }} props `saving`: the caller
- *   knows the save is running; `disabled`: Save is off although something changed
+ * the page draws ONE bar for all its sections. That bar shows while any section has changes and names them (`changes`,
+ * each name a button that jumps to its section), Save runs the `onSave` of each section with changes in the page's
+ * order and stops at the first that throws, rejects or returns `false` (its own error stays where the section shows
+ * it), Discard runs every one's `onDiscard`, Save is off while any section's Save is `disabled`, and the bar is busy
+ * while any section is `saving`.
+ *
+ * While a bar that draws itself has changes the page is guarded (see `unsaved.js`): the browser warns before the tab
+ * closes, and a move that leaves the screen asks Save, Discard or Stay first. Discard takes effect at once; when
+ * `onDiscard` returns a function that puts the edits back, a toast "Changes discarded" offers it as Undo for 8 seconds.
+ * @param {{ show: boolean, onSave: () => unknown, onDiscard: () => unknown, saving?: boolean, disabled?: boolean,
+ *   message?: ReactNode, saveLabel?: string, discardLabel?: string, changes?: Array<{ id: string, label: string }>,
+ *   onJump?: (id: string) => void, texts?: Partial<import('./unsaved.js').UnsavedTexts>, className?: string }} props
+ *   `saving`: the caller knows the save is running; `disabled`: Save is off although something changed; `changes`: the
+ *   sections that have changes (named in place of `message`); `onJump`: what a click on a section's name does
  */
 export function SaveBar({
 	show,
@@ -191,13 +234,18 @@ export function SaveBar({
 	onDiscard,
 	saving = false,
 	disabled = false,
-	message = 'You have unsaved changes',
+	message,
 	saveLabel = 'Save changes',
 	discardLabel = 'Discard',
+	changes,
+	onJump,
+	texts,
 	className,
 }) {
 	const page = useContext(PageSavesContext);
 	const id = useId();
+	const toast = useToast();
+	const words = { ...UNSAVED_TEXTS, ...texts };
 	const { mounted, closing, ref } = usePresence(show && !page);
 	const [running, setRunning] = useState(false);
 	const busy = saving || running;
@@ -209,34 +257,81 @@ export function SaveBar({
 			/** @type {Promise<unknown>} */ (result).then(done, done);
 		}
 	};
-	// a page with sections keeps the latest of what this bar has (its handlers are read when the page saves)
+	// Discard takes effect at once; a way back, when the caller gave one, is offered for a few seconds
+	const discard = () => {
+		const undo = onDiscard();
+		if (typeof undo === 'function') {
+			toast.show({
+				title: words.discarded,
+				tone: 'info',
+				durationMs: UNDO_MS,
+				action: { label: words.undo, onClick: /** @type {() => void} */ (undo) },
+			});
+		}
+	};
+	// a page with sections keeps the latest of what this bar has (its handlers are read when the page saves); a bar
+	// that draws itself tells the leave guard
 	useEffect(() => {
-		page?.put(id, { show, onSave, onDiscard, saving, disabled, message, saveLabel, discardLabel });
+		if (page) page.put(id, { show, onSave, onDiscard, saving, disabled, message, saveLabel, discardLabel });
+		else setBar(id, { show, onSave, onDiscard, disabled });
 	});
-	useEffect(() => () => page?.drop(id), [page, id]);
-	if (page || !mounted) return null;
+	useEffect(
+		() => () => {
+			page?.drop(id);
+			dropBar(id);
+		},
+		[page, id],
+	);
+	if (page) return null;
+	const named = changes && changes.length > 0 ? changes : null;
 	return (
-		<div
-			ref={ref}
-			role="region"
-			aria-label={saveLabel}
-			data-state={closing ? 'closed' : 'open'}
-			className={cx(SAVE_BAR.strip, className)}>
-			<div className={cx(SAVE_BAR.bar, closing ? 'animate-ss-sheet-out' : 'animate-ss-sheet')}>
-				<p role="status" className="flex items-center gap-2 text-sm font-medium text-fg">
-					<span aria-hidden="true" className="size-2 rounded-full bg-attention-solid" />
-					{message}
-				</p>
-				<div className="ml-auto flex items-center gap-2">
-					<Button variant="ghost" size="sm" onClick={onDiscard} disabled={busy || closing}>
-						{discardLabel}
-					</Button>
-					<Button size="sm" loading={busy} disabled={disabled || closing} onClick={save}>
-						{saveLabel}
-					</Button>
+		<>
+			{mounted ? (
+				<div
+					ref={ref}
+					role="region"
+					aria-label={saveLabel}
+					data-state={closing ? 'closed' : 'open'}
+					className={cx(SAVE_BAR.strip, className)}>
+					<div className={cx(SAVE_BAR.bar, closing ? 'animate-ss-sheet-out' : 'animate-ss-sheet')}>
+						<p role="status" className="flex items-center gap-2 text-sm font-medium text-fg">
+							<span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-attention-solid" />
+							{named ? (
+								<span>
+									{words.changedIn}{' '}
+									{named.map((one, index) => (
+										<Fragment key={one.id}>
+											{index > 0 ? ', ' : null}
+											{onJump ? (
+												<button
+													type="button"
+													onClick={() => onJump(one.id)}
+													className="ss-motion rounded underline decoration-dotted underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-focus">
+													{one.label}
+												</button>
+											) : (
+												one.label
+											)}
+										</Fragment>
+									))}
+								</span>
+							) : (
+								(message ?? words.title)
+							)}
+						</p>
+						<div className="ml-auto flex items-center gap-2">
+							<Button variant="ghost" size="sm" onClick={discard} disabled={busy || closing}>
+								{discardLabel}
+							</Button>
+							<Button size="sm" loading={busy} disabled={disabled || closing} onClick={save}>
+								{saveLabel}
+							</Button>
+						</div>
+					</div>
 				</div>
-			</div>
-		</div>
+			) : null}
+			<LeaveGuard id={id} words={words} />
+		</>
 	);
 }
 
