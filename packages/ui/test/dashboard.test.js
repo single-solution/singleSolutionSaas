@@ -28,6 +28,7 @@ import {
 	withDependents,
 } from '../src/dashboard.js';
 import { DASHBOARD_TEXTS, dashboardTexts, formatCredits, useDisplayLocale } from '../src/index.js';
+import { describeProblem } from '../src/problems.js';
 import { act, allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 /** @typedef {import('../src/dashboard.js').TabProps} TabProps */
@@ -169,7 +170,11 @@ describe('dashboard API', () => {
 		expect(sent[2][1].headers).toEqual({ 'content-type': 'application/json' });
 		expect(sent[0][1].headers).toBeUndefined();
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
-		expect(await call('GET', '/a')).toEqual({ ok: false, problem: { status: 503 } });
+		const offline = await call('GET', '/a');
+		expect(offline.ok).toBe(false);
+		if (!offline.ok) {
+			expect(describeProblem(offline.problem)).toBe('We could not reach the server. Check your connection.');
+		}
 		// a body that is not JSON
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new Error('x')) }));
 		expect(await call('GET', '/a')).toEqual({ ok: false, problem: { status: 502 } });
@@ -641,6 +646,31 @@ describe('standard tabs', () => {
 		expect(document.body.textContent).toContain('No credits');
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
 		expect(switchesOf(container)[0]?.getAttribute('aria-checked')).toBe('false');
+	});
+
+	it('Settings: if connections fail to load, features needing a connection show "Could not check the connection" with Retry', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}`;
+		let connectionAttempts = 0;
+		serve({
+			[`GET ${base}/settings`]: ok(settingsOf(['notes', 'inbox'])),
+			[`GET ${base}/features`]: ok({ features: FEATURES }),
+			[`GET ${base}/connections`]: () => {
+				connectionAttempts += 1;
+				if (connectionAttempts === 1) return { status: 500, body: { status: 500, title: 'Down' } };
+				return ok(LINKS);
+			},
+		});
+		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} links={LINKS.connections} />));
+		await settle();
+		expect(rowOf(container, 'inbox').textContent).toContain('Could not check the connection');
+		openSection(container, 'inbox');
+		expect(container.querySelector('#section-inbox')?.textContent).toContain('Could not check the connection');
+		const retryButton = byText(container.querySelector('#section-inbox') ?? container, 'Retry', 'button');
+		expect(retryButton).not.toBeNull();
+		click(retryButton);
+		await settle();
+		expect(container.querySelector('#section-inbox')?.textContent).toContain('Not working: connect Database');
 	});
 
 	it('Settings: a merchant sees the switches locked, which features are on, and is told to ask support', async () => {
@@ -1547,6 +1577,7 @@ describe('ProductDashboard', () => {
 		await settle();
 		expect(window.location.search).toBe('?websiteId=p1&view=overview');
 		expect(document.body.textContent).toContain('overview of p1 on bright.example.com');
+		expect(document.querySelector('header nav[aria-label="Breadcrumb"]')?.textContent).toContain('bright.example.com');
 		expect(document.body.textContent).not.toContain('Admin view');
 		await act(async () => button('open settings').click());
 		await settle();
@@ -1629,7 +1660,10 @@ describe('ProductDashboard', () => {
 		type(picker, 'p2');
 		await settle();
 		expect(window.location.search).toBe('?websiteId=p2&view=overview');
-		expect(document.body.textContent).toContain('Viewing as admin · Other / other.example.com');
+		expect(document.body.textContent).toContain('Editing as admin: changes go live on other.example.com');
+		const adminNote = document.querySelector('[data-ss-part="sidebar-bottom"] p');
+		expect(adminNote?.className).toContain('text-warning');
+		expect(adminNote?.className).toContain('bg-warning-soft');
 		expect(document.body.textContent).toContain('tab for p2');
 		// from a website tab, the same tab of the other website
 		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][4]));

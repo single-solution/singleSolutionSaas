@@ -17,7 +17,7 @@
  * pane returns to its top when the page changes (`scrollKey`).
  * @module
  */
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, cloneElement, isValidElement, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { Avatar, DOTS, IconBadge, TINTS } from './display.js';
 import { Icon } from './icons.js';
@@ -250,16 +250,56 @@ function Brand({ name, tagline, product, compact = false, markOnly = false }) {
  * @param {ReactNode | ((state: { rail: boolean }) => ReactNode)} slot
  * @param {boolean} rail
  */
-const slotOf = (slot, rail) => (typeof slot === 'function' ? slot({ rail }) : slot);
+const slotOf = (slot, rail) => {
+	if (typeof slot === 'function') return slot({ rail });
+	if (isValidElement(slot) && rail && typeof slot.type !== 'string')
+		return cloneElement(/** @type {import('react').ReactElement<{ compact?: boolean }>} */ (slot), {
+			compact: true,
+		});
+	return slot;
+};
 
 /**
  * The website / merchant switcher of the sidebar: a select with a small avatar of the picked item and a chevron
- * (a native select underneath, so keyboards and screen readers work everywhere).
+ * (a native select underneath, so keyboards and screen readers work everywhere). In the folded rail, `compact` shows
+ * the avatar with tooltip and the native select over it.
  * @param {{ label: string, value: string, options: Array<{ value: string, label: string }>, onChange: (value: string) => void,
- *   placeholder?: string, disabled?: boolean, className?: string }} props
+ *   placeholder?: string, disabled?: boolean, compact?: boolean, className?: string }} props
  */
-export function SwitcherSelect({ label, value, options, onChange, placeholder, disabled = false, className }) {
+export function SwitcherSelect({ label, value, options, onChange, placeholder, disabled = false, compact = false, className }) {
 	const picked = options.find((option) => option.value === value);
+	const title = picked?.label || placeholder || label;
+	if (compact) {
+		return (
+			<div
+				title={title}
+				className={cx(
+					'ss-motion relative flex size-10 min-w-0 items-center justify-center rounded-control border border-line-soft bg-surface hover:bg-surface-2',
+					'hover:border-line-strong has-[select:focus-visible]:border-primary has-[select:focus-visible]:ring-[3px] has-[select:focus-visible]:ring-primary/20',
+					disabled && 'opacity-60',
+					className,
+				)}>
+				<Avatar name={title} size="sm" className="rounded-md" />
+				<select
+					aria-label={label}
+					value={value}
+					disabled={disabled}
+					onChange={(event) => onChange(event.currentTarget.value)}
+					className="absolute inset-0 size-full cursor-pointer appearance-none bg-none opacity-0 disabled:cursor-not-allowed">
+					{placeholder ? (
+						<option value="" disabled>
+							{placeholder}
+						</option>
+					) : null}
+					{options.map((option) => (
+						<option key={option.value} value={option.value}>
+							{option.label}
+						</option>
+					))}
+				</select>
+			</div>
+		);
+	}
 	return (
 		<div
 			className={cx(
@@ -470,7 +510,9 @@ export function AppShell({
 				<div
 					data-ss-part="sidebar-bottom"
 					className={cx('shrink-0 space-y-1 border-t border-line-soft p-3', narrow && 'flex flex-col items-center')}>
-					{switcher && !narrow ? <div className="pb-2">{slotOf(switcher, narrow)}</div> : null}
+					{switcher ? (
+						<div className={cx('pb-2', narrow && 'flex w-full justify-center')}>{slotOf(switcher, narrow)}</div>
+					) : null}
 					{sidebarFooter ? <div className="w-full">{slotOf(sidebarFooter, narrow)}</div> : null}
 					{account ? (
 						<div className={cx('w-full', narrow && 'flex justify-center')}>

@@ -6,6 +6,7 @@
  */
 import { startTransition, useCallback, useEffect, useState } from 'react';
 import { useNavigationProgress } from './motion.js';
+import { networkProblem } from './problems.js';
 
 /**
  * @typedef {{ ok: true, data: any } | { ok: false, problem: any, retry?: () => void }} Answer a failed answer from
@@ -13,14 +14,17 @@ import { useNavigationProgress } from './motion.js';
  */
 
 /**
- * One call to the dashboard API. A product that does not answer gives a 503 problem, which `describeProblem` words
- * in a friendly way.
+ * One call to the dashboard API. A lost connection returns the network problem, which `describeProblem` words
+ * as "We could not reach the server. Check your connection."
  * @param {'GET' | 'PUT' | 'POST' | 'DELETE'} method
  * @param {string} path
  * @param {unknown} [body]
  * @returns {Promise<Answer>}
  */
 export const call = async (method, path, body) => {
+	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+		return { ok: false, problem: networkProblem(new Error('offline')) };
+	}
 	try {
 		const response = await fetch(path, {
 			method,
@@ -29,8 +33,8 @@ export const call = async (method, path, body) => {
 		});
 		const data = response.status === 204 ? null : await response.json().catch(() => null);
 		return response.ok ? { ok: true, data } : { ok: false, problem: data ?? { status: response.status } };
-	} catch {
-		return { ok: false, problem: { status: 503 } };
+	} catch (err) {
+		return { ok: false, problem: networkProblem(err) };
 	}
 };
 

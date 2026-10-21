@@ -43,7 +43,7 @@ import { LocalTime, useDisplayLocale } from './time.js';
  * the row with those words; without it the label itself is the link or button. `optional` steps are listed but not
  * counted in the progress.
  * @typedef {{ key: string, label: ReactNode, done: boolean, why?: ReactNode, detail?: ReactNode, optional?: boolean,
- *   actionLabel?: string, href?: string, onSelect?: () => void }} SetupStep
+ *   actionLabel?: string, href?: string, onSelect?: () => void, extraAction?: ReactNode }} SetupStep
  */
 
 /**
@@ -187,17 +187,20 @@ function SetupRow({ step, labels, LinkTag }) {
 						) : null}
 					</div>
 				</div>
-				{button ? (
+				{button || step.extraAction ? (
 					<div className="ml-auto flex shrink-0 items-center gap-1.5">
-						{step.href ? (
-							<ButtonLink as={LinkTag} href={step.href} size="sm" variant={button.variant}>
-								{button.text}
-							</ButtonLink>
-						) : (
-							<Button size="sm" variant={button.variant} onClick={step.onSelect}>
-								{button.text}
-							</Button>
-						)}
+						{button ? (
+							step.href ? (
+								<ButtonLink as={LinkTag} href={step.href} size="sm" variant={button.variant}>
+									{button.text}
+								</ButtonLink>
+							) : (
+								<Button size="sm" variant={button.variant} onClick={step.onSelect}>
+									{button.text}
+								</Button>
+							)
+						) : null}
+						{step.extraAction}
 					</div>
 				) : null}
 			</div>
@@ -495,91 +498,24 @@ export function ProductOverview({
 			effect: fillText(merchant ? N.grace.merchant : N.grace.admin, { contact }),
 			action: credits,
 		});
-	if (on.length === 0)
-		first.push({
-			key: 'features',
-			tone: 'warning',
-			title: N.noFeatures.title,
-			effect: fillText(N.noFeatures.effect, { domain }),
-			action: go(N.noFeatures.action, 'settings'),
-		});
 	for (const connection of data.checklist.connections) {
-		if (connection.status === 'connected') continue;
-		const failed = connection.status === 'test_failed';
-		const words = failed ? N.testFailed : N.notConnected;
-		const effect = fillText(words.effect, { features: featureList(connection.neededBy) });
+		if (connection.status !== 'test_failed') continue;
+		const effect = fillText(N.testFailed.effect, { features: featureList(connection.neededBy) });
 		first.push({
 			key: `connection-${connection.name}`,
-			tone: failed ? 'danger' : 'warning',
-			title: fillText(words.title, { label: connection.label }),
-			effect: failed && connection.message ? `${connection.message} ${effect}` : effect,
+			tone: 'danger',
+			title: fillText(N.testFailed.title, { label: connection.label }),
+			effect: connection.message ? `${connection.message} ${effect}` : effect,
 			// the database, the storage and the links belong to the Portal: it is set (or fixed) there
 			action: connection.managed ? (
 				<ButtonLink size="sm" href={settingsAt(connection.kind === 'link' ? 'links' : 'connections')}>
 					{N.website.action}
 				</ButtonLink>
 			) : (
-				go(words.action, 'developers', `connection-${connection.name}`)
+				go(N.testFailed.action, 'developers', `connection-${connection.name}`)
 			),
 		});
 	}
-	/** @type {Need[]} */
-	const last = [];
-	if (widget && !widget.installed)
-		last.push({
-			key: 'widget',
-			tone: 'warning',
-			title: fillText(N.widget.title, { domain }),
-			effect: N.widget.effect,
-			action: go(N.widget.action, 'developers'),
-		});
-	// nothing saved in the Portal yet (version 0), or saved but lacking what this product needs
-	if (unset)
-		last.push({
-			key: 'website-settings',
-			tone: 'warning',
-			title: N.website.title,
-			effect: fillText(N.website.effect, { domain }),
-			action: (
-				<span className="flex flex-wrap gap-2">
-					<ButtonLink size="sm" href={settingsAt()}>
-						{N.website.action}
-					</ButtonLink>
-					<Button size="sm" variant="secondary" onClick={recheck}>
-						{N.website.recheck}
-					</Button>
-				</span>
-			),
-		});
-	else
-		for (const [section, entry] of bySection) {
-			if (entry.missing.length === 0) continue;
-			const fields = entry.missing.join(', ');
-			last.push({
-				key: `website-${section}`,
-				tone: 'warning',
-				title: fillText(N.website.missingTitle, { fields }),
-				effect: fillText(N.website.missingEffect, { product, fields, section: sectionName(section) }),
-				action: (
-					<span className="flex flex-wrap gap-2">
-						<ButtonLink size="sm" href={settingsAt(section)}>
-							{N.website.action}
-						</ButtonLink>
-						<Button size="sm" variant="secondary" onClick={recheck}>
-							{N.website.recheck}
-						</Button>
-					</span>
-				),
-			});
-		}
-	const items = urgentFirst([...first, ...needs, ...last]);
-	const top = items[0];
-	const sentence = !top
-		? fillText(T.allSet, { domain })
-		: fillText(items.length === 1 ? T.only : items.length === 2 ? T.oneMore : T.more, {
-				first: top.title,
-				count: items.length - 1,
-			});
 
 	/** @type {SetupStep[]} */
 	const checklist = [
@@ -634,7 +570,16 @@ export function ProductOverview({
 						why: S.websiteWhy,
 						done: !unset,
 						href: settingsAt(),
-						...(unset ? { actionLabel: S.websiteAction } : {}),
+						...(unset
+							? {
+									actionLabel: S.websiteAction,
+									extraAction: (
+										<Button size="sm" variant="secondary" onClick={recheck}>
+											{N.website.recheck}
+										</Button>
+									),
+								}
+							: {}),
 					},
 				]
 			: [...bySection].map(([section, entry]) => ({
@@ -644,10 +589,46 @@ export function ProductOverview({
 					done: entry.missing.length === 0,
 					href: settingsAt(section),
 					actionLabel: S.websiteAction,
+					...(entry.missing.length > 0
+						? {
+								extraAction: (
+									<Button size="sm" variant="secondary" onClick={recheck}>
+										{N.website.recheck}
+									</Button>
+								),
+							}
+						: {}),
 				}))),
 	];
+
 	const counted = checklist.filter((step) => !step.optional);
 	const done = counted.filter((step) => step.done).length;
+	const remaining = counted.length - done;
+
+	/** @type {Need[]} */
+	const last = [];
+	if (remaining > 0) {
+		last.push({
+			key: 'setup-remaining',
+			tone: 'warning',
+			title: fillText(remaining === 1 ? N.setupRemainingOne : N.setupRemaining, { count: remaining }),
+			effect: N.setupRemainingEffect,
+			action: (
+				<ButtonLink size="sm" variant="secondary" href="#setup-checklist">
+					{N.setupRemainingAction}
+				</ButtonLink>
+			),
+		});
+	}
+
+	const items = urgentFirst([...first, ...needs, ...last]);
+	const top = items[0];
+	const sentence = !top
+		? fillText(T.allSet, { domain })
+		: fillText(items.length === 1 ? T.only : items.length === 2 ? T.oneMore : T.more, {
+				first: top.title,
+				count: items.length - 1,
+			});
 
 	return (
 		<Page
@@ -688,6 +669,7 @@ export function ProductOverview({
 					</div>
 					<div className="min-w-0 space-y-5">
 						<SetupChecklist
+							id="setup-checklist"
 							title={S.title}
 							progress={fillText(S.progress, { done, total: counted.length })}
 							steps={checklist}

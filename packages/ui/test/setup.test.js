@@ -289,3 +289,81 @@ describe('a setting only the merchant can settle', () => {
 		expect(await run('website')).toBe('currency:true');
 	});
 });
+
+describe('setup steps while settings or lists load or fail', () => {
+	const REQS = [
+		{
+			key: 'currency',
+			when: ['catalog'],
+			setting: 'catalog.currency',
+			label: 'Currency',
+			why: 'Set your currency.',
+			action: 'Set',
+		},
+	];
+
+	it('shows "Checking..." while loading, and does not count as done', () => {
+		/** @param {{ overview: any, websiteId: string, open: () => void, settings: any }} props */
+		const StepsProbe = (props) => {
+			const steps = useSetupSteps(props, REQS);
+			return (
+				<div>
+					{steps.map((step) => (
+						<div key={step.key} data-key={step.key} data-done={String(step.done)}>
+							<span data-why="">{step.why}</span>
+						</div>
+					))}
+				</div>
+			);
+		};
+		const { container } = render(
+			<DashboardProvider manifest={MANIFEST} texts={{ title: 'Shop' }}>
+				<StepsProbe
+					overview={{ ok: true, data: { featuresOn: ['catalog'], checklist: { connections: [] } } }}
+					websiteId="w1"
+					open={() => undefined}
+					settings={null}
+				/>
+			</DashboardProvider>,
+		);
+		const step = container.querySelector('[data-key="currency"]');
+		expect(step).not.toBeNull();
+		expect(step?.getAttribute('data-done')).toBe('false');
+		expect(step?.querySelector('[data-why]')?.textContent).toMatch(/Checking/);
+	});
+
+	it('shows "Could not check" with Retry on failure, and does not count as done', () => {
+		const retry = vi.fn();
+		/** @param {{ overview: any, websiteId: string, open: () => void, settings: any }} props */
+		const StepsProbe = (props) => {
+			const steps = useSetupSteps(props, REQS);
+			return (
+				<div>
+					{steps.map((step) => (
+						<div key={step.key} data-key={step.key} data-done={String(step.done)}>
+							<span data-why="">{step.why}</span>
+							<button type="button" onClick={step.onSelect}>
+								{step.actionLabel}
+							</button>
+						</div>
+					))}
+				</div>
+			);
+		};
+		const { container } = render(
+			<DashboardProvider manifest={MANIFEST} texts={{ title: 'Shop' }}>
+				<StepsProbe
+					overview={{ ok: true, data: { featuresOn: ['catalog'], checklist: { connections: [] } } }}
+					websiteId="w1"
+					open={() => undefined}
+					settings={{ ok: false, problem: { status: 500 }, retry }}
+				/>
+			</DashboardProvider>,
+		);
+		const step = container.querySelector('[data-key="currency"]');
+		expect(step).not.toBeNull();
+		expect(step?.getAttribute('data-done')).toBe('false');
+		expect(step?.querySelector('[data-why]')?.textContent).toMatch(/Could not check/);
+		expect(step?.querySelector('button')?.textContent).toBe('Retry');
+	});
+});

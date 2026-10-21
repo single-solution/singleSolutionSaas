@@ -864,8 +864,8 @@ describe('AppShell frame', () => {
 		expect(container.querySelector('header input[aria-label="Search"]')).not.toBeNull();
 		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Collapse sidebar"]')));
 		expect(aside.hasAttribute('data-rail')).toBe(true);
-		// the switcher is not drawn in the rail; the footer is told, links keep their name as tooltip and text
-		expect(aside.textContent).not.toContain('switcher');
+		// the switcher and footer are told of the rail, links keep their name as tooltip and text
+		expect(aside.textContent).toContain('switcher:rail');
 		expect(aside.textContent).toContain('footer:rail');
 		const link = /** @type {HTMLElement} */ (aside.querySelector('nav a[href="/websites"]'));
 		expect(link.getAttribute('title')).toBe('Websites');

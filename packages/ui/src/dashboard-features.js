@@ -89,13 +89,28 @@ export function useFeatureSwitches({ base, catalog, warnings, reload }) {
 /**
  * How Settings draws each feature of a website: its row (icon, switch, status, price and changes, or the warning) and
  * its page (what a feature that is off is, and how to switch it on; a notice per connection that does not work).
- * @param {{ catalog: Feature[], links: Connection[], who: Who, dash: Dashboard, locale: string,
+ * @param {{ catalog: Feature[], links: Connection[], connectionsFailed?: boolean, connectionsRetry?: () => void,
+ *   who: Who, dash: Dashboard, locale: string,
  *   ask: (feature: Feature, checked: boolean) => void, support: { channels: import('./format.js').SupportChannel[] },
  *   portal: string, merchantId?: string | null, websiteId: string | null,
  *   open?: (tab: string, section?: string) => void }} options
  * @returns {(settings: FeatureSettings) => FeatureLook}
  */
-export function featureLooks({ catalog, links, who, dash, locale, ask, support, portal, merchantId, websiteId, open }) {
+export function featureLooks({
+	catalog,
+	links,
+	connectionsFailed = false,
+	connectionsRetry,
+	who,
+	dash,
+	locale,
+	ask,
+	support,
+	portal,
+	merchantId,
+	websiteId,
+	open,
+}) {
 	const { texts, namesOf } = dash;
 	const F = texts.features;
 	const admin = who.kind === 'admin';
@@ -107,9 +122,14 @@ export function featureLooks({ catalog, links, who, dash, locale, ask, support, 
 		const on = Boolean(feature.on);
 		const missing = feature.dependsOn.filter((key) => !onNow.includes(key));
 		const blocked = !on && missing.length > 0;
-		const broken = on ? links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected') : [];
+		const neededLinks = links.filter((link) => link.neededBy?.includes(feature.key));
+		const broken = on ? neededLinks.filter((link) => link.status !== 'connected') : [];
+		const failed =
+			on && neededLinks.length > 0 && (connectionsFailed || neededLinks.some((link) => link.status === 'could_not_check'));
 		const changed = on ? Object.values(settings.values).filter((entry) => entry.source === 'website').length : 0;
-		const problem = broken.map((link) => fill(F.notWorking, { connection: link.label })).join(' · ');
+		const problem = failed
+			? (F.couldNotCheck ?? 'Could not check the connection')
+			: broken.map((link) => fill(F.notWorking, { connection: link.label })).join(' · ');
 		const docs = (
 			<TextLink href={`/docs#feature-${feature.key}`} external>
 				{F.docs}
@@ -134,7 +154,7 @@ export function featureLooks({ catalog, links, who, dash, locale, ask, support, 
 				formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
 				...(changed > 0 ? [fill(texts.settings.changed, { count: changed })] : []),
 			],
-			...(broken.length > 0
+			...(failed || broken.length > 0
 				? { status: /** @type {const} */ ('attention'), statusLabel: F.needsSetup, warning: { text: problem } }
 				: blocked
 					? { warning: { text: fill(F.needsOn, { features: namesOf(missing) }) } }
@@ -153,41 +173,59 @@ export function featureLooks({ catalog, links, who, dash, locale, ask, support, 
 		if (on)
 			return {
 				row,
-				...(broken.length > 0
+				...(failed
 					? {
 							lead: (
-								<>
-									{broken.map((link) => (
-										<NextStep
-											key={link.name}
-											tone="warning"
-											icon="plug"
-											action={
-												link.managed
-													? {
-															label: `${F.connect} ${link.label}`,
-															// the database, the storage and the links are set in the Portal
-															href: websiteSettingsUrl({
-																portal,
-																admin,
-																websiteId,
-																merchantId,
-																section: link.kind === 'link' ? 'links' : 'connections',
-															}),
-														}
-													: {
-															label: `${F.connect} ${link.label}`,
-															// the Connections tab opens on this connection
-															onClick: () => open?.('developers', `connection-${link.name}`),
-														}
-											}>
-											{fill(F.notWorking, { connection: link.label })}
-										</NextStep>
-									))}
-								</>
+								<NextStep
+									tone="warning"
+									icon="alert"
+									action={
+										connectionsRetry
+											? {
+													label: F.retry ?? 'Retry',
+													onClick: connectionsRetry,
+												}
+											: undefined
+									}>
+									{F.couldNotCheck ?? 'Could not check the connection'}
+								</NextStep>
 							),
 						}
-					: {}),
+					: broken.length > 0
+						? {
+								lead: (
+									<>
+										{broken.map((link) => (
+											<NextStep
+												key={link.name}
+												tone="warning"
+												icon="plug"
+												action={
+													link.managed
+														? {
+																label: `${F.connect} ${link.label}`,
+																// the database, the storage and the links are set in the Portal
+																href: websiteSettingsUrl({
+																	portal,
+																	admin,
+																	websiteId,
+																	merchantId,
+																	section: link.kind === 'link' ? 'links' : 'connections',
+																}),
+															}
+														: {
+																label: `${F.connect} ${link.label}`,
+																// the Connections tab opens on this connection
+																onClick: () => open?.('developers', `connection-${link.name}`),
+															}
+												}>
+												{fill(F.notWorking, { connection: link.label })}
+											</NextStep>
+										))}
+									</>
+								),
+							}
+						: {}),
 			};
 		return {
 			row,

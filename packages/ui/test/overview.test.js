@@ -162,21 +162,17 @@ describe('a product dashboard Overview', () => {
 		expect(needTitles(container)).toEqual([
 			'Mail key failed its last test',
 			'SMS key failed its last test',
-			'Merchant database is not connected',
 			'No note form yet',
-			'The widget has not been seen on shop.example.com',
-			'Needs setup: set your website settings in the Portal',
+			'6 setup steps left',
 		]);
-		expect(text).toContain('Mail key failed its last test, and 5 more things need you.');
+		expect(text).toContain('Mail key failed its last test, and 3 more things need you.');
 		expect(text).toContain('Each item says what happens if it waits.');
 		// a failed test says why; only the switched-on features that need it are named
 		expect(text).toContain('The key was refused. Needed by inbox: charged, but not working until it passes.');
-		expect(text).toContain('Needed by notes: charged, but not working until it is connected.');
-		expect(text).toContain(
-			'Your business facts, look, region and Format are set once for all your products. Until then the business name shows as shop.example.com, times use UTC and the widgets use the built-in look.',
-		);
-		// nothing saved in the Portal yet: a link to its Website settings (a merchant's own page), and Check again
-		expect(byText(container, 'Open Website settings', 'a').getAttribute('href')).toBe(
+		// pending setup is summarized with a jump to the checklist
+		expect(byText(container, 'See setup', 'a').getAttribute('href')).toBe('#setup-checklist');
+		// nothing saved in the Portal yet: a link to its Website settings (a merchant's own page) in the checklist
+		expect(byText(container, 'Open in the Portal', 'a').getAttribute('href')).toBe(
 			'https://portal.example.com/websites/web_1/settings',
 		);
 		click(byText(container, 'Fix it', 'button'));
@@ -214,17 +210,12 @@ describe('a product dashboard Overview', () => {
 			},
 		});
 		const { container, text } = show(data, { who: { kind: 'admin', name: 'Sam Lee' } });
-		expect(needTitles(container)).toEqual([
-			'Needs setup: set currency, time zone in the Portal',
-			'Needs setup: set address city in the Portal',
-		]);
-		expect(text).toContain(
-			'Notes needs currency, time zone. Set them once in Website settings › Region and format, for all your products.',
-		);
-		// an Owner or Support admin opens the merchant's page of the website
+		expect(needTitles(container)).toEqual(['2 setup steps left']);
+		expect(text).toContain('2 setup steps left.');
+		// an Owner or Support admin opens the merchant's page of the website from the checklist
 		expect(
 			[...container.querySelectorAll('a')]
-				.filter((a) => a.textContent === 'Open Website settings')
+				.filter((a) => a.textContent === 'Open in the Portal')
 				.map((a) => a.getAttribute('href')),
 		).toEqual([
 			'https://portal.example.com/admin/merchants/mer_1/websites/web_1/settings#region',
@@ -291,11 +282,9 @@ describe('a product dashboard Overview', () => {
 			checklist: { connections: [], widget: null, website: { version: 3, requires: [], missing: [] } },
 		});
 		const { container, text, open } = show(data);
-		expect(text).toContain('No features are on yet.');
-		expect(text).toContain('Nothing is charged, and nothing shows on shop.example.com, until a feature is switched on.');
+		expect(text).toContain('1 setup step left.');
 		expect(text).toContain('None yet');
 		expect(text).toContain('1 of 2 done');
-		click(byText(container, 'See features', 'button'));
 		expect(text).toContain('Nothing shows on shop.example.com, and nothing is charged, until a feature is on.');
 		expect(byText(container, 'Switch on a feature', 'span').closest('li')?.querySelectorAll('button')).toHaveLength(1);
 		click(
@@ -305,7 +294,7 @@ describe('a product dashboard Overview', () => {
 				'button',
 			),
 		);
-		expect(open.mock.calls).toEqual([['settings'], ['settings']]);
+		expect(open.mock.calls).toEqual([['settings']]);
 	});
 
 	it('prints UTC on the server and in the first render', () => {

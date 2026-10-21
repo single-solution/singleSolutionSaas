@@ -178,7 +178,11 @@ function SectionLink({ href, onClick, children, ...rest }) {
 function FrameFooter({ rail, note, links }) {
 	return (
 		<div className="space-y-1">
-			{note && !rail ? <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-label text-muted">{note}</p> : null}
+			{note && !rail ? (
+				<p className="rounded-lg border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-label font-medium text-warning">
+					{note}
+				</p>
+			) : null}
 			{links.map((link) => (
 				<a
 					key={link.href}
@@ -284,8 +288,10 @@ function DashboardPage({ tabs: own, product }) {
 	const Tab = current.component;
 	const needsWebsite = !current.global;
 
-	const picker = (
+	/** @param {{ rail?: boolean }} [props] */
+	const picker = ({ rail = false } = {}) => (
 		<SwitcherSelect
+			compact={rail}
 			label={texts.website}
 			value={site ? site.websiteId : ''}
 			placeholder={texts.pickWebsite}
@@ -299,6 +305,7 @@ function DashboardPage({ tabs: own, product }) {
 
 	/** The frame around the tab: its addresses keep the picked website. */
 	const frame = { hrefOf: (/** @type {string} */ tab) => href(tab), home: href(site || !owner ? 'overview' : 'defaults') };
+	const tabLabel = /** @type {Record<string, string>} */ (texts.tabs)[view] ?? view;
 
 	return (
 		<GoContext.Provider value={go}>
@@ -318,7 +325,8 @@ function DashboardPage({ tabs: own, product }) {
 						},
 					]}
 					switcher={picker}
-					crumbs={[{ label: texts.title }]}
+					crumbs={site ? [{ label: texts.title }, { label: site.domain }] : [{ label: texts.title }]}
+					title={site ? `${site.domain} · ${tabLabel}` : undefined}
 					sidebarFooter={({ rail }) => (
 						<FrameFooter
 							rail={rail}
@@ -337,7 +345,7 @@ function DashboardPage({ tabs: own, product }) {
 							<EmptyState
 								icon="globe"
 								title={texts.pickWebsite}
-								action={<div className="w-64 max-w-full text-left">{picker}</div>}
+								action={<div className="w-64 max-w-full text-left">{picker()}</div>}
 							/>
 						) : (
 							<WebsiteLocale websiteId={site ? site.websiteId : null}>

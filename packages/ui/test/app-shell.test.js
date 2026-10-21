@@ -132,4 +132,12 @@ describe('AppShell bottom of the sidebar', () => {
 		);
 		expect(container.querySelector('aside [data-testid="role"]')).toBeNull();
 	});
+
+	it('keeps the switcher in the icon rail when collapsed', () => {
+		const { container } = frame([{ href: '/a', label: 'A' }], {
+			switcher: <span data-testid="switcher">Acme Store</span>,
+		});
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Collapse sidebar"]')));
+		expect(container.querySelector('aside [data-testid="switcher"]')).not.toBeNull();
+	});
 });

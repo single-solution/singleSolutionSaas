@@ -14,7 +14,7 @@
  * here: they are the Portal's Website settings, and what a product needs of them shows on its Overview.
  * @module
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CodeBlock } from './CodeBlock.js';
 import { Card, EmptyState } from './display.js';
 import { SaveBar, SettingList, SettingsCard } from './blocks.js';
@@ -124,20 +124,40 @@ export function OverviewTab(props) {
  * `sections` after the features (not tied to a feature), a `notice` above a feature's cards and its `warnings` for
  * the features that are on (rules between features, shown in the confirmation of a switch and above the page).
  * @param {TabProps & { sections?: SectionSpec[], notice?: SettingsNotice, extras?: Record<string, FeatureExtra>,
- *   warnings?: (on: string[]) => string[] }} props
+ *   warnings?: (on: string[]) => string[], links?: Connection[] }} props
  */
-export function SettingsTab({ websiteId, merchantId, who, portal, support, open, sections, notice, extras, warnings }) {
+export function SettingsTab({
+	websiteId,
+	merchantId,
+	who,
+	portal,
+	support,
+	open,
+	sections,
+	notice,
+	extras,
+	warnings,
+	links: givenLinks,
+}) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
 	const catalog = useLoad(`${base}/features`);
 	const connections = useLoad(`${base}/connections`);
+	const lastLinks = useRef(givenLinks ?? []);
+	if (connections.answer?.ok) {
+		lastLinks.current = connections.answer.data.connections;
+	}
+	const connectionsFailed = Boolean(connections.answer && !connections.answer.ok);
+	const links = connections.answer?.ok ? connections.answer.data.connections : (givenLinks ?? lastLinks.current);
 	return (
 		<LoadedPage answer={bothOf(settings.answer, catalog.answer)} tab="settings" withNav>
 			{(data) => (
 				<SettingsPanel
 					features={data.settings}
 					catalog={data.catalog}
-					links={connections.answer?.ok ? connections.answer.data.connections : []}
+					links={links}
+					connectionsFailed={connectionsFailed}
+					connectionsRetry={connections.reload}
 					base={base}
 					who={who}
 					support={support}
@@ -178,7 +198,9 @@ const bothOf = (settings, catalog) => {
 };
 
 /**
- * @param {{ features: FeatureSettings[], catalog: Feature[], links: Connection[], base: string, who: Who,
+ * @param {{ features: FeatureSettings[], catalog: Feature[], links: Connection[],
+ *   connectionsFailed?: boolean, connectionsRetry?: () => void,
+ *   base: string, who: Who,
  *   support: TabProps['support'], portal: string, websiteId: string | null, merchantId: string | null,
  *   open?: TabProps['open'], reload: () => void, loaded: Answer | null, sections?: SectionSpec[], notice?: SettingsNotice,
  *   extras?: Record<string, FeatureExtra>, warnings?: (on: string[]) => string[],
@@ -190,6 +212,8 @@ function SettingsPanel({
 	features,
 	catalog,
 	links,
+	connectionsFailed = false,
+	connectionsRetry,
 	base,
 	who,
 	support,
@@ -235,6 +259,8 @@ function SettingsPanel({
 			look: featureLooks({
 				catalog,
 				links,
+				connectionsFailed,
+				connectionsRetry,
 				who,
 				dash,
 				locale,

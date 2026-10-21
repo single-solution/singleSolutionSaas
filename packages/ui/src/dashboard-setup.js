@@ -76,7 +76,7 @@ export const wantsSettings = (overview, requirements) =>
  * caller has the answer already), each list once, and only while a step of theirs applies; a step whose state is not
  * known yet (still loading, or its feature is not shown) is left out, so the checklist never shows a wrong tick.
  * @param {{ overview: Answer | null, websiteId: string | null, open: (tab: string, section?: string) => void,
- *   settings?: Answer | null }} from the overview answer, the website, the tab's `open`, and the settings answer if read
+ *   settings?: (Answer & { retry?: () => void }) | null }} from the overview answer, the website, the tab's `open`, and the settings answer if read
  * @param {ReadonlyArray<SetupRequirement>} requirements a constant list of the product
  * @returns {SetupStep[]}
  */
@@ -98,9 +98,11 @@ export function useSetupSteps({ overview, websiteId, open, settings: given }, re
 	const lists = new Map(
 		names.map((name) => [
 			name,
-			useLoad(live.some((requirement) => requirement.list === name) ? `${base}/lists/${name}` : null).answer,
+			useLoad(live.some((requirement) => requirement.list === name) ? `${base}/lists/${name}` : null),
 		]),
 	);
+
+	const retrySettings = given?.retry ?? own.reload;
 
 	/** @type {SetupStep[]} */
 	const steps = [];
@@ -112,15 +114,37 @@ export function useSetupSteps({ overview, websiteId, open, settings: given }, re
 		/** @type {unknown} */
 		let value;
 		let section = requirement.section;
+		const tab = requirement.tab ?? 'settings';
 		if (requirement.oneOf) {
 			const some = requirement.oneOf.some((key) => on.includes(key));
 			done = some;
 		} else if (requirement.setting) {
 			const [featureKey = '', name = ''] = requirement.setting.split('.');
+			if (settings === null) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Checking...',
+					done: false,
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => (section ? open(tab, section) : open(tab)),
+				});
+				continue;
+			}
+			if (!settings.ok) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Could not check',
+					done: false,
+					actionLabel: 'Retry',
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => retrySettings?.(),
+				});
+				continue;
+			}
 			/** @type {import('./dashboard-parts.js').FeatureSettings | undefined} */
-			const feature = settings?.ok
-				? settings.data.features.find((/** @type {{ key: string }} */ item) => item.key === featureKey)
-				: undefined;
+			const feature = settings.data.features.find((/** @type {{ key: string }} */ item) => item.key === featureKey);
 			const entry = feature?.values?.[name];
 			if (!feature || !entry) continue;
 			value = entry.value;
@@ -137,13 +161,35 @@ export function useSetupSteps({ overview, websiteId, open, settings: given }, re
 						: isFilled(value);
 			section ??= settingSectionOf(feature);
 		} else if (requirement.list) {
-			const answer = lists.get(requirement.list);
-			if (!answer?.ok) continue;
+			const listLoad = lists.get(requirement.list);
+			const answer = listLoad?.answer ?? null;
+			if (answer === null) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Checking...',
+					done: false,
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => (section ? open(tab, section) : open(tab)),
+				});
+				continue;
+			}
+			if (!answer.ok) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Could not check',
+					done: false,
+					actionLabel: 'Retry',
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => listLoad?.reload(),
+				});
+				continue;
+			}
 			value = answer.data?.value;
 			done = requirement.done ? requirement.done(value, context) : isFilled(value);
 		} else continue;
 		const detail = requirement.detail?.(value, context);
-		const tab = requirement.tab ?? 'settings';
 		steps.push({
 			key: requirement.key,
 			label: requirement.label,

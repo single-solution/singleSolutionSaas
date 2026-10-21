@@ -16,7 +16,7 @@
 
 /** Messages for codes whose server detail is too technical (or absent). */
 const FRIENDLY = Object.freeze({
-	network: 'We could not reach the Portal. Check your connection and try again.',
+	network: 'We could not reach the server. Check your connection.',
 	unauthorized: 'Your session has ended. Sign in again.',
 	forbidden: 'You do not have permission to do this.',
 	not_found: 'This item does not exist or was removed.',
