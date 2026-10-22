@@ -590,6 +590,7 @@ export function PricesTab() {
 	const { answer, reload } = useLoad('/v1/dashboard/prices');
 	const [draft, setDraft] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
+	const [saving, setSaving] = useState(false);
 	// the prices just saved stay on screen until the read after the save has arrived
 	const kept = useHeld(answer, /** @type {Record<string, string>} */ ({}));
 	return (
@@ -656,6 +657,7 @@ export function PricesTab() {
 						<Outcome result={result} />
 						<SaveBar
 							show={dirty}
+							saving={saving}
 							message={texts.prices.unsaved}
 							saveLabel={texts.save}
 							discardLabel={texts.settings.discard}
@@ -666,17 +668,41 @@ export function PricesTab() {
 								return () => setDraft((now) => ({ ...before, ...now }));
 							}}
 							onSave={async () => {
-								if (parsed.some((entry) => !entry.credits.ok)) return;
-								const prices = Object.fromEntries(
-									parsed.map(({ feature, credits }) => [feature.key, credits.ok ? credits.value : 0]),
-								);
-								const next = await call('PUT', '/v1/dashboard/prices', { prices });
-								setResult(next);
-								if (next.ok) {
-									kept.keep(answer, (all) => ({ ...all, ...draft }));
-									setDraft({});
+								const bad = parsed.find((entry) => !entry.credits.ok);
+								if (bad) {
+									const cat = byCategory(features.map((f) => f.key)).find((c) => c.keys.includes(bad.feature.key));
+									if (cat && typeof window !== 'undefined') {
+										const id = `prices-${slug(cat.title)}`;
+										if (window.location.hash !== `#${id}`) {
+											window.location.hash = `#${id}`;
+										}
+										const input = document.querySelector(
+											`input[name="${bad.feature.key}"], input[value="${bad.text}"]`,
+										);
+										if (input instanceof HTMLElement) input.focus();
+									}
+									const message = !bad.credits.ok ? bad.credits.message : 'Invalid price';
+									setResult({
+										ok: false,
+										problem: { code: 'validation_failed', title: '1 price needs fixing', message },
+									});
+									return;
 								}
-								reload();
+								setSaving(true);
+								try {
+									const prices = Object.fromEntries(
+										parsed.map(({ feature, credits }) => [feature.key, credits.ok ? credits.value : 0]),
+									);
+									const next = await call('PUT', '/v1/dashboard/prices', { prices });
+									setResult(next);
+									if (next.ok) {
+										kept.keep(answer, (all) => ({ ...all, ...draft }));
+										setDraft({});
+									}
+									reload();
+								} finally {
+									setSaving(false);
+								}
 							}}
 						/>
 					</>

@@ -35,6 +35,34 @@ const focusableIn = (root) =>
 		(el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true',
 	);
 
+let overlayLockCount = 0;
+let previousOverflow = '';
+
+/**
+ * Shared scroll lock counter (point 48): lock while any overlay is open.
+ * @param {Document} doc
+ */
+const lockScroll = (doc) => {
+	const body = doc.body;
+	if (overlayLockCount === 0) {
+		previousOverflow = body.style.overflow;
+		body.style.overflow = 'hidden';
+	}
+	overlayLockCount++;
+};
+
+/**
+ * Unlock scroll when all overlays are closed.
+ * @param {Document} doc
+ */
+const unlockScroll = (doc) => {
+	const body = doc.body;
+	overlayLockCount = Math.max(0, overlayLockCount - 1);
+	if (overlayLockCount === 0) {
+		body.style.overflow = previousOverflow;
+	}
+};
+
 /**
  * Focus trap + Escape + focus restore for an open overlay.
  * @param {import('react').RefObject<HTMLElement | null>} ref
@@ -77,12 +105,10 @@ export const useFocusTrap = (ref, open, onClose) => {
 			}
 		};
 		root.addEventListener('keydown', onKey);
-		const body = root.ownerDocument.body;
-		const overflow = body.style.overflow;
-		body.style.overflow = 'hidden';
+		lockScroll(root.ownerDocument);
 		return () => {
 			root.removeEventListener('keydown', onKey);
-			body.style.overflow = overflow;
+			unlockScroll(root.ownerDocument);
 			if (previous && typeof previous.focus === 'function') previous.focus();
 		};
 	}, [open, ref]);
@@ -298,7 +324,7 @@ export function Dialog({ placement, size = 'md', ...rest }) {
  * Confirmation dialog for destructive or irreversible actions. Focus starts on the action that is safe: Cancel when `danger`
  * is set, the confirm button otherwise.
  * @param {{ open: boolean, onClose: () => void, onConfirm: () => void, title: ReactNode, children?: ReactNode,
- *   confirmLabel?: string, cancelLabel?: string, danger?: boolean, busy?: boolean, error?: ReactNode }} props
+ *   confirmLabel?: string, cancelLabel?: string, danger?: boolean, busy?: boolean, busyLabel?: string, error?: ReactNode }} props
  */
 export function ConfirmDialog({
 	open,
@@ -310,14 +336,17 @@ export function ConfirmDialog({
 	cancelLabel = 'Cancel',
 	danger = false,
 	busy = false,
+	busyLabel,
 	error,
 }) {
+	const activeConfirmLabel = busy ? (busyLabel ?? (confirmLabel === 'Save' ? 'Saving…' : confirmLabel)) : confirmLabel;
 	return (
 		<Dialog
 			open={open}
 			onClose={busy ? () => undefined : onClose}
 			title={title}
 			size="sm"
+			dismissible={!busy}
 			footer={
 				<>
 					<Button variant="secondary" onClick={onClose} disabled={busy} data-autofocus={danger ? '' : undefined}>
@@ -328,7 +357,7 @@ export function ConfirmDialog({
 						onClick={onConfirm}
 						loading={busy}
 						data-autofocus={danger ? undefined : ''}>
-						{confirmLabel}
+						{activeConfirmLabel}
 					</Button>
 				</>
 			}>

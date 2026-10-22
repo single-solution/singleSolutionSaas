@@ -68,6 +68,8 @@ export const OVERVIEW_TEXTS = Object.freeze({
 				'Your business facts, look, region and Format are set once for all your products. Until then the business name shows as {domain}, times use UTC and the widgets use the built-in look.',
 			action: 'Open Website settings',
 			recheck: 'Check again',
+			checking: 'Checking…',
+			recheckFailed: 'Could not check website settings. Try again.',
 			missingTitle: 'Needs setup: set {fields} in the Portal',
 			missingEffect: '{product} needs {fields}. Set them once in Website settings › {section}, for all your products.',
 		}),

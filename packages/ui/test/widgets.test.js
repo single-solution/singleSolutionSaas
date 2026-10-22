@@ -87,6 +87,42 @@ describe('buttons and fields', () => {
 		expect(cx('a', false, null, 'b', undefined, 0)).toBe('a b');
 	});
 
+	it('Button prevents rapid double clicks while work is in flight', async () => {
+		let finish = () => {};
+		const onClick = vi.fn(
+			() =>
+				new Promise((resolve) => {
+					finish = () => resolve(undefined);
+				}),
+		);
+		const { container } = render(<Button onClick={onClick}>Send</Button>);
+		const button = /** @type {HTMLButtonElement} */ (container.querySelector('button'));
+		click(button);
+		click(button);
+		expect(onClick).toHaveBeenCalledTimes(1);
+		await act(async () => finish());
+	});
+
+	it('Button and ButtonLink support disabledReason', () => {
+		const { container } = render(
+			<div>
+				<Button disabledReason="Only Owners can do this">Delete</Button>
+				<ButtonLink href="/secret" disabledReason="Need higher permissions">
+					Secret
+				</ButtonLink>
+			</div>,
+		);
+		const button = /** @type {HTMLButtonElement} */ (container.querySelector('button'));
+		expect(button.disabled).toBe(true);
+		expect(button.title).toBe('Only Owners can do this');
+		expect(button.getAttribute('aria-description')).toBe('Only Owners can do this');
+
+		const link = container.querySelector('[aria-disabled="true"]');
+		expect(link).not.toBeNull();
+		expect(link?.tagName.toLowerCase()).toBe('span');
+		expect(link?.getAttribute('title')).toBe('Need higher permissions');
+	});
+
 	it('Input, TextArea and Select associate labels, help and errors', () => {
 		const { container } = render(
 			<div>
@@ -524,6 +560,55 @@ describe('overlays', () => {
 			</ConfirmDialog>,
 		);
 		expect(document.activeElement?.textContent).toBe('Publish');
+	});
+
+	it('nested overlays share scroll lock counter so closing does not leave page locked', () => {
+		const Nested = ({ openParent = true, openChild = false }) => (
+			<>
+				<Dialog open={openParent} onClose={() => {}} title="Parent">
+					Parent content
+				</Dialog>
+				<Dialog open={openChild} onClose={() => {}} title="Child" size="sm">
+					Child content
+				</Dialog>
+			</>
+		);
+		const { rerender } = render(<Nested openParent openChild={false} />);
+		expect(document.body.style.overflow).toBe('hidden');
+		// open child
+		rerender(<Nested openParent openChild />);
+		expect(document.body.style.overflow).toBe('hidden');
+		// close parent first, child still open
+		rerender(<Nested openParent={false} openChild />);
+		expect(document.body.style.overflow).toBe('hidden');
+		// close child
+		rerender(<Nested openParent={false} openChild={false} />);
+		expect(document.body.style.overflow).toBe('');
+	});
+
+	it('ConfirmDialog shows Saving... or busyLabel when busy', () => {
+		const { rerender } = render(
+			<ConfirmDialog open onClose={() => {}} onConfirm={() => {}} title="Save item?" confirmLabel="Save" busy>
+				Body
+			</ConfirmDialog>,
+		);
+		const confirmBtn = [...document.querySelectorAll('button')].find((b) => b.getAttribute('aria-busy') === 'true');
+		expect(confirmBtn?.textContent).toContain('Saving…');
+
+		rerender(
+			<ConfirmDialog
+				open
+				onClose={() => {}}
+				onConfirm={() => {}}
+				title="Delete item?"
+				confirmLabel="Delete"
+				busy
+				busyLabel="Deleting…">
+				Body
+			</ConfirmDialog>,
+		);
+		const deletingBtn = [...document.querySelectorAll('button')].find((b) => b.getAttribute('aria-busy') === 'true');
+		expect(deletingBtn?.textContent).toContain('Deleting…');
 	});
 });
 

@@ -19,6 +19,7 @@ export const FormBusyContext = createContext(false);
 // A disabled button turns neutral instead of a faded accent; a busy one (spinner) keeps its color.
 const BASE =
 	'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium tracking-[-0.005em] ss-motion ss-press select-none ' +
+	"[@media(pointer:coarse)]:relative [@media(pointer:coarse)]:after:absolute [@media(pointer:coarse)]:after:-inset-1.5 [@media(pointer:coarse)]:after:content-[''] " +
 	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed ' +
 	'aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
 	'[&:disabled:not([aria-busy])]:border-transparent [&:disabled:not([aria-busy])]:bg-surface-2 [&:disabled:not([aria-busy])]:text-muted [&:disabled:not([aria-busy])]:shadow-none ' +
@@ -52,7 +53,7 @@ const buttonClass = ({ variant = 'primary', size = 'md', block = false, classNam
 /**
  * @typedef {import('react').ButtonHTMLAttributes<HTMLButtonElement> & {
  *   variant?: ButtonVariant, size?: ButtonSize, loading?: boolean, block?: boolean, icon?: import('react').ReactNode,
- *   ref?: import('react').Ref<HTMLButtonElement>
+ *   disabledReason?: string, ref?: import('react').Ref<HTMLButtonElement>
  * }} ButtonProps
  */
 
@@ -71,12 +72,15 @@ export function Button({
 	type = 'button',
 	className,
 	disabled,
+	disabledReason,
 	children,
 	onClick,
+	title,
 	...rest
 }) {
 	const formBusy = useContext(FormBusyContext);
 	const [running, setRunning] = useState(false);
+	const inFlight = useRef(false);
 	const live = useRef(true);
 	useEffect(() => {
 		live.current = true;
@@ -85,22 +89,33 @@ export function Button({
 		};
 	}, []);
 	const busy = loading || running || (type === 'submit' && formBusy);
+	const isDisabled = disabled || busy || Boolean(disabledReason);
 	/** @param {import('react').MouseEvent<HTMLButtonElement>} event */
 	const click = (event) => {
+		if (inFlight.current || isDisabled) {
+			event.preventDefault();
+			event.stopPropagation();
+			return;
+		}
 		const out = /** @type {unknown} */ (onClick?.(event));
-		if (!out || typeof (/** @type {{ then?: unknown }} */ (out).then) !== 'function') return;
-		setRunning(true);
-		const done = () => {
-			if (live.current) setRunning(false);
-		};
-		/** @type {Promise<unknown>} */ (out).then(done, done);
+		if (out && typeof (/** @type {{ then?: unknown }} */ (out).then) === 'function') {
+			inFlight.current = true;
+			setRunning(true);
+			const done = () => {
+				inFlight.current = false;
+				if (live.current) setRunning(false);
+			};
+			/** @type {Promise<unknown>} */ (out).then(done, done);
+		}
 	};
 	return (
 		<button
 			type={type}
 			className={buttonClass({ variant, size, block, ...(className ? { className } : {}) })}
-			disabled={disabled || busy}
+			disabled={isDisabled}
 			aria-busy={busy || undefined}
+			title={title ?? disabledReason}
+			aria-description={disabledReason}
 			onClick={onClick ? click : undefined}
 			{...rest}>
 			{busy ? <Spinner size={14} className="animate-ss-fade" /> : icon}
@@ -130,9 +145,33 @@ export function IconButton({ label, variant = 'ghost', size = 'sm', className, c
 /**
  * A link that looks like a button. `as` renders a router link component (e.g. Next's `Link`).
  * @param {import('react').AnchorHTMLAttributes<HTMLAnchorElement> & { href: string, variant?: ButtonVariant,
- *   size?: ButtonSize, block?: boolean, as?: import('react').ElementType, icon?: import('react').ReactNode }} props
+ *   size?: ButtonSize, block?: boolean, as?: import('react').ElementType, icon?: import('react').ReactNode,
+ *   disabledReason?: string }} props
  */
-export function ButtonLink({ variant = 'secondary', size = 'md', block = false, as, className, icon, children, ...rest }) {
+export function ButtonLink({
+	variant = 'secondary',
+	size = 'md',
+	block = false,
+	as,
+	className,
+	icon,
+	disabledReason,
+	children,
+	...rest
+}) {
+	if (disabledReason) {
+		return (
+			<span
+				role="link"
+				aria-disabled="true"
+				title={disabledReason}
+				tabIndex={0}
+				className={buttonClass({ variant, size, block, className })}>
+				{icon}
+				{children}
+			</span>
+		);
+	}
 	const Component = as ?? 'a';
 	return (
 		<Component className={buttonClass({ variant, size, block, ...(className ? { className } : {}) })} {...rest}>

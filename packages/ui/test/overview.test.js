@@ -182,7 +182,7 @@ describe('a product dashboard Overview', () => {
 		click(byText(container, 'Check again', 'button'));
 		expect(recheck).toHaveBeenCalledTimes(1);
 		// the button is busy until the Portal's settings were fetched again
-		expect(byText(container, 'Check again', 'button').getAttribute('aria-busy')).toBe('true');
+		expect(byText(container, 'Checking…', 'button').getAttribute('aria-busy')).toBe('true');
 		await act(async () => undefined);
 		expect(byText(container, 'Check again', 'button').getAttribute('aria-busy')).toBeNull();
 		// setup: a feature on is done; the connections, the product's step, the widget and the website settings are to do
@@ -450,6 +450,32 @@ describe('the shared pieces', () => {
 		cleanup();
 		expect(render(<ChangesTable items={[]} />).container.textContent).toContain('No changes yet.');
 		expect(container.querySelector('h1, h2, h3, ul, ol')).toBeNull();
+	});
+
+	it('Check again shows error feedback when recheck fails (point 285)', async () => {
+		const recheck = vi.fn(async () => ({ ok: false, body: { message: 'Settings server unreachable' } }));
+		const baseAnswer = answer();
+		const data = answer({
+			checklist: {
+				...baseAnswer.checklist,
+				website: { version: 0, requires: [], missing: [] },
+			},
+		});
+		const { container } = render(
+			<ProductOverview
+				data={data}
+				who={{ kind: 'merchant', name: 'Alex' }}
+				product="Notes"
+				support={{ channels: [] }}
+				portal="https://portal.example.com"
+				namesOf={() => ''}
+				open={() => undefined}
+				recheck={recheck}
+			/>,
+		);
+		click(byText(container, 'Check again', 'button'));
+		await act(async () => undefined);
+		expect(container.textContent).toContain('Settings server unreachable');
 	});
 
 	it('initials of a name, an email address or nothing', () => {

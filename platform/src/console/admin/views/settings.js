@@ -19,6 +19,7 @@ import {
 	FormError,
 	Input,
 	ListEditor,
+	LocalTime,
 	Page,
 	SaveBar,
 	Select,
@@ -470,6 +471,7 @@ function EncryptionBlock() {
 			null
 		),
 	);
+	const [ranAt, setRanAt] = useState(/** @type {string | null} */ (null));
 	return (
 		<SettingsCard title={ADMIN.settingsSections.encryption.title} description={ADMIN.settingsSections.encryption.help}>
 			<div className="space-y-4">
@@ -480,13 +482,24 @@ function EncryptionBlock() {
 						setProblem(null);
 						const result = await apiFetch(adminApi.settingsReseal(), { method: 'POST', body: {} });
 						setBusy(false);
-						if (result.ok) setCounts(result.data);
-						else setProblem(result.problem);
+						if (result.ok) {
+							setCounts(result.data);
+							setRanAt(new Date().toISOString());
+						} else {
+							setProblem(result.problem);
+						}
 					}}>
-					{ADMIN.encryption.reseal}
+					{busy ? (ADMIN.encryption.resealing ?? 'Re-sealing…') : ADMIN.encryption.reseal}
 				</Button>
 				{counts ? (
-					<Callout tone={counts.unreadable === 0 ? 'success' : 'warning'}>{ADMIN.encryption.result(counts)}</Callout>
+					<div className="space-y-2">
+						<Callout tone={counts.unreadable === 0 ? 'success' : 'warning'}>{ADMIN.encryption.result(counts)}</Callout>
+						{ranAt ? (
+							<p className="text-xs text-muted">
+								{ADMIN.encryption.ranAt} <LocalTime value={ranAt} />
+							</p>
+						) : null}
+					</div>
 				) : null}
 				<FormError problem={problem} fields={[]} />
 			</div>

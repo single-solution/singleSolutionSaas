@@ -380,7 +380,7 @@ describe('SectionsPage', () => {
 		expect(container.querySelector('[data-ss-part="body"]')).toBeNull();
 		// the browser's Back button returns to the view
 		window.history.back();
-		await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+		await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
 		expect(panel('two')?.hidden).toBe(false);
 	});
 

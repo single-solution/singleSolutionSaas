@@ -958,6 +958,8 @@ export const ADMIN = Object.freeze({
 	}),
 	encryption: Object.freeze({
 		reseal: 'Re-seal stored secrets',
+		resealing: 'Re-sealing…',
+		ranAt: 'Ran at',
 		/**
 		 * What Re-seal did: ENCRYPTION_KEY_PREVIOUS can be removed only when nothing failed to open; otherwise what to
 		 * type or make again, part by part.

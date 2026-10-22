@@ -438,6 +438,22 @@ export function ProductOverview({
 	const locale = useDisplayLocale();
 	const { widget, website } = data.checklist;
 	const unset = website.version === 0;
+	const [rechecking, setRechecking] = useState(false);
+	const [recheckError, setRecheckError] = useState(/** @type {string | null} */ (null));
+	const doRecheck = async () => {
+		setRechecking(true);
+		setRecheckError(null);
+		try {
+			const res = /** @type {any} */ (await recheck?.());
+			if (res && res.ok === false) {
+				setRecheckError(res.body?.message ?? N.website.recheckFailed);
+			}
+		} catch (err) {
+			setRecheckError(err instanceof Error ? err.message : N.website.recheckFailed);
+		} finally {
+			setRechecking(false);
+		}
+	};
 	/** The address of a section of this website's settings in the Portal. @param {string} [section] */
 	const settingsAt = (section) =>
 		websiteSettingsUrl({
@@ -575,9 +591,16 @@ export function ProductOverview({
 							? {
 									actionLabel: S.websiteAction,
 									extraAction: (
-										<Button size="sm" variant="secondary" onClick={recheck}>
-											{N.website.recheck}
-										</Button>
+										<div className="flex flex-col items-end gap-1">
+											<Button size="sm" variant="secondary" loading={rechecking} onClick={doRecheck}>
+												{rechecking ? N.website.checking : N.website.recheck}
+											</Button>
+											{recheckError ? (
+												<span role="alert" className="text-xs text-danger">
+													{recheckError}
+												</span>
+											) : null}
+										</div>
 									),
 								}
 							: {}),
@@ -593,9 +616,16 @@ export function ProductOverview({
 					...(entry.missing.length > 0
 						? {
 								extraAction: (
-									<Button size="sm" variant="secondary" onClick={recheck}>
-										{N.website.recheck}
-									</Button>
+									<div className="flex flex-col items-end gap-1">
+										<Button size="sm" variant="secondary" loading={rechecking} onClick={doRecheck}>
+											{rechecking ? N.website.checking : N.website.recheck}
+										</Button>
+										{recheckError ? (
+											<span role="alert" className="text-xs text-danger">
+												{recheckError}
+											</span>
+										) : null}
+									</div>
 								),
 							}
 						: {}),
