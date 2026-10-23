@@ -752,7 +752,13 @@ const sheetSections = (sheet, actions) => {
 						content: (
 							<Section title={SETUP.products}>
 								{sheet.products.length === 0 ? (
-									<EmptyState compact icon="box" kind="product" title={SETUP.noProducts} />
+									<EmptyState
+										compact
+										icon="box"
+										kind="product"
+										title={SETUP.noProducts}
+										description={SETUP.noProductsHelp}
+									/>
 								) : (
 									sheet.products.map((product) => productEntry(product, sheet.share?.values !== false))
 								)}

@@ -7,10 +7,10 @@
  *   way, so a sibling subdomain cannot plant it) ending at the launch's `sessionExpiresAt`, and redirects to the
  *   dashboard: `<dashboard>?websiteId=<id>`, or `<dashboard>?view=defaults` for an admin launch without a website.
  * - Merchants reach only the websites of their launch; admins any website that has this product (not removed).
- * - Rights: features on/off → Owner or Support; prices, global defaults and Re-seal (stored secrets sealed again with
- *   the current `ENCRYPTION_KEY`, `reseal.js`) → Owner; settings, texts and connections → the merchant (settings of
- *   switched-on features only) and Owner or Support. The theme and the Format are the Portal's (Website settings): the
- *   dashboard only reads the Format (`GET …/format`, for the dates it shows).
+ * - Rights: features on/off → `portal_owner` or `portal_support`; prices, global defaults and Re-seal → `portal_owner`;
+ *   settings, texts and connections → the merchant (settings of switched-on features only) and Portal admins. Launch JWT
+ *   still says `owner`/`support`; SSO maps them so they never collide with Accounts staff "Owner". Configure sessions
+ *   never mint tickets or edit live records (operate is staff widgets). The theme and Format are the Portal's.
  * - Writes are refused unless their Origin is the product's own address; dashboard responses are never framed.
  * @module
  */
@@ -30,7 +30,7 @@ import { effectiveStatus } from './status.js';
  * @property {'merchant' | 'admin'} kind
  * @property {string} subject the merchant id or admin id
  * @property {string} name
- * @property {'owner' | 'support'} [role] admins
+ * @property {'portal_owner' | 'portal_support'} [role] Portal admins (mapped from launch `owner`/`support`)
  * @property {Array<{ websiteId: string, domain: string }>} [websites] merchants: the websites of the launch
  * @property {{ name: string, accent: string, logoUrl: string | null }} branding
  * @property {{ channels: import('@ss/contracts/text').SupportChannel[] }} support the Portal's support contact
@@ -42,6 +42,14 @@ const SESSION_COOKIE = '__Host-ss_session';
 /** A widget counts as installed when it was seen within this time. */
 export const WIDGET_SEEN_MS = 7 * 24 * 60 * 60_000;
 const SWITCHER_PAGES = 50;
+
+/**
+ * Launch JWT still carries Portal RBAC names (`owner`/`support`); the configure session never uses those words —
+ * they collide with Accounts staff "Owner". Map once at SSO.
+ * @param {'owner' | 'support' | string} role
+ * @returns {'portal_owner' | 'portal_support' | null}
+ */
+const portalRoleOf = (role) => (role === 'owner' ? 'portal_owner' : role === 'support' ? 'portal_support' : null);
 
 /**
  * @param {string | null} header
@@ -82,7 +90,7 @@ export const createDashboard = (kit) => {
 		const id = sessionIdOf(ctx.headers.get('cookie'));
 		const session = id ? /** @type {Session | null} */ (await store.get('sessions', sha256Hex(id))) : null;
 		if (!session) return refuse(problem('unauthorized', 'Open this dashboard from the Portal.'));
-		const role = session.kind === 'merchant' ? 'merchant' : /** @type {'owner' | 'support'} */ (session.role);
+		const role = session.kind === 'merchant' ? 'merchant' : /** @type {'portal_owner' | 'portal_support'} */ (session.role);
 		if (r.roles && !r.roles.includes(role)) return refuse(problem('forbidden', 'Your role cannot do this.'));
 		if (ctx.method !== 'GET' && ctx.origin !== canonicalOrigin(new URL(kit.connection.active().baseUrl).origin))
 			return refuse(problem('forbidden', 'Changes are accepted only from this dashboard.'));
@@ -129,12 +137,15 @@ export const createDashboard = (kit) => {
 		const expiresAt = Date.parse(claims.sessionExpiresAt);
 		const merchant = claims.merchant;
 		const admin = claims.admin;
+		const portalRole = admin ? portalRoleOf(admin.role) : null;
+		if (admin && portalRole === null)
+			return problem('invalid_token', 'This link to the dashboard is not valid any more. Open it again from the Portal.');
 		/** @type {Session & { websiteIds: string[], at: number }} */
 		const session = {
 			kind: claims.kind,
 			subject: claims.sub,
 			name: /** @type {{ name: string }} */ (merchant ?? admin).name,
-			...(admin ? { role: admin.role } : {}),
+			...(portalRole ? { role: portalRole } : {}),
 			...(merchant ? { websites: merchant.websites.map(({ websiteId, domain }) => ({ websiteId, domain })) } : {}),
 			websiteIds: merchant ? merchant.websites.map((site) => site.websiteId) : [],
 			branding: claims.branding,
@@ -240,9 +251,9 @@ export const createDashboard = (kit) => {
 
 	const W = '/v1/dashboard/websites/:websiteId';
 	/** @type {import('./http/routes.js').DashboardRole[]} */
-	const ADMINS = ['owner', 'support'];
+	const ADMINS = ['portal_owner', 'portal_support'];
 	/** @type {import('./http/routes.js').DashboardRole[]} */
-	const OWNER = ['owner'];
+	const OWNER = ['portal_owner'];
 
 	const routes = [
 		defineRoute({ method: 'GET', path: '/sso', auth: 'none', handler: sso }),

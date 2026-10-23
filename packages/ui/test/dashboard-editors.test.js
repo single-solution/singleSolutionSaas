@@ -147,7 +147,7 @@ const tab = (id) => ({
 	websiteId: id,
 	merchantId: 'mer_1',
 	domain: 'shop.example.com',
-	who: /** @type {const} */ ({ kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'owner' }),
+	who: /** @type {const} */ ({ kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'portal_owner' }),
 	support: { channels: [] },
 	portal: 'https://portal.example.com',
 	open: () => undefined,

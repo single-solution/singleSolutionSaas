@@ -66,7 +66,7 @@ const open = async (id) => {
 				websiteId={id}
 				merchantId="mer_1"
 				domain="shop.example.com"
-				who={{ kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'owner' }}
+				who={{ kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'portal_owner' }}
 				support={{ channels: [] }}
 				portal="https://portal.example.com"
 				open={() => undefined}

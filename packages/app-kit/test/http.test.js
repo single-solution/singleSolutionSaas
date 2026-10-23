@@ -81,7 +81,7 @@ describe('defineRoute', () => {
 		expect(() =>
 			defineRoute(/** @type {any} */ ({ method: 'GET', path: '/', auth: 'dashboard', roles: ['admin'], handler })),
 		).toThrow(/roles/);
-		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'none', roles: ['owner'], handler })).toThrow(/roles/);
+		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'none', roles: ['portal_owner'], handler })).toThrow(/roles/);
 		expect(() =>
 			defineRoute(/** @type {any} */ ({ method: 'GET', path: '/', auth: 'none', rateLimit: { limit: 1 }, handler })),
 		).toThrow(/rateLimit/);
@@ -96,7 +96,9 @@ describe('defineRoute', () => {
 				}),
 			),
 		).toThrow();
-		expect(defineRoute({ method: 'GET', path: '/', auth: 'dashboard', roles: ['owner'], handler }).roles).toEqual(['owner']);
+		expect(defineRoute({ method: 'GET', path: '/', auth: 'dashboard', roles: ['portal_owner'], handler }).roles).toEqual([
+			'portal_owner',
+		]);
 	});
 
 	it('refuses duplicate routes, unknown features and unknown permissions', async () => {

@@ -48,15 +48,9 @@ export const grants = (user, productId, permission) => {
 };
 
 /**
- * Whether the caller of a request may do what a permission stands for, read the same way on every kind of route (a
- * guard inside a handler, for example "a move that gives money back needs `orders.refund`"):
- *
- * - a dashboard ticket call: the permissions the ticket carries;
- * - a server call with a verified staff sign-in (`checkStaff`): what that person's role grants of this product;
- * - a server call with the server token alone and no staff sign-in (the merchant's own server, or work the product starts
- *   itself): allowed, as the merchant's server is trusted with what it asks for.
- *
- * A guard that only looks at the ticket would skip every server call, so use this one.
+ * Whether the caller may do what a permission stands for (in-handler guards such as "this move needs `orders.refund`"):
+ * ticket permissions, else verified staff (`checkStaff`). A bare server token never implies allow (fail closed) —
+ * use `runtime: true` for merchant-server work that needs no staff member.
  * @param {{ ticket?: { permissions: readonly string[] } | null, staff?: { can: (permission: string) => boolean } | null }} ctx
  * @param {string} permission the product's own key (`orders.refund`), without the product prefix
  * @returns {boolean}
@@ -64,7 +58,7 @@ export const grants = (user, productId, permission) => {
 export const allows = (ctx, permission) => {
 	if (ctx.ticket) return ctx.ticket.permissions.includes(permission);
 	if (ctx.staff) return ctx.staff.can(permission);
-	return true;
+	return false;
 };
 
 /**

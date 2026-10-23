@@ -353,7 +353,7 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 			/>
 			<SettingsCard wide title={T.data.productsTitle} description={T.data.productsHelp}>
 				{view.products.length === 0 ? (
-					<EmptyState compact icon="box" title={T.data.noProducts} />
+					<EmptyState compact icon="box" title={T.data.noProducts} description={T.data.noProductsHelp} />
 				) : (
 					<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
 						{view.products.map((product) => (

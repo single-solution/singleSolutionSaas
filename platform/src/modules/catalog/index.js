@@ -28,7 +28,12 @@ export const createCatalogModule = (options = {}) =>
 			catalog_switch_refused: { status: 422, title: 'Switch on refused' },
 		},
 		service: (ctx) => createCatalogService(ctx, options),
-		routes: (ctx) => catalogRoutes(/** @type {CatalogService} */ (ctx.service('catalog')), () => ctx.service('commerce')),
+		routes: (ctx) =>
+			catalogRoutes(
+				/** @type {CatalogService} */ (ctx.service('catalog')),
+				() => ctx.service('commerce'),
+				() => ctx.service('identity'),
+			),
 		ports: (ctx) => ({
 			productKeys: (productId) => /** @type {CatalogService} */ (ctx.service('catalog')).productKeys(productId),
 			productCalled: (productId) => /** @type {CatalogService} */ (ctx.service('catalog')).deliverNotices(productId),

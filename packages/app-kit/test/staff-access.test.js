@@ -527,10 +527,10 @@ describe('`allows`: one way to read a permission inside a handler, for tickets a
 		expect(await asked(['*'])).toEqual({ status: 200, body: { allowed: true } });
 	});
 
-	it('trusts the server token alone on a route that needs no staff member (the merchant’s own server)', async () => {
+	it('never grants a permission from the server token alone (runtime routes must not call allows for staff rights)', async () => {
 		const { call, server } = await setup({ routes: askingRoutes() });
 		const response = await call('GET', '/v1/server/asks', { token: server.token, bare: true });
-		expect(await response.json()).toEqual({ allowed: true });
+		expect(await response.json()).toEqual({ allowed: false });
 	});
 
 	it('does not trust a signed-in shopper or a header: only a verified staff route sets a staff member', async () => {
@@ -540,6 +540,6 @@ describe('`allows`: one way to read a permission inside a handler, for tickets a
 			bare: true,
 			headers: { 'ss-actor-id': 'usr_x', 'ss-actor-role': 'owner' },
 		});
-		expect(await response.json()).toEqual({ allowed: true });
+		expect(await response.json()).toEqual({ allowed: false });
 	});
 });

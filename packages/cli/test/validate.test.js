@@ -131,6 +131,26 @@ describe('ss app validate', () => {
 		);
 		const shape = await validateProject(bare);
 		expect(rules(shape)).toEqual(expect.arrayContaining(['routes.widget-script', 'routes.docs', 'routes.feature']));
+
+		const live = await project();
+		await put(
+			live,
+			'server/live-ops.js',
+			[
+				"import { defineRoute } from '@ss/app-kit';",
+				'export const live = [',
+				"\tdefineRoute({ method: 'GET', path: '/v1/inbox', auth: 'dashboard', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/dashboard/websites/:websiteId/orders', auth: 'dashboard', handler: () => 1 }),",
+				'];',
+				'',
+			].join('\n'),
+		);
+		const configure = await validateProject(live);
+		expect(messages(configure, 'routes.configure')).toEqual([
+			'GET /v1/inbox: dashboard auth is configure only — path must start with /v1/dashboard/',
+			"GET /v1/inbox: 'inbox' is live ops — use ticket or server auth (admin widgets), not dashboard",
+			"GET /v1/dashboard/websites/:websiteId/orders: 'orders' is live ops — use ticket or server auth (admin widgets), not dashboard",
+		]);
 	});
 
 	it('checks widget texts', async () => {

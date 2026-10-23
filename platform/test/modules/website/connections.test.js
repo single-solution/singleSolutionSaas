@@ -417,6 +417,18 @@ describe('Data and files: the merchant enters the database once', () => {
 		expect(codeOf(await fetchAs(plain))).toEqual([404, 'website_not_found']);
 	});
 
+	it('does not deliver secrets when the catalog product is inactive (placement alone is not enough)', async () => {
+		const { h, owner, notes, m, site, fetchAs, w1 } = await setUp('conn_inactive');
+		await m.client.put(`${site()}/connections/database`, { value: DB, ...CONFIRM });
+		expect((await fetchAs(notes)).status).toBe(200);
+		expect((await owner.post('/v1/admin/products/notes/status', { status: 'inactive' })).status).toBe(200);
+		expect(codeOf(await fetchAs(notes))).toEqual([404, 'website_not_found']);
+		expect(codeOf(await h.productCall(notes, 'GET', `/v1/product/websites/${w1}/settings`))).toEqual([
+			404,
+			'website_not_found',
+		]);
+	});
+
 	it('rotation: a changed value reaches every product, which fetch the new one', async () => {
 		const { h, m, notes, chat, w1, site, fetchAs } = await setUp('conn_rotate');
 		await m.client.put(`${site()}/connections/database`, { value: DB, ...CONFIRM });

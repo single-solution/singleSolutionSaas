@@ -52,7 +52,7 @@ describe('sso and sessions', () => {
 		});
 		portal.addWebsite({ domain: 'gone.example.org', status: 'removed' });
 		const admin = await (await dash(await session(), 'GET', '/v1/dashboard/session')).json();
-		expect(admin.who).toEqual({ kind: 'admin', id: 'adm_0123456789abcdefghjkmnpq', name: 'Ada Admin', role: 'owner' });
+		expect(admin.who).toEqual({ kind: 'admin', id: 'adm_0123456789abcdefghjkmnpq', name: 'Ada Admin', role: 'portal_owner' });
 		expect(admin.portalUrl).toBe(portal.url);
 		expect(admin.switcher).toEqual([
 			{
@@ -151,7 +151,7 @@ describe('features and prices', () => {
 		expect(overview.recentChanges[0]).toMatchObject({
 			what: 'features',
 			detail: 'On: Notes, Notes inbox',
-			who: { kind: 'admin', role: 'support' },
+			who: { kind: 'admin', role: 'portal_support' },
 		});
 	});
 

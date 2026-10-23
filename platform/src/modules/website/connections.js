@@ -629,6 +629,8 @@ export const createConnections = (ctx, { notifyProducts }) => {
 				throw problem('website_not_found', 'This website does not have this product.');
 			const merchantId = String(website.merchantId);
 			const product = await catalog().getProduct(productId);
+			// inactive catalog: no secrets (placement alone is not enough)
+			if (product.status !== 'active') throw problem('website_not_found', 'This website does not have this product.');
 			const record = await ownerOps(merchantId).findOne({ merchantId, _id: websiteId });
 			const open = (/** @type {WebsiteConnectionName} */ name) =>
 				ctx.secretBox.openText(record?.[name].sealed, { aad: sealAad(name, websiteId, record?.[name].v) });

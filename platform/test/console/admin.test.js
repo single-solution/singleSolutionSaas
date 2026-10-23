@@ -203,10 +203,11 @@ describe('admin console smoke', () => {
 			const siteRaw = ssr(<AdminWebsiteView detail={siteDetail} admin={owner} />);
 			expect(text(siteRaw)).toContain('Notes');
 			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}"`);
-			for (const word of ['Add product', 'Status and spend', 'Settings', 'Setup sheet', 'Usage details', 'Recent changes'])
-				expect(text(siteRaw)).toContain(word);
+			// home is product rows only; Settings / Install are header actions (Setup sheet may sit in More)
+			for (const word of ['Add product', 'Settings', 'Install', 'Open']) expect(text(siteRaw)).toContain(word);
 			expect(siteRaw).toContain('id="product-notes"');
 			expect(siteRaw).toContain('aria-label="Actions for Notes"');
+			expect(text(siteRaw)).not.toContain('Status and spend');
 			const unknownSite = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, 'web_none', '', owner);
 			expect(text(ssr(<AdminWebsiteView detail={unknownSite} admin={owner} />))).toContain('No such website.');
 			// a part that is not a page of the website says so
@@ -411,8 +412,9 @@ describe('admin console smoke', () => {
 			expect(ssr(<MerchantsView detail={supportDetail} admin={support} />)).toContain('Add website');
 			const supportSiteDetail = await admin.loadAdminWebsite(supportBrowser.api, merchantId, supportSite, '', support);
 			const supportHtml = ssr(<AdminWebsiteView detail={supportSiteDetail} admin={support} />);
-			for (const word of ['Add product', 'aria-label="Actions for Notes"', 'Setup sheet', 'Settings', 'Recent changes'])
+			for (const word of ['Add product', 'aria-label="Actions for Notes"', 'Settings', 'Install'])
 				expect(supportHtml).toContain(word);
+			expect(supportHtml).toMatch(/Setup sheet|Install/);
 			expect(supportHtml).not.toContain('Add credits');
 			const supportProducts = await admin.loadProducts(supportBrowser.api);
 			const supportProductsHtml = text(ssr(<ProductsView {...supportProducts} admin={support} />));
@@ -426,7 +428,7 @@ describe('admin console smoke', () => {
 			for (const word of ['Open as admin', 'Set inactive']) expect(supportProduct).not.toContain(word);
 			expect(supportProductRaw).not.toContain('More actions'); // no Reconnect
 
-			// Finance: products and usage only; no Install and tokens, no Open, no admin actions
+			// Finance: product rows home; Usage is its own address (inner nav only off-home); no Install/Open/admin actions
 			const financeDetail = await admin.loadMerchant(financeBrowser.api, merchantId, finance);
 			if (!financeDetail.ok) throw new Error('finance merchant');
 			expect(financeDetail.addable).toBeNull();
@@ -434,7 +436,13 @@ describe('admin console smoke', () => {
 			const financeSiteDetail = await admin.loadAdminWebsite(financeBrowser.api, merchantId, financeSite, '', finance);
 			const financeHtml = ssr(<AdminWebsiteView detail={financeSiteDetail} admin={finance} />);
 			expect(financeHtml).toContain('Notes');
-			expect(financeHtml).toContain('Usage'); // Usage stays
+			const financeUsage = ssr(
+				<AdminWebsiteView
+					detail={await admin.loadAdminWebsite(financeBrowser.api, merchantId, financeSite, 'usage', finance)}
+					admin={finance}
+				/>,
+			);
+			expect(financeUsage).toContain('Usage details');
 			expect(ssr(<MerchantsView detail={financeDetail} admin={finance} />)).toContain('Add credits');
 			for (const word of ['Setup sheet', 'Settings', 'Recent changes', 'Add product', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);

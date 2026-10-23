@@ -3,7 +3,7 @@
  * active, grace, stopped, suspended and removed — and learns changes at once from `status.changed`.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DAY, HOUR, codeOf, startSystem } from './helpers.js';
+import { DAY, HOUR, PASSWORD, codeOf, startSystem } from './helpers.js';
 
 /** @type {import('./helpers.js').System} */
 let sys;
@@ -90,7 +90,9 @@ describe('statuses of the product on a website', () => {
 			body: { email: m.email, password: 'correct horse battery staple' },
 		});
 		expect(signIn.status).not.toBe(200);
-		const launch = await m.client.post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes/launch`);
+		const launch = await m.client.post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes/launch`, {
+			password: PASSWORD,
+		});
 		expect(launch.status).toBeGreaterThanOrEqual(400);
 		const admin = await sys.adminSession(owner, websiteId);
 		const overview = await sys.dashboard(admin, 'GET', `/v1/dashboard/websites/${websiteId}/overview`);
@@ -106,7 +108,7 @@ describe('statuses of the product on a website', () => {
 		expect(removed.json).toEqual({ websiteId, productId: 'notes', status: 'removed' });
 		expect(await api()).toEqual([403, 'product_unavailable', 'removed']);
 		expect((await portalStatus()).status).toBe('removed');
-		const launch = await owner.post('/v1/admin/products/notes/launch', { websiteId });
+		const launch = await owner.post('/v1/admin/products/notes/launch', { websiteId, password: PASSWORD });
 		expect(launch.status).toBe(404);
 		const cards = await owner.get(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products`);
 		expect(cards.json.items).toEqual([]);

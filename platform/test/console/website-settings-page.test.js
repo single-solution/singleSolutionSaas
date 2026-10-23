@@ -95,11 +95,13 @@ describe('Website settings (jsdom)', () => {
 			expect(shows('Notes needs: currency, country.')).toBe(true);
 			const nav = /** @type {HTMLElement} */ (document.querySelector('nav[aria-label="Website pages"]'));
 			const links = [...nav.querySelectorAll('a')].map((a) => a.textContent?.replace(/\s+/g, ' ').trim());
-			// the website page is one page now (its products, usage and changes are sections on it); the settings and the
-			// Setup sheet keep their own addresses, with a way back to it
+			// home + Install / Setup / Usage / Changes, then settings sections (PLAN one-job redesign)
 			expect(links).toEqual([
 				'Overview',
+				'Install',
 				'Setup sheet',
+				'Usage details',
+				'Recent changes',
 				'Business',
 				'Brand and look',
 				'Region and formatNeeded by Notes',
@@ -316,17 +318,17 @@ describe('Website settings (jsdom)', () => {
 		try {
 			const x = await world('wsp_menu');
 			await openPage(x, '');
-			// the header's Settings action leads to the settings address; the page lists Recent changes as a section
+			// home is product rows; Settings is a header action (Recent changes is its own address)
 			expect(buttons('Settings').length).toBeGreaterThan(0);
-			expect(shows('Recent changes')).toBe(true);
+			expect(shows('Recent changes')).toBe(false);
 			cleanup();
-			// the admin's website page: the same items for the Owner; Finance has no Website settings and no such page
+			// the admin's website page: the same header actions for the Owner; Finance has no Website settings
 			const owner = x.w.owner;
 			x.w.ownerBrowser.use();
 			const detail = await admin.loadAdminWebsite(x.w.ownerBrowser.api, x.merchantId, x.websiteId, '', owner);
 			withToasts(<AdminWebsiteView detail={detail} admin={owner} />);
 			expect(buttons('Settings').length).toBeGreaterThan(0);
-			expect(shows('Recent changes')).toBe(true);
+			expect(shows('Recent changes')).toBe(false);
 			cleanup();
 			const { admin: finance, b: financeBrowser } = await x.w.adminOf('finance');
 			financeBrowser.use();

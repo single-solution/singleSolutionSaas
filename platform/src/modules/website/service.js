@@ -314,7 +314,7 @@ export const createWebsiteService = (ctx) => {
 		 * @returns {Promise<{ version: number, settings: WebsiteSettings | null }>}
 		 */
 		forProduct: async ({ productId, websiteId, since }) => {
-			const [placement, website] = await Promise.all([
+			const [placement, website, product] = await Promise.all([
 				commerce().productOnWebsite(websiteId, productId),
 				identity()
 					.getWebsite(websiteId)
@@ -322,8 +322,18 @@ export const createWebsiteService = (ctx) => {
 						if (error?.code === 'not_found') return null;
 						throw error;
 					}),
+				catalog()
+					.getProduct(productId)
+					.catch(() => null),
 			]);
-			if (!placement || placement.status !== 'added' || !website || website.status !== 'active')
+			if (
+				!placement ||
+				placement.status !== 'added' ||
+				!website ||
+				website.status !== 'active' ||
+				!product ||
+				product.status !== 'active'
+			)
 				throw problem('website_not_found', 'This website does not have this product.');
 			const record = await /** @type {import('../../infra/db.js').MutableOps} */ (settings.acrossMerchants()).findOne({
 				_id: websiteId,

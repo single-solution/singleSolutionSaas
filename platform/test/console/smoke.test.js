@@ -9,6 +9,9 @@ import { renderToString } from 'react-dom/server';
 import { closeMongoClients } from '../../src/testing.js';
 import * as loaders from '../../src/console/loaders.js';
 import { routes } from '../../src/console/paths.js';
+import { adminApi, adminRoutes } from '../../src/console/admin/paths.js';
+import { websitePartOf, sectionOf } from '../../src/console/website-parts.js';
+import { ADMIN, CONSOLE, MORE, PRODUCTS, PROFILE, SETUP, WEBSITE, WEBSITE_SETTINGS } from '../../src/texts/console.js';
 import { AccountView } from '../../src/console/views/account.js';
 import { CreditsView } from '../../src/console/views/credits.js';
 import { BillingBanner, DaysLeft, ProductStatusBadge, productStatusLabel, productTone } from '../../src/console/views/billing.js';
@@ -117,7 +120,7 @@ describe('merchant console smoke', () => {
 			expect(websitesRaw).not.toContain('role="tab"');
 			expect(websitesText).toContain('No products yet'); // the second website's row says what it lacks
 			expect(websitesText).toContain('Chatty: no feature on yet');
-			expect(websitesText).toContain('Open dashboard'); // the first website's page is open beside the list
+			expect(websitesText).toContain('Open'); // the first website's page is open beside the list
 
 			// a website: its own page, Websites › domain, the list beside it, its sections all open (status, products,
 			// usage), no admin actions
@@ -129,8 +132,7 @@ describe('merchant console smoke', () => {
 			expect(selectedText).toContain('Notes');
 			expect(selectedText).toContain('Chatty');
 			expect(selectedText).toContain('No features on');
-			for (const word of ['Settings', 'Setup sheet', 'Daily cost', 'Open dashboard', 'Recent changes'])
-				expect(selectedText).toContain(word);
+			for (const word of ['Settings', 'Install', 'Daily cost', 'Open']) expect(selectedText).toContain(word);
 			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}"`); // its row in the list
 			expect(selectedRaw).toContain('id="product-notes"');
 			expect(selectedRaw).not.toContain('role="tab"');
@@ -222,6 +224,14 @@ describe('merchant console smoke', () => {
 			['Usage and credits', false],
 			['Account', false],
 		]);
+		// adaptability: Portal menus are platform jobs only — never a product id (PLAN §1 / §7)
+		for (const id of ['accounts', 'chat', 'ecommerce', 'growth', 'notifications', 'notes', 'payments']) {
+			expect(
+				merchantSections('/overview')
+					.flatMap((s) => s.items.map((i) => i.label))
+					.join(' '),
+			).not.toMatch(new RegExp(id, 'i'));
+		}
 		// status labels and colors (PLAN 0.6)
 		expect(productTone({ status: 'active', featuresOn: [] })).toBe('neutral');
 		expect(productTone({ status: 'active', featuresOn: ['a'] })).toBe('success');
@@ -265,5 +275,47 @@ describe('merchant console smoke', () => {
 		expect(
 			text(ssr(<BillingBanner summary={{ status: 'grace', graceEnd: '2026-10-04T11:00:00.000Z' }} contact="help@x" />)),
 		).toContain('Oct 4, 2026, 11:00 AM UTC');
+
+		// website parts and address builders
+		expect(websitePartOf('settings', 'business')).toBe('settings/business');
+		expect(websitePartOf('install')).toBe('install');
+		expect(sectionOf({ kind: 'product', id: 'notes' })).toBe('product-notes');
+		expect(sectionOf(null)).toBeNull();
+		expect(sectionOf({ kind: 'overview' })).toBeNull();
+		expect(routes.websiteSetup('w1')).toBe('/websites/w1/setup');
+		expect(routes.websiteSettings('w1', 'brand')).toBe('/websites/w1/settings/brand');
+		expect(adminRoutes.websiteSetup('m1', 'w1')).toBe('/admin/merchants/m1/websites/w1/setup');
+		expect(adminRoutes.websiteSettings('m1', 'w1', 'brand')).toBe('/admin/merchants/m1/websites/w1/settings/brand');
+		expect(adminRoutes.adminPart('p1', 's1')).toBe('/admin/admins/p1/s1');
+		expect(adminRoutes.account()).toBe('/admin/account');
+		expect(adminApi.adminTwoStepOff('a1')).toBe('/v1/admin/admins/a1/two-step/off');
+		expect(adminApi.settingsBilling()).toBe('/v1/admin/settings/billing');
+
+		// console text helpers
+		expect(CONSOLE.pageFailed('E-123')).toContain('E-123');
+		expect(CONSOLE.pageFailed(undefined)).toContain('This page failed');
+		expect(WEBSITE.productsCount(1)).toBe('1 product');
+		expect(WEBSITE.productsCount(3)).toBe('3 products');
+		expect(WEBSITE.productsOf('example.com')).toBe('Products on example.com');
+		expect(WEBSITE.featuresOn(1)).toBe('1 feature on');
+		expect(WEBSITE.featuresOn(2)).toBe('2 features on');
+		expect(WEBSITE.productTrouble('Notes', 'unreachable')).toBe('Notes: unreachable');
+		expect(SETUP.alsoSwitches('Core')).toContain('Core');
+		expect(PROFILE.otherTooMany(5)).toContain('5');
+		expect(PROFILE.otherTooLong(50)).toContain('50');
+		expect(PRODUCTS.websitesCount(1)).toBe('1 website');
+		expect(PRODUCTS.websitesCount(2)).toBe('2 websites');
+		expect(ADMIN.productWebsites(1)).toBe('1 website');
+		expect(ADMIN.productWebsites(2)).toBe('2 websites');
+		expect(ADMIN.productEarned('50')).toContain('50 earned');
+		expect(ADMIN.showing(1, 10, true)).toContain('1–10');
+		expect(ADMIN.selectMerchant('Alice')).toContain('Alice');
+		expect(ADMIN.moreActions('Alice')).toContain('Alice');
+		expect(ADMIN.mail.testSent('test@example.com')).toContain('test@example.com');
+		expect(MORE.productMenu('Notes')).toContain('Notes actions');
+		expect(WEBSITE_SETTINGS.region.symbolsCount(1)).toBe('1 symbol');
+		expect(WEBSITE_SETTINGS.region.symbolsCount(5)).toBe('5 symbols');
+		expect(WEBSITE_SETTINGS.region.regionsCount(1)).toBe('1 country');
+		expect(WEBSITE_SETTINGS.region.regionsCount(5)).toBe('5 countries');
 	});
 });

@@ -159,8 +159,10 @@ describe('admin Products (jsdom)', () => {
 			expect(document.querySelector('#connection')).not.toBeNull();
 			expect(shows('Earned this month') && shows('Websites')).toBe(true);
 
-			// Open as admin: Defaults, no website picked
+			// Open as admin: password confirm, then Defaults with no website
 			await press('Open as admin');
+			fillDialog('Your password', ownerBrowser.password);
+			await pressDialog('Open configure');
 			const launched = await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/launch', (st) => st === 200);
 			expect(open).toHaveBeenCalledWith(launched.body.url, '_blank', 'noopener,noreferrer');
 			expect(claimsOf(launched.body.url)).toMatchObject({ kind: 'admin', admin: { role: 'owner', websiteId: null } });
@@ -232,9 +234,8 @@ describe('admin Products (jsdom)', () => {
 			withToasts(screen({ websites: { items: [], cursor: 'next-page' } }));
 			await until(() => shows('Something went wrong on our side.'));
 			expect(shows('No website has this product yet.')).toBe(true);
-			await press('Open as admin');
-			await until(() => buttons('Open as admin').length === 1 && !button('Open as admin').disabled);
-			expect(open).toHaveBeenCalledTimes(1);
+			expect(buttons('Open as admin')).toHaveLength(1);
+			expect(button('Open as admin').disabled).toBe(false);
 			await press('Set inactive');
 			await until(() => document.querySelectorAll('[role="status"], [role="alert"]').length > 0);
 			expect(buttons('Set inactive')).toHaveLength(1);

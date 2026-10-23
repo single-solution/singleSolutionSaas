@@ -24,6 +24,7 @@ import {
 	clickEl,
 	createWorld,
 	dialog,
+	menuItems,
 	press,
 	pressDialog,
 	pressMenu,
@@ -224,14 +225,17 @@ describe('Setup page (jsdom)', () => {
 		try {
 			const { ownerBrowser, owner } = w;
 			ownerBrowser.use();
-			// the Setup sheet is an action in the website page's header (its own address)
+			// the Setup sheet is a header action (secondary or More when Settings + Install fill the two slots)
 			withToasts(
 				<AdminWebsiteView
 					detail={await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, '', owner)}
 					admin={owner}
 				/>,
 			);
-			expect(buttons('Setup sheet').length).toBeGreaterThan(0);
+			if (buttons('Setup sheet').length === 0) {
+				await press('More actions');
+				expect(menuItems()).toContain('Setup sheet');
+			} else expect(buttons('Setup sheet').length).toBeGreaterThan(0);
 			cleanup();
 			withToasts(
 				<AdminWebsiteView

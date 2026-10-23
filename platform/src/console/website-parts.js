@@ -1,7 +1,7 @@
 /**
  * The parts of a website's own address (both consoles), each its own address segment after the website:
- * `` (the page) · `products/:productId` · `install` · `usage` · `changes` open the ONE page at their section (flat
- * layout 2026-10-21); `settings/:section` and `setup` are pages of their own.
+ * `` (product rows home) · `products/:productId` (same home, scroll to row) · `install` · `usage` · `changes` ·
+ * `settings/:section` · `setup` — each job its own page (PLAN redesign).
  * Plain module (no `'use client'`): the server views and the loaders read it too.
  * @module
  */
@@ -39,16 +39,12 @@ export const parseWebsitePart = (path) => {
 };
 
 /**
- * The element of the website page an address opens it at: a section (`status`, `products`, `activity`, `usage`) or one
- * product's card; null for the top of the page and for the pages of their own (settings, setup).
+ * Scroll target on the product-rows home for a deep link; null for pages of their own.
  * @param {ReturnType<typeof parseWebsitePart>} parsed
  * @returns {string | null}
  */
 export const sectionOf = (parsed) => {
 	if (parsed === null) return null;
 	if (parsed.kind === 'product') return `product-${parsed.id}`;
-	if (parsed.kind === 'install') return 'products';
-	if (parsed.kind === 'usage') return 'usage';
-	if (parsed.kind === 'changes') return 'activity';
 	return null;
 };

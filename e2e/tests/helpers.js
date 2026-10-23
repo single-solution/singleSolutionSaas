@@ -493,25 +493,26 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	};
 
 	/**
-	 * A dashboard session of an admin (Open as admin); '' when refused.
+	 * A dashboard session of an admin (Open as admin); password step-up required (stolen session blast radius).
 	 * @param {ReturnType<typeof api.session>} by
 	 * @param {string | null} websiteId
 	 * @param {string} [productId]
 	 */
 	const adminSession = async (by, websiteId, productId = productManifest.id) => {
-		const launch = await by.post(`/v1/admin/products/${productId}/launch`, { websiteId });
+		const launch = await by.post(`/v1/admin/products/${productId}/launch`, { websiteId, password: PASSWORD });
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;
 	};
 
 	/**
-	 * A merchant's dashboard session for one website (Open on the product card).
+	 * A merchant's dashboard session for one website (Open on the product card); password step-up required.
 	 * @param {{ client: ReturnType<typeof api.session>, merchantId: string }} who
 	 * @param {string} websiteId
 	 */
 	const merchantSession = async (who, websiteId) => {
 		const launch = await who.client.post(
 			`/v1/merchants/${who.merchantId}/websites/${websiteId}/products/${productManifest.id}/launch`,
+			{ password: PASSWORD },
 		);
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;

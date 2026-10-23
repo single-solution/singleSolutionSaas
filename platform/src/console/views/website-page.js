@@ -1,49 +1,40 @@
 'use client';
 /**
- * A website's own page, the same in both consoles (flat layout 2026-10-21): ONE `Page` whose header carries the domain
- * (crumbs `Websites › domain` for a merchant, `Merchants › name › domain` for an admin), the status pill, the daily
- * cost, the products on, the one primary action and the ⋯ More menu. Its body shows every section at once, all open:
- * **Status and spend** (the key numbers and the 30-day spend) · **Products** (one rich card per product: its status,
- * one line of help, Open dashboard, Remove and its install block with the widget script tag and tokens) · **Recent
- * changes** (a timeline) · **Usage details**. In the merchant console the list of websites stands beside it
- * (`list`). The old addresses (`products/:id`, `install`, `usage`, `changes`) open this page at their section.
- * **Website settings** (Business, Brand and look, Region and format, Domains, pages and legal, Team and alerts, Data
- * and files, Between your products; the floating Save bar is the only save) and the **Setup sheet** are big, so each
- * stays its own address, reached by an action in the header and by the inner navigation. Add product and Add website
- * are drawers; a short yes/no stays a dialog. What each person may do follows the `can` the console passes; the Portal
- * checks every right again.
+ * A website's own page, the same in both consoles (PLAN redesign): ONE `Page` whose header carries the domain, status,
+ * daily cost, primary action and ⋯. The **home** job is product rows only (name, status, cost, Open, ⋯). Install,
+ * usage, recent changes, Website settings and the Setup sheet are their own addresses. Open configure asks for the
+ * person's password first (stolen session blast radius). Add product is a drawer; Remove is a typed confirm. What each
+ * person may do follows `can`; the Portal checks every right again.
  * @module
  */
 import { useEffect, useState } from 'react';
 import {
 	ActionMenu,
-	BarChart,
 	Button,
 	Callout,
 	Card,
 	EmptyState,
+	Icon,
 	IconBadge,
 	LocalTime,
 	Page,
 	Skeleton,
-	Stat,
-	StatGrid,
 	Timeline,
 	TypedConfirmDialog,
 	copyText,
 	describeProblem,
 	formatCredits,
-	isEmptySeries,
 	useToast,
 } from '@ss/ui';
-import { BILLING, MORE, SETUP, WEBSITE, WEBSITE_SETTINGS as T } from '../../texts/console.js';
+import { MORE, SETUP, WEBSITE, WEBSITE_SETTINGS as T } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api } from '../paths.js';
-import { parseWebsitePart, sectionOf, SETTINGS_SECTIONS } from '../website-parts.js';
-import { UsageView, creditDayBars, formatChartCredits, productStatusLabel, productTone } from './billing.js';
+import { parseWebsitePart, SETTINGS_SECTIONS } from '../website-parts.js';
+import { UsageView, productStatusLabel, productTone } from './billing.js';
 import { openDashboard } from './common.js';
+import { ConfirmChange } from './confirm-change.js';
 import { SetupView, useSetupSheet } from './setup.js';
 import { SettingsSectionBody, contextOf, readinessLines, useWebsiteSettings } from './website-settings.js';
 import { AddProductDrawer, InstallBlock, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from './website.js';
@@ -97,13 +88,10 @@ function ChangesTimeline({ changes }) {
  */
 
 /**
- * One product on the website as a rich card: its icon, name and status, one line of help (what is on and what it
- * costs), Open dashboard and its menu in the header, and its install block as the body.
- * @param {{ card: ProductCard, domain: string, merchantId: string, websiteId: string, can: WebsiteCan,
- *   tokens: any, pending: boolean, twoStepOn: boolean, opening: boolean, onOpen: () => void, onRemove: () => void }} props
- *   `tokens`: the entry of this product in the loaded tokens (null: none); `pending`: the tokens are still loading
+ * One product row on the website home: name, status, cost, Open, ⋯. Install lives on `/install`.
+ * @param {{ card: ProductCard, can: WebsiteCan, opening: boolean, onOpen: () => void, onRemove: () => void }} props
  */
-function ProductSection({ card, domain, merchantId, websiteId, can, tokens, pending, twoStepOn, opening, onOpen, onRemove }) {
+function ProductRow({ card, can, opening, onOpen, onRemove }) {
 	return (
 		<Card
 			id={`product-${card.productId}`}
@@ -135,20 +123,8 @@ function ProductSection({ card, domain, merchantId, websiteId, can, tokens, pend
 							</>
 						),
 					}
-				: {})}>
-			{tokens ? (
-				<InstallBlock
-					key={`${websiteId}:${card.productId}`}
-					entry={tokens}
-					domain={domain}
-					merchantId={merchantId}
-					websiteId={websiteId}
-					twoStepOn={twoStepOn}
-				/>
-			) : pending ? (
-				<Skeleton lines={3} />
-			) : null}
-		</Card>
+				: {})}
+		/>
 	);
 }
 
@@ -185,6 +161,8 @@ export function WebsitePageView({
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {import('@ss/ui/problems').Problem | null} */ (null));
 	const [opening, setOpening] = useState(/** @type {string | null} */ (null));
+	/** Product waiting for password confirm before launch. */
+	const [launching, setLaunching] = useState(/** @type {ProductCard | null} */ (null));
 	// the website was removed: the page waits (as a skeleton) for the list to open
 	const [gone, setGone] = useState(false);
 
@@ -203,8 +181,19 @@ export function WebsitePageView({
 	const hasSettings = can.settings && state.settings !== null;
 	const productId = parsed?.kind === 'product' ? parsed.id : null;
 	const shown = productId ? (cards.find((c) => c.productId === productId) ?? null) : null;
-	// the page itself, or one of the two big pages of their own (Website settings, the Setup sheet)
-	const own = kind === 'settings' ? 'settings' : kind === 'setup' ? 'setup' : null;
+	// pages of their own (not the product-rows home)
+	const own =
+		kind === 'settings'
+			? 'settings'
+			: kind === 'setup'
+				? 'setup'
+				: kind === 'install'
+					? 'install'
+					: kind === 'usage'
+						? 'usage'
+						: kind === 'changes'
+							? 'changes'
+							: null;
 	const onSetup = own === 'setup' && setupState.sheet !== null;
 
 	// what stands in place of the body when the address is not a page of this website or the person may not see it
@@ -217,6 +206,7 @@ export function WebsitePageView({
 	else if (parsed.kind === 'settings')
 		error = !can.settings ? WEBSITE.noSuchPage : settings && !settings.ok ? describeProblem(settings.problem) : null;
 	else if (parsed.kind === 'changes') error = !can.settings ? WEBSITE.noSuchPage : null;
+	else if (parsed.kind === 'usage') error = null;
 	else if (parsed.kind === 'install' || parsed.kind === 'setup') {
 		error = !can.tokens
 			? WEBSITE.noSuchPage
@@ -225,22 +215,23 @@ export function WebsitePageView({
 				: null;
 	}
 
-	// what the page loads for itself: the spend, and the tokens of its products (never for a person without tokens)
-	const onPage = own === null && !error && !gone;
-	const usage = useOnce(onPage ? api.usage(merchantId, { websiteId }) : null);
-	const tokens = useOnce(onPage && can.tokens ? api.tokens(merchantId, websiteId) : null);
-	// two-step on: the confirmation of a server token asks for the code at once
-	const twoStepOn = twoStepOnOf(useOnce(onPage && can.tokens ? '/v1/me' : null));
+	const onHome = own === null && !error && !gone;
+	const onInstall = own === 'install' && !error && !gone;
+	const onUsage = own === 'usage' && !error && !gone;
+	const onChanges = own === 'changes' && !error && !gone;
+	const usage = useOnce(onUsage ? api.usage(merchantId, { websiteId }) : null);
+	const tokens = useOnce(onInstall && can.tokens ? api.tokens(merchantId, websiteId) : null);
+	const twoStepOn = twoStepOnOf(useOnce(onInstall && can.tokens ? '/v1/me' : null));
 
-	// an old address opens the page at its section (or at the product's card)
-	const target = onPage ? sectionOf(parsed) : null;
+	// a deep link to one product scrolls its row into view on the home
 	useEffect(() => {
-		if (target) document.getElementById(target)?.scrollIntoView?.({ block: 'start' });
-	}, [target]);
+		if (onHome && productId) document.getElementById(`product-${productId}`)?.scrollIntoView?.({ block: 'start' });
+	}, [onHome, productId]);
 	// the list picked another website: nothing of the last one stays open
 	useEffect(() => {
 		setDialog(null);
 		setRemoving(null);
+		setLaunching(null);
 		setProblem(null);
 		setGone(false);
 	}, [websiteId]);
@@ -248,12 +239,18 @@ export function WebsitePageView({
 	/** @param {ProductCard[]} next */
 	const setCards = (next) => setCardsState(next);
 	/** @param {ProductCard} card */
-	const open = async (card) => {
-		setOpening(card.productId);
-		const { path, body } = launch(card.productId);
-		const result = await openDashboard(path, body);
+	const askOpen = (card) => setLaunching(card);
+	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	const sendLaunch = async (confirmation) => {
+		if (!launching)
+			return { ok: /** @type {const} */ (false), problem: /** @type {any} */ ({ status: 400, title: 'Nothing to open' }) };
+		setOpening(launching.productId);
+		const { path, body } = launch(launching.productId);
+		const result = await openDashboard(path, { ...(body && typeof body === 'object' ? body : {}), ...confirmation });
 		setOpening(null);
-		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
+		if (!result.ok) return result;
+		setLaunching(null);
+		return { ok: /** @type {const} */ (true) };
 	};
 	const removeProduct = async () => {
 		if (!removing) return;
@@ -305,6 +302,32 @@ export function WebsitePageView({
 				]
 			: []),
 	];
+	/** Home header: at most two secondary actions (Page rule); the rest open from More. */
+	const homeSecondary = [
+		...(hasSettings
+			? [
+					{
+						label: WEBSITE.settingsAction,
+						icon: /** @type {const} */ ('sliders'),
+						onClick: () => nav.go(hrefOf('settings')),
+					},
+				]
+			: []),
+		...(can.tokens
+			? [
+					{
+						label: WEBSITE.installCeremony,
+						icon: /** @type {const} */ ('code'),
+						onClick: () => nav.go(hrefOf('install')),
+					},
+					{
+						label: WEBSITE.setupSheet,
+						icon: /** @type {const} */ ('layers'),
+						onClick: () => nav.go(hrefOf('setup')),
+					},
+				]
+			: []),
+	];
 	/** @type {import('@ss/ui').PageActions} */
 	const actions = {
 		...(onSetup
@@ -319,31 +342,17 @@ export function WebsitePageView({
 						{ label: SETUP.refresh, loading: setupState.refreshing, onClick: setupState.refresh },
 					],
 				}
-			: own === null && (hasSettings || can.tokens)
-				? {
-						secondary: [
-							...(hasSettings
-								? [
-										{
-											label: WEBSITE.settingsAction,
-											icon: /** @type {const} */ ('sliders'),
-											onClick: () => nav.go(hrefOf('settings')),
-										},
-									]
-								: []),
-							...(can.tokens
-								? [
-										{
-											label: WEBSITE.setupSheet,
-											icon: /** @type {const} */ ('layers'),
-											onClick: () => nav.go(hrefOf('setup')),
-										},
-									]
-								: []),
-						],
-					}
+			: own === null && homeSecondary.length > 0
+				? { secondary: homeSecondary.slice(0, 2) }
 				: {}),
 		more: [
+			...(own === null
+				? homeSecondary.slice(2).map((action) => ({
+						label: action.label,
+						icon: action.icon,
+						onSelect: action.onClick,
+					}))
+				: []),
 			{
 				label: MORE.visitWebsite,
 				icon: 'external',
@@ -375,7 +384,14 @@ export function WebsitePageView({
 		{
 			items: [
 				{ id: 'overview', label: WEBSITE.overview, icon: 'home' },
-				...(can.tokens ? [{ id: 'setup', label: WEBSITE.setupSheet, icon: /** @type {const} */ ('layers') }] : []),
+				...(can.tokens
+					? [
+							{ id: 'install', label: WEBSITE.installCeremony, icon: /** @type {const} */ ('code') },
+							{ id: 'setup', label: WEBSITE.setupSheet, icon: /** @type {const} */ ('layers') },
+						]
+					: []),
+				{ id: 'usage', label: WEBSITE.usageDetails, icon: /** @type {const} */ ('trendingUp') },
+				...(can.settings ? [{ id: 'changes', label: WEBSITE.recentChanges, icon: /** @type {const} */ ('clock') }] : []),
 			],
 		},
 		...(hasSettings
@@ -399,7 +415,16 @@ export function WebsitePageView({
 				]
 			: []),
 	];
-	const current = parsed?.kind === 'settings' ? `settings/${parsed.section}` : 'setup';
+	const current =
+		parsed?.kind === 'settings'
+			? `settings/${parsed.section}`
+			: own === 'install'
+				? 'install'
+				: own === 'usage'
+					? 'usage'
+					: own === 'changes'
+						? 'changes'
+						: 'setup';
 
 	/** @type {import('react').ReactNode} */
 	let body = null;
@@ -430,54 +455,101 @@ export function WebsitePageView({
 				settingsHref={hrefOf('settings')}
 			/>
 		);
-	else if (onPage) {
-		const days = usage?.ok ? usage.data : null;
-		const bars = creditDayBars(days?.days);
+	else if (onInstall) {
 		const entries = /** @type {import('./website.js').TokenEntry[]} */ (tokens?.ok ? (tokens.data?.items ?? []) : []);
-		sections = [
-			{
-				id: 'status',
-				label: WEBSITE.statusSpend,
-				icon: 'activity',
-				body: (
-					<>
-						<StatGrid label={WEBSITE.statusSpend}>
-							<Stat label={WEBSITE.statusColumn} value={pills[dot].label} tone={dot} icon="activity" />
-							<Stat label={WEBSITE.productsTitle} value={cards.length} icon="box" kind="product" />
-							<Stat label={WEBSITE.dailyCost} value={dailyCost} icon="trendingUp" kind="credit" />
-						</StatGrid>
-						{usage && !usage.ok ? <Callout tone="danger">{describeProblem(usage.problem)}</Callout> : null}
-						{days && !isEmptySeries(bars) ? (
-							<Card title={MORE.websiteSpend} subtitle={formatCredits(days.total ?? 0)}>
-								<BarChart label={MORE.websiteSpend} data={bars} format={formatChartCredits} height={120} />
+		body = (
+			<div className="space-y-4">
+				<p className="text-sm text-muted">{WEBSITE.installCeremonyHelp}</p>
+				{tokens && !tokens.ok ? <Callout tone="danger">{describeProblem(tokens.problem)}</Callout> : null}
+				{cards.length === 0 ? (
+					<EmptyState
+						compact
+						icon="box"
+						title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
+						description={can.manage ? WEBSITE.noProductsHelp : WEBSITE.noProductsMerchantHelp}
+						action={
+							can.manage ? (
+								<Button size="sm" icon={<Icon name="plus" size={14} />} onClick={() => setDialog('add')}>
+									{WEBSITE.addProduct}
+								</Button>
+							) : undefined
+						}
+					/>
+				) : !tokens ? (
+					<Skeleton lines={4} />
+				) : (
+					cards.map((card) => {
+						const entry = entries.find((e) => e.productId === card.productId) ?? null;
+						return entry ? (
+							<Card key={card.productId} lead={<IconBadge product={card.productId} size="sm" />} title={card.name}>
+								<InstallBlock
+									key={`${websiteId}:${card.productId}`}
+									entry={entry}
+									domain={website.domain}
+									merchantId={merchantId}
+									websiteId={websiteId}
+									twoStepOn={twoStepOn}
+								/>
 							</Card>
-						) : null}
-					</>
-				),
-			},
+						) : null;
+					})
+				)}
+			</div>
+		);
+	} else if (onUsage)
+		body = (
+			<div id="usage">
+				{!usage ? (
+					<Skeleton lines={4} />
+				) : usage.ok ? (
+					<UsageView usage={usage.data} showWebsite={false} chart />
+				) : (
+					<Callout tone="danger">{describeProblem(usage.problem)}</Callout>
+				)}
+			</div>
+		);
+	else if (onChanges)
+		body = (
+			<div id="activity">
+				<Card title={WEBSITE.recentChanges} subtitle={T.changes.intro}>
+					{settings && !settings.ok ? (
+						<Callout tone="danger">{describeProblem(settings.problem)}</Callout>
+					) : (
+						<ChangesTimeline changes={state.changes} />
+					)}
+				</Card>
+			</div>
+		);
+	else if (onHome) {
+		sections = [
 			{
 				id: 'products',
 				label: WEBSITE.productsTitle,
 				icon: 'box',
 				body: (
 					<>
-						{tokens && !tokens.ok ? <Callout tone="danger">{describeProblem(tokens.problem)}</Callout> : null}
 						{cards.length === 0 ? (
-							<EmptyState compact icon="box" title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant} />
+							<EmptyState
+								compact
+								icon="box"
+								title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
+								description={can.manage ? WEBSITE.noProductsHelp : WEBSITE.noProductsMerchantHelp}
+								action={
+									can.manage ? (
+										<Button size="sm" icon={<Icon name="plus" size={14} />} onClick={() => setDialog('add')}>
+											{WEBSITE.addProduct}
+										</Button>
+									) : undefined
+								}
+							/>
 						) : (
 							cards.map((card) => (
-								<ProductSection
+								<ProductRow
 									key={card.productId}
 									card={card}
-									domain={website.domain}
-									merchantId={merchantId}
-									websiteId={websiteId}
 									can={can}
-									tokens={entries.find((entry) => entry.productId === card.productId) ?? null}
-									pending={can.tokens && !tokens}
-									twoStepOn={twoStepOn}
 									opening={opening === card.productId}
-									onOpen={() => void open(card)}
+									onOpen={() => askOpen(card)}
 									onRemove={() => {
 										setProblem(null);
 										setRemoving(card);
@@ -487,36 +559,6 @@ export function WebsitePageView({
 						)}
 					</>
 				),
-			},
-			...(can.settings
-				? [
-						{
-							id: 'activity',
-							label: WEBSITE.recentChanges,
-							icon: /** @type {const} */ ('clock'),
-							body: (
-								<Card title={WEBSITE.recentChanges} subtitle={T.changes.intro}>
-									{settings && !settings.ok ? (
-										<Callout tone="danger">{describeProblem(settings.problem)}</Callout>
-									) : (
-										<ChangesTimeline changes={state.changes} />
-									)}
-								</Card>
-							),
-						},
-					]
-				: []),
-			{
-				id: 'usage',
-				label: WEBSITE.usageDetails,
-				icon: 'trendingUp',
-				body: !usage ? (
-					<Skeleton lines={4} />
-				) : usage.ok ? (
-					<Card title={WEBSITE.usageDetails}>
-						<UsageView usage={usage.data} showWebsite={false} chart={false} />
-					</Card>
-				) : null,
 			},
 		];
 	}
@@ -531,7 +573,7 @@ export function WebsitePageView({
 				status={[pills[dot]]}
 				facts={facts}
 				actions={actions}
-				info={kind === 'settings' ? T.intro : WEBSITE.pageInfo}
+				info={kind === 'settings' ? T.intro : own === 'install' ? WEBSITE.installCeremonyHelp : WEBSITE.pageInfo}
 				{...(own !== null
 					? {
 							nav: {
@@ -544,7 +586,7 @@ export function WebsitePageView({
 							},
 						}
 					: {})}
-				{...(list && own === null ? { list } : {})}
+				{...(list && (own === null || own === 'install' || own === 'usage' || own === 'changes') ? { list } : {})}
 				{...(sections ? { sections } : {})}
 				loading={gone}
 				{...(error ? { error } : {})}>
@@ -562,6 +604,15 @@ export function WebsitePageView({
 					toast.show({ title: WEBSITE.productAdded(card.name) });
 					nav.go(hrefOf(`products/${card.productId}`));
 				}}
+			/>
+			<ConfirmChange
+				open={Boolean(launching)}
+				title={WEBSITE.openConfirmTitle(launching?.name ?? '')}
+				help={WEBSITE.openConfirmHelp}
+				confirmLabel={WEBSITE.openConfirmLabel}
+				send={sendLaunch}
+				onClose={() => setLaunching(null)}
+				onDone={() => setLaunching(null)}
 			/>
 			<TypedConfirmDialog
 				open={Boolean(removing)}

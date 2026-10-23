@@ -424,10 +424,12 @@ describe('rights: product dashboards, Products, settings, defaults and prices', 
 		await owner.post(`/v1/merchants/${other.merchantId}/websites/${other.websiteIds[0]}/products`, { productId: 'notes' });
 		const support = (await t.admin('support')).client;
 		const finance = (await t.admin('finance')).client;
-		/** @param {any} client @param {unknown} body */
-		const open = (client, body) => client.post('/v1/admin/products/notes/launch', body);
+		/** @param {any} client @param {Record<string, unknown>} [body] */
+		const open = (client, body = {}) => client.post('/v1/admin/products/notes/launch', { password: PASSWORD, ...body });
 		const merchantOpen = (/** @type {any} */ client, /** @type {{ merchantId: string, websiteIds: string[] }} */ who) =>
-			client.post(`/v1/merchants/${who.merchantId}/websites/${who.websiteIds[0]}/products/notes/launch`, {});
+			client.post(`/v1/merchants/${who.merchantId}/websites/${who.websiteIds[0]}/products/notes/launch`, {
+				password: PASSWORD,
+			});
 		/** The role a launch carries (what the product checks). @param {{ json: any }} res */
 		const roleOf = async (res) => {
 			const claims = await t.verify(res.json.url, 'notes');

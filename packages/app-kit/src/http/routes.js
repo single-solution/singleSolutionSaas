@@ -8,7 +8,7 @@ import { isLinkScope } from '@ss/contracts';
 
 /** @typedef {'browser' | 'server' | 'ticket' | 'dashboard' | 'portal' | 'none'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
-/** @typedef {'merchant' | 'owner' | 'support'} DashboardRole */
+/** @typedef {'merchant' | 'portal_owner' | 'portal_support'} DashboardRole */
 /**
  * A fixed-window rate limit (a code constant): `per: 'website'` counts per website (the default when the request names
  * one), `per: 'visitor'` per client IP. Routes with the same `bucket` share one counter (default: one per route). The
@@ -55,7 +55,7 @@ import { isLinkScope } from '@ss/contracts';
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const AUTH = new Set(['browser', 'server', 'ticket', 'dashboard', 'portal', 'none']);
 const WEBSITE_AUTH = new Set(['browser', 'server', 'ticket']);
-const ROLES = new Set(['merchant', 'owner', 'support']);
+const ROLES = new Set(['merchant', 'portal_owner', 'portal_support']);
 
 /**
  * Validate and freeze a route definition.
@@ -94,7 +94,7 @@ export const defineRoute = (definition) => {
 		definition.roles !== undefined &&
 		(auth !== 'dashboard' || !Array.isArray(definition.roles) || definition.roles.some((role) => !ROLES.has(role)))
 	)
-		throw new TypeError(`roles are merchant, owner or support on dashboard routes ${where}`);
+		throw new TypeError(`roles are merchant, portal_owner or portal_support on dashboard routes ${where}`);
 	const limits = definition.rateLimit === undefined ? [] : [definition.rateLimit].flat();
 	for (const limit of limits) {
 		if (

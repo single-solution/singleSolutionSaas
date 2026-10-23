@@ -273,7 +273,7 @@ function DashboardPage({ tabs: own, product }) {
 	/** @type {{ who: Who, portalUrl: string, branding: { name: string }, support: { channels: import('./format.js').SupportChannel[] }, switcher: Array<{ merchantId: string, merchantName: string, websites: Array<{ websiteId: string, domain: string }> }> }} */
 	const { who, portalUrl, branding, support, switcher } = session.data;
 	const admin = who.kind === 'admin';
-	const owner = admin && who.role === 'owner';
+	const owner = admin && who.role === 'portal_owner';
 	const shown = tabsOf(own).filter(([, tab]) => owner || !tab.global);
 	const keys = shown.map(([key]) => key);
 	const view = query.view && keys.includes(query.view) ? query.view : query.websiteId || !owner ? 'overview' : 'defaults';

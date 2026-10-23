@@ -130,7 +130,7 @@ const tabProps = (websiteId, parts = {}) => ({
 	websiteId,
 	merchantId: 'mer_1',
 	domain: 'shop.example.com',
-	who: { kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'owner' },
+	who: { kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'portal_owner' },
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
 	portal: 'https://portal.example.com',
 	open: () => undefined,
@@ -1513,7 +1513,7 @@ describe('ProductDashboard', () => {
 				{ merchantName: 'Other', websites: [{ websiteId: 'p2', domain: 'other.example.com' }] },
 			],
 		});
-	const OWNER = { kind: 'admin', id: 'a1', name: 'Alex', role: 'owner' };
+	const OWNER = { kind: 'admin', id: 'a1', name: 'Alex', role: 'portal_owner' };
 	// React names the section's view transition with CSS.escape, which jsdom lacks
 	beforeEach(() => vi.stubGlobal('CSS', { escape: (/** @type {string} */ text) => text }));
 	const MERCHANT = { kind: 'merchant', id: 'm1', name: 'Sam' };

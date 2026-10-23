@@ -29,6 +29,19 @@ unit, plus `next build` for deployables and `ss app validate` for products. `pnp
 root files and of every unit, `pnpm validate` runs `ss app validate` on every product, and
 `pnpm --filter <unit> <script>` runs one unit's script.
 
+## Adding a product (outside this monorepo)
+
+Do **not** clone this repository to start a new product. This tree is the Portal plus the six first-party products.
+Start a product with the published CLI — it writes a standalone package (`pnpm-workspace.yaml`, pinned `@ss/*`
+versions), not a fork of `products/`:
+
+```bash
+npx @ss/cli app init my-product --id my-product --name "My Product"
+cd my-product && pnpm install && pnpm check
+```
+
+`ss app validate` enforces the product standard (layout, routes, configure ≠ operate). See `packages/cli/README.md`.
+
 ## Deploying
 
 The owner deploys. Deploy the Portal first (`platform/README.md`), then each product (`products/<id>/README.md`).

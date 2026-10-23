@@ -24,9 +24,7 @@ import {
 	SetupChecklist,
 	Stat,
 	StatGrid,
-	describeProblem,
 	formatCredits,
-	useToast,
 	TextLink,
 } from '@ss/ui';
 import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
@@ -34,7 +32,9 @@ import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { DaysLeft, creditDayBars, formatChartCredits, merchantPill } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
+import { ConfirmChange } from '../../views/confirm-change.js';
 import { ActivityTimeline } from '../../views/login-settings.js';
+import { WEBSITE } from '../../../texts/console.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
 import { AddCreditsDialog } from './finance.js';
@@ -58,10 +58,18 @@ const totalDays = (products) => {
  * @param {any} props loader result of `loadOverview` plus `admin`
  */
 export function OverviewView(props) {
-	const toast = useToast();
 	const nav = useNavigation();
 	const [adding, setAdding] = useState(false);
 	const [crediting, setCrediting] = useState(/** @type {any} */ (null));
+	const [launching, setLaunching] = useState(/** @type {any | null} */ (null));
+	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	const sendLaunch = async (confirmation) => {
+		if (!launching) return { ok: /** @type {const} */ (false), problem: /** @type {any} */ ({ status: 400 }) };
+		const result = await openDashboard(adminApi.launch(launching.productId), { websiteId: null, ...confirmation });
+		if (!result.ok) return result;
+		setLaunching(null);
+		return { ok: /** @type {const} */ (true) };
+	};
 	if (!props.ok) return <AdminProblem problem={props.problem} />;
 	const o = props.overview ?? {};
 	const products = /** @type {any[]} */ (o.products ?? []);
@@ -74,11 +82,6 @@ export function OverviewView(props) {
 	const canSettings = adminCan(props.admin, 'portal_settings.write');
 	const earned = products.reduce((n, p) => n + (p.earnedThisMonth ?? 0), 0);
 	const inactive = products.filter((p) => p.status !== 'active').length;
-	/** @param {any} p */
-	const openAsAdmin = async (p) => {
-		const result = await openDashboard(adminApi.launch(p.productId), { websiteId: null });
-		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
-	};
 
 	/** @type {import('@ss/ui').Need[]} */
 	const needs = [];
@@ -308,7 +311,7 @@ export function OverviewView(props) {
 													label={`Actions for ${p.name}`}
 													items={[
 														{ label: MORE.viewProduct, onSelect: () => nav.go(adminRoutes.product(p.productId)) },
-														{ label: PRODUCTS.openAsAdmin, onSelect: () => void openAsAdmin(p) },
+														{ label: PRODUCTS.openAsAdmin, onSelect: () => setLaunching(p) },
 													]}
 												/>
 											) : null
@@ -331,6 +334,15 @@ export function OverviewView(props) {
 					</Card>
 				</div>
 			</Page>
+			<ConfirmChange
+				open={Boolean(launching)}
+				title={WEBSITE.openConfirmTitle(launching?.name ?? '')}
+				help={WEBSITE.openConfirmHelp}
+				confirmLabel={WEBSITE.openConfirmLabel}
+				send={sendLaunch}
+				onClose={() => setLaunching(null)}
+				onDone={() => setLaunching(null)}
+			/>
 			<AddMerchantDialog
 				open={adding}
 				onClose={() => setAdding(false)}

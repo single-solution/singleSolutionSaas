@@ -23,10 +23,8 @@ import {
 	Row,
 	Stat,
 	StatGrid,
-	describeProblem,
 	formatCredits,
 	useNarrow,
-	useToast,
 	TextLink,
 } from '@ss/ui';
 import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
@@ -36,6 +34,7 @@ import { api, routes } from '../paths.js';
 import { DaysLeft, ProductStatusBadge, creditDayBars, formatChartCredits, productStatusLabel, productTone } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
 import { PageProblem, openDashboard } from './common.js';
+import { ConfirmChange } from './confirm-change.js';
 import { ActivityTimeline } from './login-settings.js';
 import { contactLine } from './sign-in.js';
 import { dailyCostOf, websiteDot } from './website.js';
@@ -71,17 +70,23 @@ function Welcome({ branding }) {
  * @param {any} props loader result of `loadOverview` plus `branding` and the signed-in `me`
  */
 export function OverviewView(props) {
-	const toast = useToast();
 	const [opening, setOpening] = useState(/** @type {string | null} */ (null));
+	const [launching, setLaunching] = useState(/** @type {{ website: any, card: ProductCard } | null} */ (null));
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
-	/** @param {any} website @param {ProductCard} card */
-	const open = async (website, card) => {
-		const key = `${website.websiteId}:${card.productId}`;
+	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	const sendLaunch = async (confirmation) => {
+		if (!launching) return { ok: /** @type {const} */ (false), problem: /** @type {any} */ ({ status: 400 }) };
+		const key = `${launching.website.websiteId}:${launching.card.productId}`;
 		setOpening(key);
-		const result = await openDashboard(api.launch(props.merchantId, website.websiteId, card.productId));
+		const result = await openDashboard(
+			api.launch(props.merchantId, launching.website.websiteId, launching.card.productId),
+			confirmation,
+		);
 		setOpening(null);
-		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
+		if (!result.ok) return result;
+		setLaunching(null);
+		return { ok: /** @type {const} */ (true) };
 	};
 	const billing = props.billing;
 	const productCount = rows.reduce((n, r) => n + r.cards.length, 0);
@@ -92,7 +97,7 @@ export function OverviewView(props) {
 			variant="secondary"
 			loading={opening === `${website.websiteId}:${card.productId}`}
 			aria-label={`${WEBSITE.openLabel(card.name)} · ${website.domain}`}
-			onClick={() => void open(website, card)}
+			onClick={() => setLaunching({ website, card })}
 			icon={<Icon name="external" size={14} />}>
 			{WEBSITE.open}
 		</Button>
@@ -267,6 +272,15 @@ export function OverviewView(props) {
 					</div>
 				)}
 			</Page>
+			<ConfirmChange
+				open={Boolean(launching)}
+				title={WEBSITE.openConfirmTitle(launching?.card.name ?? '')}
+				help={WEBSITE.openConfirmHelp}
+				confirmLabel={WEBSITE.openConfirmLabel}
+				send={sendLaunch}
+				onClose={() => setLaunching(null)}
+				onDone={() => setLaunching(null)}
+			/>
 		</>
 	);
 }

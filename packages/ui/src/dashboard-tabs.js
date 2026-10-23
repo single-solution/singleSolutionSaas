@@ -49,7 +49,7 @@ import { websiteSettingsUrl } from './portal-links.js';
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('./dashboard-page.js').Section} Section */
 /** @typedef {import('react').ReactNode} ReactNode */
-/** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
+/** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'portal_owner' | 'portal_support' }} Who */
 /**
  * What every tab is given: the picked website (null on the Owner's global tabs), its merchant and its domain, the viewer, the
  * support contact, the Portal's address and name (`brand`, its Branding), and `open`, which shows another section (the

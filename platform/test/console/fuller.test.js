@@ -27,7 +27,19 @@ import { CreditsView } from '../../src/console/views/credits.js';
 import { presetOf, rangePresets } from '../../src/console/views/range.js';
 import { OverviewView as MerchantOverview, WebsiteView } from '../../src/console/views/websites.js';
 import { PORTAL_URL, startMongo } from '../helpers.js';
-import { buttons, clickEl, createWorld, dialog, press, pressDialog, pressMenu, quiet, shows, until } from './merchant-harness.js';
+import {
+	buttons,
+	clickEl,
+	createWorld,
+	dialog,
+	fillDialog,
+	press,
+	pressDialog,
+	pressMenu,
+	quiet,
+	shows,
+	until,
+} from './merchant-harness.js';
 import { testRouter } from './router.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
@@ -160,6 +172,8 @@ describe('fuller Portal screens (jsdom)', () => {
 			expect(pushed('/admin/products/notes')).toBe(true);
 			await menu('Actions for Notes');
 			await clickEl(menuItem('Open as admin'));
+			fillDialog('Your password', ownerBrowser.password);
+			await pressDialog('Open configure');
 			await until(() => open.mock.calls.length > 0);
 			await press('Add credits');
 			await until(() => shows('Add credits · Shop & Co'));
@@ -308,6 +322,10 @@ describe('fuller Portal screens (jsdom)', () => {
 			for (const text of ['Recent activity', 'Latest credits added', 'seed-1']) expect(shows(text)).toBe(true);
 			cleanup();
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(shop.b.api, merchantId, websiteId, '')} />);
+			expect(document.querySelector('#product-notes')).not.toBeNull();
+			cleanup();
+			// usage is its own address (not loaded on the product-rows home)
+			withToasts(<WebsiteView {...await loaders.loadWebsitePage(shop.b.api, merchantId, websiteId, 'usage')} />);
 			await until(() =>
 				shop.b.calls.some((c) => c.path.startsWith(`/v1/merchants/${merchantId}/usage?websiteId=`) && c.status === 200),
 			);

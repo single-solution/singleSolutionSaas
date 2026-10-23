@@ -35,8 +35,10 @@ import {
 	clickEl,
 	createWorld,
 	fill,
+	fillDialog,
 	menuItems,
 	press,
+	pressDialog,
 	quiet,
 	resetHash,
 	settle,
@@ -361,14 +363,12 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		cleanup();
 		render(<WebsiteView {...await loaders.loadWebsitePage(e.api, beta.merchantId, String(site.websiteId), '')} />);
 		expect(document.querySelector('h1')?.textContent).toBe('beta.example.com');
-		// one page with its sections open (product card, usage, recent changes); Settings and the Setup sheet are
-		// header actions to their own addresses; the More menu has only those and Visit and Copy for a merchant
+		// home is product rows; Settings / Install are header actions (Setup sheet overflows to More)
 		expect(document.querySelector('#product-notes')).not.toBeNull();
-		for (const label of ['Settings', 'Setup sheet', 'Open Notes']) expect(buttons(label).length).toBeGreaterThan(0);
-		expect(shows('Recent changes')).toBe(true);
+		for (const label of ['Settings', 'Install', 'Open Notes']) expect(buttons(label).length).toBeGreaterThan(0);
+		expect(shows('Recent changes')).toBe(false);
 		await press('More actions');
-		// (the header's own actions repeat there on a narrow window)
-		expect(menuItems()).toEqual(['Settings', 'Setup sheet', 'Visit website', 'Copy domain']);
+		expect(menuItems()).toEqual(expect.arrayContaining(['Setup sheet', 'Visit website', 'Copy domain']));
 		cleanup();
 		const open = vi.fn();
 		vi.stubGlobal('open', open);
@@ -377,6 +377,8 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		expect(shows('No features on')).toBe(true);
 		expect(shows('Spend per UTC day (last 30 days)')).toBe(true);
 		await press('Open Notes · beta.example.com');
+		fillDialog('Your password', PASSWORD);
+		await pressDialog('Open configure');
 		const launched = await e.waitCall(
 			'POST',
 			`/v1/merchants/${beta.merchantId}/websites/${site.websiteId}/products/notes/launch`,
@@ -387,6 +389,8 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		// a refused launch shows its problem (the merchant is suspended meanwhile: every session ends)
 		await world.ownerBrowser.api.post(`/v1/admin/merchants/${beta.merchantId}/suspend`, { reason: 'check' });
 		await press('Open Notes · beta.example.com');
+		fillDialog('Your password', PASSWORD);
+		await pressDialog('Open configure');
 		await e.waitCall(
 			'POST',
 			`/v1/merchants/${beta.merchantId}/websites/${site.websiteId}/products/notes/launch`,

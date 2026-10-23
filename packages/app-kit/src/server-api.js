@@ -113,7 +113,7 @@ const valuesOf = (list, field, unique) =>
  * @param {string} permission
  */
 const mayChange = (ctx, permission) =>
-	ctx.session ? ctx.session.kind === 'merchant' || ctx.session.role === 'owner' : allows(ctx, permission);
+	ctx.session ? ctx.session.kind === 'merchant' || ctx.session.role === 'portal_owner' : allows(ctx, permission);
 
 /** The dashboard twin of `/v1/lists/:list`. */
 const DASHBOARD_LIST_PATH = '/v1/dashboard/websites/:websiteId/lists/:list';

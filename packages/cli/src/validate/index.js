@@ -5,8 +5,8 @@
  *   needs (`anatomy.missing`);
  * - `manifest.json` (local `$ref`s bundled) against `@ss/contracts` `validateManifest` (`manifest.*`);
  * - the routes in `server/`: every route has a valid auth, every browser-token, server-token and ticket route belongs to
- *   a feature of the manifest, permissions exist, and the widget script and the docs are public routes
- *   (`routes.*`);
+ *   a feature of the manifest, permissions exist, dashboard routes stay under `/v1/dashboard/` with no live-ops
+ *   segments (`routes.configure`), and the widget script and the docs are public routes (`routes.*`);
  * - `strings/en.json`, the only widget-text file: flat keys, text values, well-formed `{placeholders}`, and every
  *   `t('key')` used in the code exists (`strings.*`);
  * - `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY`, and may list the optional
@@ -91,6 +91,20 @@ const IMPORT_POLICY = Object.freeze({
 const AUTH_MODES = Object.freeze(['browser', 'server', 'ticket', 'dashboard', 'none']);
 /** Auth modes of website routes, which belong to exactly one feature. */
 const WEBSITE_AUTH = Object.freeze(['browser', 'server', 'ticket']);
+/**
+ * Path segments that mean live ops. Configure dashboards must not expose them under `auth: 'dashboard'` —
+ * those belong on ticket/server routes and admin widgets (PLAN configure ≠ operate).
+ */
+const LIVE_OPS_SEGMENTS = Object.freeze([
+	'orders',
+	'inbox',
+	'conversations',
+	'claims',
+	'campaigns',
+	'shipments',
+	'refunds',
+	'customers',
+]);
 
 const CODE_FILE = /\.(?:m?js|cjs|jsx)$/;
 const CSS_FILE = /\.css$/;
@@ -423,6 +437,25 @@ const checkRoutes = (routes, manifest) => {
 					message: `${name}: every ${route.auth} route belongs to one feature (set feature${route.auth === 'ticket' ? ' or permission' : ''})`,
 				}),
 			);
+		if (route.auth === 'dashboard') {
+			if (!route.path.startsWith('/v1/dashboard/'))
+				problems.push(
+					problemOf({
+						rule: 'routes.configure',
+						...where,
+						message: `${name}: dashboard auth is configure only — path must start with /v1/dashboard/`,
+					}),
+				);
+			const live = route.path.split('/').find((segment) => LIVE_OPS_SEGMENTS.includes(segment));
+			if (live)
+				problems.push(
+					problemOf({
+						rule: 'routes.configure',
+						...where,
+						message: `${name}: '${live}' is live ops — use ticket or server auth (admin widgets), not dashboard`,
+					}),
+				);
+		}
 	}
 	/** @param {string} where */
 	const publicRoute = (where) => routes.some((route) => route.method === 'GET' && route.path === where && route.auth === 'none');

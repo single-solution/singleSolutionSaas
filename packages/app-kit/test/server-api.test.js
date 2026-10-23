@@ -261,7 +261,7 @@ describe('settings API for the merchant’s server (K1)', () => {
 		const overview = await (await dash(owner, 'GET', `/v1/dashboard/websites/${websiteId}/overview`)).json();
 		expect(overview.recentChanges.slice(0, 2)).toMatchObject([
 			{ what: 'settings', detail: 'Labels: changed', who: { kind: 'merchant' } },
-			{ what: 'settings', detail: 'Labels: changed', who: { kind: 'admin', role: 'owner' } },
+			{ what: 'settings', detail: 'Labels: changed', who: { kind: 'admin', role: 'portal_owner' } },
 		]);
 	});
 

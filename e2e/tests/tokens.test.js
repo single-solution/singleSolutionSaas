@@ -1,7 +1,7 @@
 /**
- * PLAN 0.4.4 and 0.5.9: the two tokens of a product on a website, created on Add product, shown in Install and tokens,
- * revealed and regenerated in the Portal, and obeyed by the product (browser token origins, server token without an
- * Origin, revocation after `token.revoked`, tokens of another product refused).
+ * PLAN 0.4.4 / 0.5.9 / §7 polish: Install and tokens ceremony — both tokens issued on Add product, browser shown in
+ * Install, server revealed and regenerated only with the person's password (session alone shows nothing), then obeyed
+ * by the product (origins, no Origin on server, revocation after `token.revoked`, other product's tokens refused).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PASSWORD, PRODUCT_URL, codeOf, startSystem } from './helpers.js';
@@ -54,23 +54,30 @@ describe('tokens of a product on a website', () => {
 		expect(config.json).toMatchObject({ features: ['notes'] });
 	});
 
-	it('Finance never sees tokens; reveals are logged and never cached', async () => {
+	it('Install ceremony: reveal needs the password; Finance never; Support lists but cannot show', async () => {
 		const finance = await sys.admin('finance');
 		const base = `/v1/merchants/${m.merchantId}/websites/${websiteId}/tokens`;
 		expect((await finance.client.get(base)).status).toBe(403);
 		expect((await finance.client.post(`${base}/notes/reveal`, { password: PASSWORD })).status).toBe(403);
 		expect((await finance.client.post(`${base}/notes/regenerate`, { kind: 'server', password: PASSWORD })).status).toBe(403);
-		// Support sees the tab, but showing or renewing a server token is the Owner's (and the merchant's, for its own)
+		// Support sees Install, but showing or renewing a server token is the Owner's (and the merchant's, for its own)
 		const support = await sys.admin('support');
 		expect((await support.client.get(base)).status).toBe(200);
 		expect((await support.client.post(`${base}/notes/reveal`, { password: PASSWORD })).status).toBe(403);
-		// and nobody shows one without their password: a session alone (a stolen cookie) shows nothing
+		// session alone (stolen cookie) shows nothing; wrong password refuses; right password reveals once
 		expect((await m.client.post(`${base}/notes/reveal`, {})).status).toBe(422);
 		expect((await m.client.post(`${base}/notes/reveal`, { password: 'not my password' })).status).toBeGreaterThanOrEqual(400);
 		const revealed = await m.client.post(`${base}/notes/reveal`, { password: PASSWORD });
 		expect(revealed.status).toBe(200);
+		expect(revealed.json.serverToken).toEqual(expect.any(String));
 		expect(revealed.headers.get('cache-control')).toMatch(/no-store/);
 		expect((await sys.activity('token.revealed')).length).toBeGreaterThan(0);
+		// Owner can reveal the same token; list still hides the plaintext
+		const ownerReveal = await (await sys.owner()).post(`${base}/notes/reveal`, { password: PASSWORD });
+		expect(ownerReveal.status).toBe(200);
+		expect(ownerReveal.json.serverToken).toBe(revealed.json.serverToken);
+		const listed = await m.client.get(base);
+		expect(listed.json.items[0].serverToken).toEqual({ canShow: true });
 	});
 
 	it('the browser token works only from the exact https domain and local origins', async () => {

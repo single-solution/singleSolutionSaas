@@ -37,6 +37,7 @@ import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { creditDayBars, formatChartCredits, productPill } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
+import { ConfirmChange } from '../../views/confirm-change.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -201,6 +202,7 @@ function ProductPageView({ detail, owner, list }) {
 	const [product, setProduct] = useState(detail.product);
 	const [reconnecting, setReconnecting] = useState(false);
 	const [busy, setBusy] = useState(/** @type {null | 'open' | 'status'} */ (null));
+	const [askOpen, setAskOpen] = useState(false);
 	const sites = useProductWebsites(String(product.productId), detail.websites, detail.websitesProblem);
 
 	const id = String(product.productId);
@@ -208,11 +210,14 @@ function ProductPageView({ detail, owner, list }) {
 	const earned = creditDayBars(numbers.days);
 	const features = /** @type {any[]} */ (product.features ?? []);
 
-	const openAsAdmin = async () => {
+	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	const sendLaunch = async (confirmation) => {
 		setBusy('open');
-		const result = await openDashboard(adminApi.launch(id), { websiteId: null });
+		const result = await openDashboard(adminApi.launch(id), { websiteId: null, ...confirmation });
 		setBusy(null);
-		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
+		if (!result.ok) return result;
+		setAskOpen(false);
+		return { ok: /** @type {const} */ (true) };
 	};
 
 	const toggle = async () => {
@@ -393,7 +398,7 @@ function ProductPageView({ detail, owner, list }) {
 									icon: 'external',
 									title: PRODUCTS.openAsAdminHelp,
 									loading: busy === 'open',
-									onClick: () => openAsAdmin(),
+									onClick: () => setAskOpen(true),
 								},
 								secondary: [
 									{
@@ -411,6 +416,15 @@ function ProductPageView({ detail, owner, list }) {
 						: {}
 				}
 				sections={sections}
+			/>
+			<ConfirmChange
+				open={askOpen}
+				title={WEBSITE.openConfirmTitle(product.name)}
+				help={WEBSITE.openConfirmHelp}
+				confirmLabel={WEBSITE.openConfirmLabel}
+				send={sendLaunch}
+				onClose={() => setAskOpen(false)}
+				onDone={() => setAskOpen(false)}
 			/>
 			{owner ? (
 				<ConnectDialog
