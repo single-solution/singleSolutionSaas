@@ -174,6 +174,7 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 				<Input
 					name="name"
 					label={MERCHANT_FIELDS.name}
+					autoComplete="organization"
 					value={form.name}
 					onChange={handleInput}
 					error={errors.name}
@@ -183,6 +184,7 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 				<Input
 					name="ownerName"
 					label={MERCHANT_FIELDS.ownerName}
+					autoComplete="name"
 					value={form.ownerName}
 					onChange={handleInput}
 					error={errors.ownerName}
@@ -193,6 +195,7 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 					name="email"
 					label={MERCHANT_FIELDS.email}
 					type="email"
+					autoComplete="email"
 					value={form.email}
 					onChange={handleInput}
 					error={errors.email}
@@ -201,6 +204,9 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 				<Input
 					name="phone"
 					label={MERCHANT_FIELDS.phone}
+					type="tel"
+					inputMode="tel"
+					autoComplete="tel"
 					help={MERCHANT_FIELDS.phoneHelp}
 					value={form.phone}
 					onChange={handleInput}
@@ -217,6 +223,7 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 				<Input
 					name="address"
 					label={MERCHANT_FIELDS.address}
+					autoComplete="street-address"
 					value={form.address}
 					onChange={handleInput}
 					error={errors.address}

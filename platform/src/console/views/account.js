@@ -81,6 +81,7 @@ export function MerchantFieldsForm({
 		<Form onSubmit={submit} busy={busy} aria-label={MERCHANT.detailsTitle}>
 			<Input
 				label={MERCHANT_FIELDS.name}
+				autoComplete="organization"
 				value={form.name}
 				onChange={(e) => set('name', e.currentTarget.value)}
 				error={errors.name}
@@ -90,6 +91,7 @@ export function MerchantFieldsForm({
 			/>
 			<Input
 				label={MERCHANT_FIELDS.ownerName}
+				autoComplete="name"
 				value={form.ownerName}
 				onChange={(e) => set('ownerName', e.currentTarget.value)}
 				error={errors.ownerName}
@@ -101,6 +103,7 @@ export function MerchantFieldsForm({
 				<Input
 					label={MERCHANT_FIELDS.email}
 					type="email"
+					autoComplete="email"
 					value={form.email}
 					onChange={(e) => set('email', e.currentTarget.value)}
 					error={errors.email}
@@ -110,6 +113,9 @@ export function MerchantFieldsForm({
 			) : null}
 			<Input
 				label={MERCHANT_FIELDS.phone}
+				type="tel"
+				inputMode="tel"
+				autoComplete="tel"
 				help={MERCHANT_FIELDS.phoneHelp}
 				value={form.phone}
 				onChange={(e) => set('phone', e.currentTarget.value)}
@@ -127,6 +133,7 @@ export function MerchantFieldsForm({
 			/>
 			<Input
 				label={MERCHANT_FIELDS.address}
+				autoComplete="street-address"
 				value={form.address}
 				onChange={(e) => set('address', e.currentTarget.value)}
 				error={errors.address}

@@ -150,6 +150,17 @@ function InviteDrawer({ open, onClose, onInvited, twoStepOn = false }) {
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const formId = useId();
 
+	/** @param {boolean} copy */
+	const validateAndAsk = (copy) => {
+		const val = email.trim();
+		if (!val || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+			setProblem({ status: 422, errors: [{ path: '/email', message: 'Enter a valid email address.' }] });
+			return;
+		}
+		setProblem(null);
+		setAsking({ copy });
+	};
+
 	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
 	const send = async (confirmation) => {
 		const copy = asking?.copy ?? false;
@@ -177,7 +188,7 @@ function InviteDrawer({ open, onClose, onInvited, twoStepOn = false }) {
 				title={ADMIN.inviteTitle}
 				footer={
 					<>
-						<Button variant="secondary" onClick={() => setAsking({ copy: true })}>
+						<Button variant="secondary" onClick={() => validateAndAsk(true)}>
 							{ADMIN.copyInvite}
 						</Button>
 						<Button type="submit" form={formId}>
@@ -185,10 +196,17 @@ function InviteDrawer({ open, onClose, onInvited, twoStepOn = false }) {
 						</Button>
 					</>
 				}>
-				<Form id={formId} onSubmit={() => setAsking({ copy: false })} aria-label={ADMIN.inviteTitle}>
+				<Form
+					id={formId}
+					onSubmit={(e) => {
+						e.preventDefault();
+						validateAndAsk(false);
+					}}
+					aria-label={ADMIN.inviteTitle}>
 					<Input
 						label="Email"
 						type="email"
+						autoComplete="email"
 						value={email}
 						onChange={(e) => setEmail(e.currentTarget.value)}
 						error={fieldErrors(problem).email}

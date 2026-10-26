@@ -271,7 +271,7 @@ export function OverviewView(props) {
 						actions={
 							linked && products.length > 0 ? (
 								<ButtonLink as={Link} href={adminRoutes.products()} variant="secondary" size="sm">
-									{ADMIN.viewMerchants}
+									{MORE.viewAll}
 								</ButtonLink>
 							) : null
 						}>
