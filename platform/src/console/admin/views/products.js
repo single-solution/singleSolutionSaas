@@ -197,9 +197,10 @@ function useProductWebsites(productId, first, firstProblem) {
  *   owner: boolean,
  *   list?: any,
  *   admin?: any,
+ *   onAdd?: (() => void) | null,
  * }} props
  */
-function ProductPageView({ detail, owner, list, admin = null }) {
+function ProductPageView({ detail, owner, list, admin = null, onAdd = null }) {
 	const toast = useToast();
 	const [product, setProduct] = useState(detail.product);
 	const [reconnecting, setReconnecting] = useState(false);
@@ -413,6 +414,7 @@ function ProductPageView({ detail, owner, list, admin = null }) {
 								more: [
 									{ label: MORE.copyAddress, onSelect: () => void copyAddress() },
 									{ label: PRODUCTS.reconnect, onSelect: () => setReconnecting(true) },
+									...(onAdd ? [{ label: PRODUCTS.add, onSelect: onAdd }] : []),
 								],
 							}
 						: {}
@@ -555,7 +557,13 @@ function ProductsScreen({ items, owner, detail, admin = null, productId: explici
 	if (detail) {
 		return (
 			<>
-				<ProductPageView detail={detail} owner={owner} list={listColumn} admin={admin} />
+				<ProductPageView
+					detail={detail}
+					owner={owner}
+					list={listColumn}
+					admin={admin}
+					onAdd={owner ? () => setAdding(true) : null}
+				/>
 				{connectDialog}
 			</>
 		);

@@ -195,6 +195,7 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 					name="email"
 					label={MERCHANT_FIELDS.email}
 					type="email"
+					inputMode="email"
 					autoComplete="email"
 					value={form.email}
 					onChange={handleInput}

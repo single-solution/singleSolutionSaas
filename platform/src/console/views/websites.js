@@ -215,10 +215,7 @@ export function OverviewView(props) {
 											lead={{ icon: 'globe' }}
 											href={routes.website(r.website.websiteId)}
 											title={r.website.domain}
-											meta={[
-												r.card?.name ?? WEBSITE.noProductsMerchant,
-												r.card ? productStatusLabel(r.card) : null,
-											].filter(Boolean)}
+											meta={r.card ? [r.card.name] : [WEBSITE.noProductsMerchant]}
 											status={
 												r.card
 													? {
