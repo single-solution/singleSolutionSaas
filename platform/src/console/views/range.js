@@ -12,7 +12,7 @@ import { useNavigation } from '../navigation.js';
 const DAY_MS = 86_400_000;
 
 /** @param {number} ms */
-const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+const dayOf = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : '');
 
 /** @typedef {'last7' | 'last30' | 'last90' | 'thisMonth' | 'lastMonth'} Preset */
 

@@ -89,26 +89,31 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
 	const save = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch(adminApi.addReceipt(merchant.merchantId), {
-			method: 'POST',
-			idempotencyKey: key,
-			body: {
-				credits,
-				amountPaid: form.amountPaid.trim(),
-				method: form.method.trim(),
-				...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
-			},
-		});
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			setErrors(fieldErrors(result.problem));
-			setReviewing(false);
-			return;
+		try {
+			const result = await apiFetch(adminApi.addReceipt(merchant.merchantId), {
+				method: 'POST',
+				idempotencyKey: key,
+				body: {
+					credits,
+					amountPaid: form.amountPaid.trim(),
+					method: form.method.trim(),
+					...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
+				},
+			});
+			setBusy(false);
+			if (!result.ok) {
+				setProblem(result.problem);
+				setErrors(fieldErrors(result.problem));
+				setReviewing(false);
+				return;
+			}
+			toast.show({ title: F.added, description: `${BILLING.balance}: ${formatCredits(result.data?.summary?.balance)}` });
+			await onAdded();
+			onClose();
+		} catch (error) {
+			setBusy(false);
+			setProblem({ status: 500, detail: error instanceof Error ? error.message : 'The request failed.' });
 		}
-		toast.show({ title: F.added, description: `${BILLING.balance}: ${formatCredits(result.data?.summary?.balance)}` });
-		await onAdded();
-		onClose();
 	};
 	return (
 		<Drawer
@@ -228,14 +233,19 @@ function PickMerchantDialog({ merchants, initial = null, onClose, onPicked }) {
 		if (!merchantId) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch(adminApi.billing(merchantId));
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
+		try {
+			const result = await apiFetch(adminApi.billing(merchantId));
+			setBusy(false);
+			if (!result.ok) {
+				setProblem(result.problem);
+				return;
+			}
+			const name = merchants.find((m) => m.value === merchantId)?.label ?? merchantId;
+			onPicked({ merchantId, merchantName: name, balance: result.data?.balance ?? null });
+		} catch (error) {
+			setBusy(false);
+			setProblem({ status: 500, detail: error instanceof Error ? error.message : 'The request failed.' });
 		}
-		const name = merchants.find((m) => m.value === merchantId)?.label ?? merchantId;
-		onPicked({ merchantId, merchantName: name, balance: result.data?.balance ?? null });
 	};
 	return (
 		<Drawer

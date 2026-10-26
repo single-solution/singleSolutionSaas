@@ -195,9 +195,10 @@ function useProductWebsites(productId, first, firstProblem) {
  *   detail: any,
  *   owner: boolean,
  *   list?: any,
+ *   admin?: any,
  * }} props
  */
-function ProductPageView({ detail, owner, list }) {
+function ProductPageView({ detail, owner, list, admin = null }) {
 	const toast = useToast();
 	const [product, setProduct] = useState(detail.product);
 	const [reconnecting, setReconnecting] = useState(false);
@@ -422,6 +423,7 @@ function ProductPageView({ detail, owner, list }) {
 				title={WEBSITE.openConfirmTitle(product.name)}
 				help={WEBSITE.openConfirmHelp}
 				confirmLabel={WEBSITE.openConfirmLabel}
+				twoStepOn={Boolean(admin?.twoStep?.enabled)}
 				send={sendLaunch}
 				onClose={() => setAskOpen(false)}
 				onDone={() => setAskOpen(false)}
@@ -452,12 +454,13 @@ function ProductPageView({ detail, owner, list }) {
  *   items: any[],
  *   owner: boolean,
  *   detail?: any,
+ *   admin?: any,
  *   productId?: string | null,
  *   fromList?: boolean,
  *   filterStatus?: string | null,
  * }} props
  */
-function ProductsScreen({ items, owner, detail, productId: explicitId, fromList, filterStatus: initialStatus }) {
+function ProductsScreen({ items, owner, detail, admin = null, productId: explicitId, fromList, filterStatus: initialStatus }) {
 	const toast = useToast();
 	const nav = useNavigation();
 	const phone = usePhone();
@@ -551,7 +554,7 @@ function ProductsScreen({ items, owner, detail, productId: explicitId, fromList,
 	if (detail) {
 		return (
 			<>
-				<ProductPageView detail={detail} owner={owner} list={listColumn} />
+				<ProductPageView detail={detail} owner={owner} list={listColumn} admin={admin} />
 				{connectDialog}
 			</>
 		);
@@ -624,6 +627,7 @@ export function ProductsView(props) {
 			items={items}
 			owner={owner}
 			detail={detail}
+			admin={props.admin}
 			productId={props.productId ?? (detail?.product ? String(detail.product.productId) : null)}
 			fromList={Boolean(props.fromList)}
 			filterStatus={filterStatus}

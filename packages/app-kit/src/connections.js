@@ -87,10 +87,22 @@ export const portalNameOf = (def) => (def.kind === 'database' || def.kind === 's
  */
 export const deliveredFor = (def, bundle) => {
 	const name = portalNameOf(def);
-	return name === 'database' ? bundle.database : name === 'storage' ? bundle.storage : name === 'ai' ? bundle.shared.ai : null;
+	return name === 'database'
+		? bundle.database
+		: name === 'storage'
+			? bundle.storage
+			: name === 'ai'
+				? (bundle.shared?.ai ?? null)
+				: null;
 };
 /** Who changed a connection that arrived from the Portal. @type {Who} */
 const PORTAL = Object.freeze({ kind: 'portal', id: 'portal', name: 'Portal' });
+/** @param {unknown} value */
+const toIso = (value) => {
+	if (value === null || value === undefined || value === '') return null;
+	const d = value instanceof Date ? value : new Date(/** @type {any} */ (value));
+	return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+};
 /** The name a link to another product is stored under. @param {string} productId */
 export const linkName = (productId) => `link_${productId.replace(/-/g, '_')}`;
 const DIRECTORY_TTL_MS = 5 * 60_000;
@@ -276,7 +288,7 @@ export const createConnections = ({
 					set: true,
 					status: found.doc.status,
 					...(found.doc.message ? { message: found.doc.message } : {}),
-					testedAt: new Date(found.doc.testedAt).toISOString(),
+					testedAt: toIso(found.doc.testedAt),
 				};
 			}),
 		);
@@ -296,7 +308,7 @@ export const createConnections = ({
 					set: true,
 					status: doc.status ?? 'connected',
 					...(doc.message ? { message: doc.message } : {}),
-					testedAt: new Date(doc.testedAt ?? doc.at).toISOString(),
+					testedAt: toIso(doc.testedAt ?? doc.at),
 				};
 			}),
 		);

@@ -211,10 +211,18 @@ export const useOnce = (path) => {
 };
 
 /**
- * Whether the signed-in person has two-step on, from `GET /v1/me` (`{ kind, <kind>: { twoStep }, … }`).
- * @param {import('./common.js').ApiResult | null} me
+ * Whether the signed-in person has two-step on, from `GET /v1/me` (`{ kind, <kind>: { twoStep }, … }`) or an actor object.
+ * @param {import('./common.js').ApiResult | any | null} me
  */
-export const twoStepOnOf = (me) => me?.ok === true && me.data?.[me.data?.kind]?.twoStep?.enabled === true;
+export const twoStepOnOf = (me) => {
+	if (!me) return false;
+	const obj = me?.ok === true ? me.data : me;
+	if (!obj) return false;
+	const kind = obj.kind;
+	if (kind && obj[kind]?.twoStep?.enabled !== undefined) return Boolean(obj[kind].twoStep.enabled);
+	if (obj.twoStep?.enabled !== undefined) return Boolean(obj.twoStep.enabled);
+	return false;
+};
 
 /**
  * One product's install block, the body of the product's card on the website page: the widget script tag (products

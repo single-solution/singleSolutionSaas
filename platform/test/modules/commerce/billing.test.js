@@ -224,5 +224,15 @@ describe('credits and billing (PLAN 0.5)', () => {
 				actor: STAFF,
 			}),
 		).rejects.toMatchObject({ code: 'not_found' });
+		const unknown = 'mer_999999999999999999999999';
+		await expect(h.service.billingSummary(unknown)).rejects.toMatchObject({ code: 'not_found' });
+		await expect(h.service.usage(unknown, { from: '2026-10-01', to: '2026-10-02' })).rejects.toMatchObject({
+			code: 'not_found',
+		});
+		await expect(h.service.receiptsOf(unknown, { forAdmin: true })).rejects.toMatchObject({ code: 'not_found' });
+		await expect(h.service.dayChargesOf(unknown)).rejects.toMatchObject({ code: 'not_found' });
+		const mixed = await h.service.billingSummaries([M1, unknown]);
+		expect(mixed).toHaveLength(1);
+		expect(mixed[0]?.merchantId).toBe(M1);
 	});
 });

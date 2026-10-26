@@ -108,9 +108,9 @@ export function useWebsiteSettings({ data, changes: initialChanges, connections:
 
 /**
  * One section of the settings.
- * @param {{ section: string, state: ReturnType<typeof useWebsiteSettings> }} props
+ * @param {{ section: string, state: ReturnType<typeof useWebsiteSettings>, twoStepOn?: boolean }} props
  */
-export function SettingsSectionBody({ section, state }) {
+export function SettingsSectionBody({ section, state, twoStepOn = false }) {
 	const { settings, manage, canWrite, stale, saved, markStale, reload, connections, setConnections } = state;
 	if (DOCUMENT_SECTIONS.includes(section) && !settings) return null;
 	const common = {
@@ -134,6 +134,7 @@ export function SettingsSectionBody({ section, state }) {
 					view={connections}
 					manage={manage}
 					canWrite={connections?.can.write ?? false}
+					twoStepOn={twoStepOn}
 					onChanged={(view) => setConnections(view)}
 				/>
 			) : null}
@@ -142,6 +143,7 @@ export function SettingsSectionBody({ section, state }) {
 					view={connections}
 					manage={manage}
 					canWrite={connections?.can.write ?? false}
+					twoStepOn={twoStepOn}
 					onChanged={(view) => setConnections(view)}
 				/>
 			) : null}

@@ -277,6 +277,7 @@ export function OverviewView(props) {
 				title={WEBSITE.openConfirmTitle(launching?.card.name ?? '')}
 				help={WEBSITE.openConfirmHelp}
 				confirmLabel={WEBSITE.openConfirmLabel}
+				twoStepOn={Boolean(props.me?.merchant?.twoStep?.enabled)}
 				send={sendLaunch}
 				onClose={() => setLaunching(null)}
 				onDone={() => setLaunching(null)}
@@ -319,9 +320,18 @@ const troubleOf = (cards) => {
  * (`fromList`) the first website is open straight away on wide screens, and a phone shows the list alone. A search and
  * status chips narrow the list.
  * @param {{ rows: Array<{ website: any, cards: ProductCard[] }>, websiteId: string, fromList?: boolean, part?: string,
- *   settings?: any, setup?: any, merchantId: string }} props
+ *   settings?: any, setup?: any, merchantId: string, twoStepOn?: boolean }} props
  */
-function WebsitesScreen({ rows, websiteId, fromList = false, part = '', settings = null, setup = null, merchantId }) {
+function WebsitesScreen({
+	rows,
+	websiteId,
+	fromList = false,
+	part = '',
+	settings = null,
+	setup = null,
+	merchantId,
+	twoStepOn = false,
+}) {
 	const nav = useNavigation();
 	const phone = useNarrow();
 	const [q, setQ] = useState('');
@@ -396,6 +406,7 @@ function WebsitesScreen({ rows, websiteId, fromList = false, part = '', settings
 			settings={settings}
 			setup={setup}
 			list={list}
+			twoStepOn={twoStepOn}
 		/>
 	);
 }
@@ -421,6 +432,7 @@ export function WebsitesView(props) {
 					fromList
 					settings={props.settings}
 					merchantId={props.merchantId}
+					twoStepOn={Boolean(props.me?.merchant?.twoStep?.enabled)}
 				/>
 			)}
 		</>
@@ -444,6 +456,7 @@ export function WebsiteView(props) {
 				settings={props.settings}
 				setup={props.setup}
 				merchantId={props.merchantId}
+				twoStepOn={Boolean(props.me?.merchant?.twoStep?.enabled)}
 			/>
 		</>
 	);

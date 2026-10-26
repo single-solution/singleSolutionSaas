@@ -141,9 +141,9 @@ function InviteLink({ link, onClose }) {
 /**
  * Invite an admin, in a drawer: the email and the role; Invite sends the invite, Copy invite link hands the link over.
  * Both ask for the Owner's password first (an invite can make an Owner).
- * @param {{ open: boolean, onClose: () => void, onInvited: (invite: any, copy: boolean) => void }} props
+ * @param {{ open: boolean, onClose: () => void, onInvited: (invite: any, copy: boolean) => void, twoStepOn?: boolean }} props
  */
-function InviteDrawer({ open, onClose, onInvited }) {
+function InviteDrawer({ open, onClose, onInvited, twoStepOn = false }) {
 	const [email, setEmail] = useState('');
 	const [role, setRole] = useState('support');
 	const [asking, setAsking] = useState(/** @type {null | { copy: boolean }} */ (null));
@@ -203,6 +203,7 @@ function InviteDrawer({ open, onClose, onInvited }) {
 				title={ADMIN.inviteTitle}
 				help={ADMIN.confirmInviteHelp}
 				confirmLabel={asking?.copy ? ADMIN.copyInvite : ADMIN.invite}
+				twoStepOn={twoStepOn}
 				send={send}
 				onClose={() => setAsking(null)}
 				onDone={() => setAsking(null)}
@@ -462,6 +463,7 @@ function AdminPageView({ current, me, list, activityInitial, onReload, onInvite 
 									: ADMIN.changeRole
 				}
 				danger={dialog === 'twoStep' || dialog === 'remove'}
+				twoStepOn={Boolean(me?.twoStep?.enabled)}
 				send={send}
 				onClose={() => {
 					setAsking(false);
@@ -580,7 +582,12 @@ function AdminsScreen({ items, me, admin, selectedId: explicitId, fromList, acti
 					onReload={reload}
 					onInvite={canManage ? () => setInviting(true) : undefined}
 				/>
-				<InviteDrawer open={inviting} onClose={() => setInviting(false)} onInvited={onInvited} />
+				<InviteDrawer
+					open={inviting}
+					onClose={() => setInviting(false)}
+					onInvited={onInvited}
+					twoStepOn={Boolean(me?.twoStep?.enabled)}
+				/>
 				<InviteLink link={link} onClose={() => setLink(null)} />
 			</>
 		);
@@ -597,7 +604,12 @@ function AdminsScreen({ items, me, admin, selectedId: explicitId, fromList, acti
 				actions={canManage ? { primary: { label: ADMIN.invite, icon: 'plus', onClick: () => setInviting(true) } } : {}}>
 				{items.length === 0 ? <EmptyState compact icon="shield" kind="admin" title={ADMIN.noAdmins} /> : <></>}
 			</Page>
-			<InviteDrawer open={inviting} onClose={() => setInviting(false)} onInvited={onInvited} />
+			<InviteDrawer
+				open={inviting}
+				onClose={() => setInviting(false)}
+				onInvited={onInvited}
+				twoStepOn={Boolean(me?.twoStep?.enabled)}
+			/>
 			<InviteLink link={link} onClose={() => setLink(null)} />
 		</>
 	);

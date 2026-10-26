@@ -6,7 +6,7 @@
  * changes when the change is destructive. One dialog for all of them; the Portal checks the password again.
  * @module
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PasswordConfirmDialog, describeProblem, fieldErrors, problemCode } from '@ss/ui';
 import { CONFIRM_CHANGE, WEBSITE } from '../../texts/console.js';
 import { factorOf } from './common.js';
@@ -35,31 +35,54 @@ export const confirmationErrors = (problem) => {
  * A refusal that is not about the password or the code (a value the Portal does not accept) closes the dialog, so the
  * form behind it can show the reason.
  * @param {{ open: boolean, title: string, help: string, confirmLabel: string, danger?: boolean, expected?: string,
+ *   twoStepOn?: boolean,
  *   send: (confirmation: { password: string, code?: string, recoveryCode?: string }) => Promise<{ ok: true } | { ok: false, problem: Problem }>,
  *   onClose: () => void, onDone: () => void }} props
  */
-export function ConfirmChange({ open, title, help, confirmLabel, danger = false, expected, send, onClose, onDone }) {
+export function ConfirmChange({
+	open,
+	title,
+	help,
+	confirmLabel,
+	danger = false,
+	expected,
+	send,
+	twoStepOn = false,
+	onClose,
+	onDone,
+}) {
 	const [busy, setBusy] = useState(false);
 	const [errors, setErrors] = useState(/** @type {{ password?: string, code?: string, form?: string }} */ ({}));
-	const [wantsCode, setWantsCode] = useState(false);
+	const [wantsCode, setWantsCode] = useState(twoStepOn);
+	useEffect(() => {
+		if (open) {
+			setWantsCode(twoStepOn);
+			setErrors({});
+		}
+	}, [open, twoStepOn]);
 	/** @param {{ password: string, code: string }} input */
 	const confirm = async ({ password, code }) => {
 		setBusy(true);
 		setErrors({});
-		const result = await send({ password, ...factorOf(code) });
-		setBusy(false);
-		if (result.ok) {
-			onDone();
-			return;
+		try {
+			const result = await send({ password, ...factorOf(code) });
+			setBusy(false);
+			if (result.ok) {
+				onDone();
+				return;
+			}
+			const found = confirmationErrors(result.problem);
+			if (found.code) setWantsCode(true);
+			// a refusal that is not about the password (a value the Portal does not accept) is shown by the form, not here
+			if (!found.password && !found.code && result.problem.status === 422) {
+				onClose();
+				return;
+			}
+			setErrors(found);
+		} catch (error) {
+			setBusy(false);
+			setErrors({ form: error instanceof Error ? error.message : 'The confirmation failed.' });
 		}
-		const found = confirmationErrors(result.problem);
-		if (found.code) setWantsCode(true);
-		// a refusal that is not about the password (a value the Portal does not accept) is shown by the form, not here
-		if (!found.password && !found.code && result.problem.status === 422) {
-			onClose();
-			return;
-		}
-		setErrors(found);
 	};
 	return (
 		<PasswordConfirmDialog

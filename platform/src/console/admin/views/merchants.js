@@ -627,6 +627,7 @@ function MerchantPageView({ detail, admin, list, onAddMerchant }) {
 					dialog === 'copyLink' ? ADMIN.copySetupLink : dialog === 'twoStep' ? ADMIN.turnOffTwoStep : ADMIN.deleteMerchant
 				}
 				danger={dialog !== 'copyLink'}
+				twoStepOn={Boolean(admin?.twoStep?.enabled)}
 				{...(dialog === 'delete' ? { expected: merchant.name } : {})}
 				send={sendConfirmed}
 				onClose={closeDialog}

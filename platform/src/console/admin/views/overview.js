@@ -339,6 +339,7 @@ export function OverviewView(props) {
 				title={WEBSITE.openConfirmTitle(launching?.name ?? '')}
 				help={WEBSITE.openConfirmHelp}
 				confirmLabel={WEBSITE.openConfirmLabel}
+				twoStepOn={Boolean(props.admin?.twoStep?.enabled)}
 				send={sendLaunch}
 				onClose={() => setLaunching(null)}
 				onDone={() => setLaunching(null)}

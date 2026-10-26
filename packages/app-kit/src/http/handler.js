@@ -739,7 +739,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 					[
 						method,
 						`${pathname}${url.search}`,
-						ctx.ticket?.user.id ?? '',
+						ctx.ticket?.user?.id ?? '',
 						ctx.actor?.id ?? '',
 						request.headers.get('ss-guest') ?? '',
 						request.headers.get('ss-order-key') ?? '',

@@ -182,6 +182,7 @@ function RecoveryCodes({ codes, saved, setSaved, onDone }) {
 function ProveForm({ title, help, label, path, onDone, onCancel }) {
 	const [password, setPassword] = useState('');
 	const [code, setCode] = useState('');
+	const [useRecovery, setUseRecovery] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const submit = async () => {
@@ -205,13 +206,28 @@ function ProveForm({ title, help, label, path, onDone, onCancel }) {
 				required
 			/>
 			<Input
-				label={LOGIN.twoStepCode}
+				label={useRecovery ? AUTH.recoveryCode : LOGIN.twoStepCode}
 				value={code}
 				onChange={(e) => setCode(e.currentTarget.value)}
-				autoComplete="one-time-code"
+				autoComplete={useRecovery ? 'off' : 'one-time-code'}
+				inputMode={useRecovery ? 'text' : 'numeric'}
+				maxLength={useRecovery ? 16 : 6}
+				placeholder={useRecovery ? 'abcd-efgh-...' : '123456'}
 				error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
 				required
 			/>
+			<div className="flex justify-start">
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					onClick={() => {
+						setUseRecovery((v) => !v);
+						setCode('');
+					}}>
+					{useRecovery ? AUTH.useApp : AUTH.useRecovery}
+				</Button>
+			</div>
 			<FormError problem={problem} fields={['password', 'code', 'recoveryCode']} />
 			<div className="flex flex-wrap gap-2">
 				<Button type="submit" loading={busy} variant="danger">
@@ -313,6 +329,7 @@ export function EmailPanel({ email, twoStepOn }) {
 	const [next, setNext] = useState('');
 	const [password, setPassword] = useState('');
 	const [code, setCode] = useState('');
+	const [useRecovery, setUseRecovery] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [sentTo, setSentTo] = useState(/** @type {string | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
@@ -354,15 +371,32 @@ export function EmailPanel({ email, twoStepOn }) {
 					required
 				/>
 				{twoStepOn ? (
-					<Input
-						label={LOGIN.twoStepCode}
-						help={LOGIN.twoStepCodeHelp}
-						value={code}
-						onChange={(e) => setCode(e.currentTarget.value)}
-						autoComplete="one-time-code"
-						error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
-						required
-					/>
+					<div className="space-y-2">
+						<Input
+							label={useRecovery ? AUTH.recoveryCode : LOGIN.twoStepCode}
+							help={useRecovery ? AUTH.recoveryHelp : LOGIN.twoStepCodeHelp}
+							value={code}
+							onChange={(e) => setCode(e.currentTarget.value)}
+							autoComplete={useRecovery ? 'off' : 'one-time-code'}
+							inputMode={useRecovery ? 'text' : 'numeric'}
+							maxLength={useRecovery ? 16 : 6}
+							placeholder={useRecovery ? 'abcd-efgh-...' : '123456'}
+							error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
+							required
+						/>
+						<div className="flex justify-start">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setUseRecovery((v) => !v);
+									setCode('');
+								}}>
+								{useRecovery ? AUTH.useApp : AUTH.useRecovery}
+							</Button>
+						</div>
+					</div>
 				) : null}
 				<FormError problem={problem} fields={['email', 'password', 'code', 'recoveryCode']} />
 				<Button type="submit" loading={busy}>
@@ -382,6 +416,7 @@ export function PasswordPanel({ twoStepOn }) {
 	const [current, setCurrent] = useState('');
 	const [next, setNext] = useState('');
 	const [code, setCode] = useState('');
+	const [useRecovery, setUseRecovery] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [error, setError] = useState(/** @type {string | null} */ (null));
@@ -428,15 +463,32 @@ export function PasswordPanel({ twoStepOn }) {
 					required
 				/>
 				{twoStepOn ? (
-					<Input
-						label={LOGIN.twoStepCode}
-						help={LOGIN.twoStepCodeHelp}
-						value={code}
-						onChange={(e) => setCode(e.currentTarget.value)}
-						autoComplete="one-time-code"
-						error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
-						required
-					/>
+					<div className="space-y-2">
+						<Input
+							label={useRecovery ? AUTH.recoveryCode : LOGIN.twoStepCode}
+							help={useRecovery ? AUTH.recoveryHelp : LOGIN.twoStepCodeHelp}
+							value={code}
+							onChange={(e) => setCode(e.currentTarget.value)}
+							autoComplete={useRecovery ? 'off' : 'one-time-code'}
+							inputMode={useRecovery ? 'text' : 'numeric'}
+							maxLength={useRecovery ? 16 : 6}
+							placeholder={useRecovery ? 'abcd-efgh-...' : '123456'}
+							error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
+							required
+						/>
+						<div className="flex justify-start">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setUseRecovery((v) => !v);
+									setCode('');
+								}}>
+								{useRecovery ? AUTH.useApp : AUTH.useRecovery}
+							</Button>
+						</div>
+					</div>
 				) : null}
 				<FormError problem={problem} fields={['currentPassword', 'newPassword', 'code', 'recoveryCode']} />
 				<Button type="submit" loading={busy}>

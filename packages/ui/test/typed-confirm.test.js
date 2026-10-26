@@ -147,7 +147,10 @@ describe('PasswordConfirmDialog', () => {
 		);
 		expect(dialog().textContent).toContain('Too many tries.');
 		type(byLabel(dialog(), 'Your password'), 'hunter2 hunter2');
-		type(byLabel(dialog(), 'Two-step or recovery code'), ' 123456 ');
+		click(confirm('Use a recovery code instead'));
+		expect(byLabel(dialog(), 'Recovery code')).not.toBeNull();
+		click(confirm('Use authenticator code instead'));
+		type(byLabel(dialog(), 'Two-step code'), ' 123456 ');
 		expect(confirm('Regenerate').disabled).toBe(true); // the name is not typed yet
 		type(/** @type {HTMLInputElement} */ (dialog().querySelectorAll('input')[2]), 'Notes');
 		expect(confirm('Regenerate').disabled).toBe(false);

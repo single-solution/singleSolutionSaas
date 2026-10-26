@@ -202,6 +202,10 @@ export const CONFIRM_CHANGE = Object.freeze({
 	passwordHelp: 'The password you sign in with.',
 	code: 'Two-step or recovery code',
 	codeHelp: 'From your authenticator app, or one of your recovery codes.',
+	recoveryCode: 'Recovery code',
+	recoveryHelp: 'One of your backup recovery codes.',
+	useRecovery: 'Use a recovery code instead',
+	useTwoStep: 'Use authenticator code instead',
 });
 
 /** The websites list and the website page (PLAN 0.6 Website page, 0.8.2, 0.4.4, 0.5.9), in both consoles. */
@@ -271,6 +275,10 @@ export const WEBSITE = Object.freeze({
 	passwordHelp: 'The password you sign in with.',
 	code: 'Two-step or recovery code',
 	codeHelp: 'From your authenticator app, or one of your recovery codes.',
+	recoveryCode: 'Recovery code',
+	recoveryHelp: 'One of your backup recovery codes.',
+	useRecovery: 'Use a recovery code instead',
+	useTwoStep: 'Use authenticator code instead',
 	wrongPassword: 'That password is not right. Check it and try again.',
 	wrongCode: 'That code is not right. Try the next code from your app, or a recovery code.',
 	needsCode: 'Two-step sign-in is on for you: enter a code from your app, or a recovery code.',

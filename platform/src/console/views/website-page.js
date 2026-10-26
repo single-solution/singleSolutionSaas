@@ -84,6 +84,7 @@ function ChangesTimeline({ changes }) {
  * @property {any} [setup] the loaded Setup sheet (`loadSetup`), a failure, or null when not asked
  * @property {boolean} [canSwitch] the admin console switches recommended features on
  * @property {import('react').ReactElement<any>} [list] the list of websites beside the page (a `ListColumn`, merchant console)
+ * @property {boolean} [twoStepOn] whether the signed-in person has two-step on
  * @property {string} [error] what stands in place of the page (a missing website: the list stays)
  */
 
@@ -147,6 +148,7 @@ export function WebsitePageView({
 	setup = null,
 	canSwitch = false,
 	list,
+	twoStepOn: initialTwoStepOn,
 	error: missing,
 }) {
 	const toast = useToast();
@@ -221,7 +223,8 @@ export function WebsitePageView({
 	const onChanges = own === 'changes' && !error && !gone;
 	const usage = useOnce(onUsage ? api.usage(merchantId, { websiteId }) : null);
 	const tokens = useOnce(onInstall && can.tokens ? api.tokens(merchantId, websiteId) : null);
-	const twoStepOn = twoStepOnOf(useOnce(onInstall && can.tokens ? '/v1/me' : null));
+	const meResult = useOnce('/v1/me');
+	const twoStepOn = initialTwoStepOn !== undefined ? initialTwoStepOn : twoStepOnOf(meResult);
 
 	// a deep link to one product scrolls its row into view on the home
 	useEffect(() => {
@@ -256,31 +259,44 @@ export function WebsitePageView({
 		if (!removing) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch(api.websiteProduct(merchantId, websiteId, removing.productId), { method: 'DELETE' });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
+		try {
+			const result = await apiFetch(api.websiteProduct(merchantId, websiteId, removing.productId), { method: 'DELETE' });
+			setBusy(false);
+			if (!result.ok) {
+				setProblem(result.problem);
+				return;
+			}
+			setCards(cards.filter((c) => c.productId !== removing.productId));
+			toast.show({ title: WEBSITE.productRemoved(removing.name) });
+			const wasShown = removing.productId === productId;
+			setRemoving(null);
+			if (wasShown) nav.go(hrefOf(''));
+		} catch (error) {
+			setBusy(false);
+			setProblem({ status: 500, detail: error instanceof Error ? error.message : 'The request failed.' });
 		}
-		setCards(cards.filter((c) => c.productId !== removing.productId));
-		toast.show({ title: WEBSITE.productRemoved(removing.name) });
-		const wasShown = removing.productId === productId;
-		setRemoving(null);
-		if (wasShown) nav.go(hrefOf(''));
 	};
 	const removeWebsite = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch(api.website(merchantId, websiteId), { method: 'DELETE', body: { confirm: website.domain } });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
+		try {
+			const result = await apiFetch(api.website(merchantId, websiteId), {
+				method: 'DELETE',
+				body: { confirm: website.domain },
+			});
+			setBusy(false);
+			if (!result.ok) {
+				setProblem(result.problem);
+				return;
+			}
+			setDialog(null);
+			setGone(true);
+			toast.show({ title: WEBSITE.websiteRemoved(website.domain) });
+			nav.go(afterRemoved);
+		} catch (error) {
+			setBusy(false);
+			setProblem({ status: 500, detail: error instanceof Error ? error.message : 'The request failed.' });
 		}
-		setDialog(null);
-		setGone(true);
-		toast.show({ title: WEBSITE.websiteRemoved(website.domain) });
-		nav.go(afterRemoved);
 	};
 	const copyDomain = async () => {
 		const copied = await copyText(website.domain);
@@ -424,7 +440,9 @@ export function WebsitePageView({
 					? 'usage'
 					: own === 'changes'
 						? 'changes'
-						: 'setup';
+						: own === 'setup'
+							? 'setup'
+							: 'overview';
 
 	/** @type {import('react').ReactNode} */
 	let body = null;
@@ -442,7 +460,11 @@ export function WebsitePageView({
 						</ul>
 					</Callout>
 				) : null}
-				<SettingsSectionBody section={/** @type {{ section: string }} */ (parsed).section} state={state} />
+				<SettingsSectionBody
+					section={/** @type {{ section: string }} */ (parsed).section}
+					state={state}
+					twoStepOn={twoStepOn}
+				/>
 			</div>
 		);
 	else if (!error && own === 'setup' && setup?.ok)
@@ -586,7 +608,7 @@ export function WebsitePageView({
 							},
 						}
 					: {})}
-				{...(list && (own === null || own === 'install' || own === 'usage' || own === 'changes') ? { list } : {})}
+				{...(list && own === null ? { list } : {})}
 				{...(sections ? { sections } : {})}
 				loading={gone}
 				{...(error ? { error } : {})}>
@@ -610,6 +632,7 @@ export function WebsitePageView({
 				title={WEBSITE.openConfirmTitle(launching?.name ?? '')}
 				help={WEBSITE.openConfirmHelp}
 				confirmLabel={WEBSITE.openConfirmLabel}
+				twoStepOn={twoStepOn}
 				send={sendLaunch}
 				onClose={() => setLaunching(null)}
 				onDone={() => setLaunching(null)}

@@ -135,6 +135,8 @@ export const createDashboard = (kit) => {
 			return problem('portal_unreachable', 'The Portal cannot be reached. Try again.');
 		}
 		const expiresAt = Date.parse(claims.sessionExpiresAt);
+		if (!Number.isFinite(expiresAt) || expiresAt <= now())
+			return problem('invalid_token', 'This link to the dashboard is not valid any more. Open it again from the Portal.');
 		const merchant = claims.merchant;
 		const admin = claims.admin;
 		const portalRole = admin ? portalRoleOf(admin.role) : null;

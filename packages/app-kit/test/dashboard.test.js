@@ -31,6 +31,15 @@ describe('sso and sessions', () => {
 		expect((await call('GET', '/v1/dashboard/session', { cookie: admin })).status).toBe(200);
 		clock.advance(61_000);
 		expect((await call('GET', '/v1/dashboard/session', { cookie: admin })).status).toBe(401);
+
+		// a launch whose session has already expired before sso is called is refused
+		const expired = await portal.issueLaunch({
+			productId: 'notes',
+			kind: 'admin',
+			sessionExpiresAt: new Date(clock.now() + 5000).toISOString(),
+		});
+		clock.advance(6000);
+		expect((await call('GET', `/sso?launch=${expired}`)).status).toBe(401);
 	});
 
 	it('sends an admin without a website to Defaults and answers 503 when the Portal cannot consume', async () => {

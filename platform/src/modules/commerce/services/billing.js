@@ -448,6 +448,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	 * @param {string} merchantId
 	 */
 	const summary = async (merchantId) => {
+		await deps.getMerchantRecord(merchantId);
 		const { checked, status } = await statusOf(merchantId);
 		const { run } = checked;
 		return {
@@ -512,6 +513,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	 * @param {{ from: string, to: string, websiteId?: string | null }} range UTC days, inclusive
 	 */
 	const usage = async (merchantId, { from, to, websiteId = null }) => {
+		await deps.getMerchantRecord(merchantId);
 		const checked = await check(merchantId);
 		const written = await repo
 			.ledgerOf(merchantId)
@@ -571,16 +573,19 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	 * A merchant's receipts, newest first.
 	 * @param {string} merchantId @param {{ forAdmin: boolean }} viewer
 	 */
-	const receiptsOf = async (merchantId, { forAdmin }) =>
-		(await repo.ledgerOf(merchantId).find({ merchantId, type: 'receipt' }).sort({ seq: -1 }).limit(500).toArray()).map((e) =>
-			receiptView(e, forAdmin),
+	const receiptsOf = async (merchantId, { forAdmin }) => {
+		await deps.getMerchantRecord(merchantId);
+		return (await repo.ledgerOf(merchantId).find({ merchantId, type: 'receipt' }).sort({ seq: -1 }).limit(500).toArray()).map(
+			(e) => receiptView(e, forAdmin),
 		);
+	};
 
 	/**
 	 * A merchant's day charges, newest first (admin Credits tab).
 	 * @param {string} merchantId
 	 */
 	const dayChargesOf = async (merchantId) => {
+		await deps.getMerchantRecord(merchantId);
 		const entries = await repo
 			.ledgerOf(merchantId)
 			.find({ merchantId, type: 'day_charge' })
@@ -692,16 +697,21 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	const summaries = async (merchantIds) => {
 		const out = [];
 		for (const merchantId of [...new Set(merchantIds)].slice(0, PAGE)) {
-			const s = await summary(merchantId);
-			out.push({
-				merchantId,
-				status: s.status,
-				balance: s.balance,
-				dailySpend: s.dailySpend,
-				daysLeft: s.daysLeft,
-				graceEnd: s.graceEnd,
-				stoppedAt: s.stoppedAt,
-			});
+			try {
+				const s = await summary(merchantId);
+				out.push({
+					merchantId,
+					status: s.status,
+					balance: s.balance,
+					dailySpend: s.dailySpend,
+					daysLeft: s.daysLeft,
+					graceEnd: s.graceEnd,
+					stoppedAt: s.stoppedAt,
+				});
+			} catch (error) {
+				if (isProblem(error) && /** @type {any} */ (error).code === 'not_found') continue;
+				throw error;
+			}
 		}
 		return out;
 	};

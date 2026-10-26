@@ -60,6 +60,7 @@ export function AdminWebsiteView({ detail, admin }) {
 			settings={detail.settings}
 			setup={detail.setup}
 			canSwitch
+			twoStepOn={Boolean(admin?.twoStep?.enabled)}
 		/>
 	);
 }

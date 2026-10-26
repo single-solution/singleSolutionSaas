@@ -70,6 +70,13 @@ const TONES = {
 	idle: 'neutral',
 };
 
+/** @param {unknown} dateValue */
+const safeDateText = (dateValue) => {
+	if (!dateValue) return '';
+	const t = typeof dateValue === 'number' ? dateValue : Date.parse(String(dateValue));
+	return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : '';
+};
+
 /**
  * The state of a value (or of a link) in words, as a badge.
  * @param {{ state: string, message?: string | undefined, words?: Record<string, string> }} props `words`: the names of the states
@@ -92,6 +99,7 @@ function StateBadge({ state, message, words: names = T.data.state }) {
  * @param {{ name: 'database' | 'storage' | 'ai', title: string, help: string, set: { set: boolean, setAt: string | null },
  *   fields: import('react').ReactNode, value: () => unknown, empty: () => boolean, clear: () => void,
  *   manage: { merchantId: string, websiteId: string }, canWrite: boolean, problem: Problem | null,
+ *   twoStepOn?: boolean,
  *   setProblem: (problem: Problem | null) => void, onChanged: (view: ConnectionsView) => void }} props
  */
 function ConnectionCard({
@@ -106,6 +114,7 @@ function ConnectionCard({
 	manage,
 	canWrite,
 	problem,
+	twoStepOn = false,
 	setProblem,
 	onChanged,
 }) {
@@ -140,9 +149,7 @@ function ConnectionCard({
 				set.set ? (
 					<span className="flex items-center gap-2">
 						<StateBadge state="connected" />
-						<span className="text-help text-muted">
-							{T.data.isSet(set.setAt ? new Date(set.setAt).toISOString().slice(0, 10) : '')}
-						</span>
+						<span className="text-help text-muted">{T.data.isSet(safeDateText(set.setAt))}</span>
 					</span>
 				) : (
 					<Badge tone="neutral" dot>
@@ -172,6 +179,7 @@ function ConnectionCard({
 				help={T.data.confirmHelp}
 				confirmLabel={asking === 'remove' ? T.data.remove : T.data.save}
 				danger={asking === 'remove'}
+				twoStepOn={twoStepOn}
 				send={send}
 				onClose={() => setAsking(null)}
 				onDone={() => {
@@ -186,9 +194,9 @@ function ConnectionCard({
 
 /**
  * The Data and files section.
- * @param {ConnectionsProps} props
+ * @param {ConnectionsProps & { twoStepOn?: boolean }} props
  */
-export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
+export function ConnectionsSection({ view, manage, canWrite, twoStepOn = false, onChanged }) {
 	const [uri, setUri] = useState('');
 	const [bucket, setBucket] = useState(/** @type {Record<string, string>} */ ({}));
 	const [pathStyle, setPathStyle] = useState(false);
@@ -243,6 +251,7 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 				set={view.database}
 				manage={manage}
 				canWrite={canWrite}
+				twoStepOn={twoStepOn}
 				problem={problems.database}
 				setProblem={(problem) => setProblems((old) => ({ ...old, database: problem }))}
 				onChanged={onChanged}
@@ -269,6 +278,7 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 				set={view.storage}
 				manage={manage}
 				canWrite={canWrite}
+				twoStepOn={twoStepOn}
 				problem={problems.storage}
 				setProblem={(problem) => setProblems((old) => ({ ...old, storage: problem }))}
 				onChanged={onChanged}
@@ -304,6 +314,7 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 				set={view.ai}
 				manage={manage}
 				canWrite={canWrite}
+				twoStepOn={twoStepOn}
 				problem={problems.ai}
 				setProblem={(problem) => setProblems((old) => ({ ...old, ai: problem }))}
 				onChanged={onChanged}
@@ -390,9 +401,9 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 
 /**
  * The Between your products section.
- * @param {ConnectionsProps} props
+ * @param {ConnectionsProps & { twoStepOn?: boolean }} props
  */
-export function LinksSection({ view, manage, canWrite, onChanged }) {
+export function LinksSection({ view, manage, canWrite, twoStepOn = false, onChanged }) {
 	const toast = useToast();
 	const [asking, setAsking] = useState(
 		/** @type {null | { link: ConnectionsView['links'][number], action: 'regenerate' | 'off' | 'on' }} */ (null),
@@ -503,6 +514,7 @@ export function LinksSection({ view, manage, canWrite, onChanged }) {
 							: T.links.switchOn
 				}
 				danger={asking?.action === 'off'}
+				twoStepOn={twoStepOn}
 				send={send}
 				onClose={() => setAsking(null)}
 				onDone={() => {

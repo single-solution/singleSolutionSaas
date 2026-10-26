@@ -14,21 +14,26 @@ import { Dialog } from './overlay.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 
 /** The words of the dialog (US English; a caller passes its own). */
-export const PASSWORD_CONFIRM_TEXTS = /** @type {Readonly<Record<'password' | 'passwordHelp' | 'code' | 'codeHelp', string>>} */ (
-	Object.freeze({
-		password: 'Your password',
-		passwordHelp: 'Enter it again to confirm it is you.',
-		code: 'Two-step or recovery code',
-		codeHelp: 'From your authenticator app, or one of your recovery codes.',
-	})
-);
+export const PASSWORD_CONFIRM_TEXTS =
+	/** @type {Readonly<Record<'password' | 'passwordHelp' | 'code' | 'codeHelp' | 'recoveryCode' | 'recoveryHelp' | 'useRecovery' | 'useTwoStep', string>>} */ (
+		Object.freeze({
+			password: 'Your password',
+			passwordHelp: 'Enter it again to confirm it is you.',
+			code: 'Two-step code',
+			codeHelp: '6-digit code from your authenticator app.',
+			recoveryCode: 'Recovery code',
+			recoveryHelp: 'One of your backup recovery codes.',
+			useRecovery: 'Use a recovery code instead',
+			useTwoStep: 'Use authenticator code instead',
+		})
+	);
 
 /**
  * @param {{ open: boolean, onClose: () => void, onConfirm: (input: { password: string, code: string }) => void,
  *   title: ReactNode, description?: ReactNode, children?: ReactNode, confirmLabel?: string, cancelLabel?: string,
  *   busy?: boolean, danger?: boolean, showCode?: boolean, expected?: string,
  *   errors?: { password?: ReactNode, code?: ReactNode, form?: ReactNode },
- *   texts?: Partial<Record<'password' | 'passwordHelp' | 'code' | 'codeHelp', string>> }} props
+ *   texts?: Partial<Record<'password' | 'passwordHelp' | 'code' | 'codeHelp' | 'recoveryCode' | 'recoveryHelp' | 'useRecovery' | 'useTwoStep', string>> }} props
  */
 export function PasswordConfirmDialog({
 	open,
@@ -50,12 +55,14 @@ export function PasswordConfirmDialog({
 	const [password, setPassword] = useState('');
 	const [code, setCode] = useState('');
 	const [typed, setTyped] = useState('');
+	const [useRecovery, setUseRecovery] = useState(false);
 	const formId = useId();
 	useEffect(() => {
 		if (open) {
 			setPassword('');
 			setCode('');
 			setTyped('');
+			setUseRecovery(false);
 		}
 	}, [open]);
 	const ready =
@@ -98,16 +105,35 @@ export function PasswordConfirmDialog({
 					data-autofocus
 				/>
 				{showCode ? (
-					<Input
-						label={T.code}
-						help={T.codeHelp}
-						autoComplete="one-time-code"
-						spellCheck={false}
-						value={code}
-						onChange={(event) => setCode(event.currentTarget.value)}
-						error={errors.code}
-						required
-					/>
+					<div className="space-y-2">
+						<Input
+							label={useRecovery ? (T.recoveryCode ?? 'Recovery code') : T.code}
+							help={useRecovery ? (T.recoveryHelp ?? 'One of your backup recovery codes.') : T.codeHelp}
+							autoComplete={useRecovery ? 'off' : 'one-time-code'}
+							inputMode={useRecovery ? 'text' : 'numeric'}
+							maxLength={useRecovery ? 16 : 6}
+							placeholder={useRecovery ? 'abcd-efgh-...' : '123456'}
+							spellCheck={false}
+							value={code}
+							onChange={(event) => setCode(event.currentTarget.value)}
+							error={errors.code}
+							required
+						/>
+						<div className="flex justify-end">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setUseRecovery((v) => !v);
+									setCode('');
+								}}>
+								{useRecovery
+									? (T.useTwoStep ?? 'Use authenticator code instead')
+									: (T.useRecovery ?? 'Use a recovery code instead')}
+							</Button>
+						</div>
+					</div>
 				) : null}
 				{expected === undefined ? null : (
 					<Input
