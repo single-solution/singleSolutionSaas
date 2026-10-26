@@ -618,7 +618,15 @@ function ProfileDialog({ manage, profile, settingsHref, onClose, onSaved }) {
 									aria-label={PROFILE.otherLabel(PROFILE.questions[question])}
 									help={PROFILE.otherHelp}
 									value={own[question] ?? ''}
-									onChange={(event) => setOwn({ ...own, [question]: event.currentTarget.value })}
+									onChange={(event) => {
+										setOwn({ ...own, [question]: event.currentTarget.value });
+										if (errors[`other.${question}`]) {
+											setErrors((prev) => {
+												const { [`other.${question}`]: _, ...rest } = prev;
+												return rest;
+											});
+										}
+									}}
 									error={errors[`other.${question}`]}
 								/>
 							) : null}
@@ -841,7 +849,10 @@ function CreateLinkDialog({ manage, onClose, onCreated }) {
 			title={url ? SETUP.linkReady : SETUP.createLink}
 			description={url ? SETUP.linkOnce : SETUP.createLinkHelp}>
 			{url ? (
-				<CodeBlock label={SETUP.shareLink} code={url} />
+				<div className="space-y-4">
+					<CodeBlock label={SETUP.shareLink} code={url} />
+					<Button onClick={onClose}>{SETUP.done}</Button>
+				</div>
 			) : (
 				<div className="space-y-4">
 					<Input
@@ -852,7 +863,10 @@ function CreateLinkDialog({ manage, onClose, onCreated }) {
 						max={30}
 						inputMode="numeric"
 						value={days}
-						onChange={(event) => setDays(event.currentTarget.value)}
+						onChange={(event) => {
+							setDays(event.currentTarget.value);
+							if (error) setError(null);
+						}}
 						error={error ?? undefined}
 					/>
 					<Switch checked={values} onChange={setValues} label={SETUP.includeValues} description={SETUP.includeValuesHelp} />

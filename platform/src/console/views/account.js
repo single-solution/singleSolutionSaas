@@ -104,6 +104,7 @@ export function MerchantFieldsForm({
 					label={MERCHANT_FIELDS.email}
 					type="email"
 					autoComplete="email"
+					inputMode="email"
 					value={form.email}
 					onChange={(e) => set('email', e.currentTarget.value)}
 					error={errors.email}

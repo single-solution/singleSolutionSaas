@@ -201,6 +201,8 @@ function MailCard({ settings, onSaved }) {
 					<Input
 						label={ADMIN.mail.senderAddress}
 						type="email"
+						inputMode="email"
+						autoComplete="email"
 						value={form.senderAddress}
 						onChange={(e) => set('senderAddress', e.currentTarget.value)}
 						error={errors.senderAddress}
@@ -354,6 +356,15 @@ function SupportCard({ settings, onSaved }) {
 								/>
 								<Input
 									label={S.value[row.type]}
+									type={
+										row.type === 'email' ? 'email' : row.type === 'phone' ? 'tel' : row.type === 'link' ? 'url' : 'text'
+									}
+									inputMode={
+										row.type === 'email' ? 'email' : row.type === 'phone' ? 'tel' : row.type === 'link' ? 'url' : 'text'
+									}
+									autoComplete={
+										row.type === 'email' ? 'email' : row.type === 'phone' ? 'tel' : row.type === 'link' ? 'url' : 'off'
+									}
 									placeholder={S.valuePlaceholder[row.type]}
 									value={row.value}
 									onChange={(e) => update({ ...row, value: e.currentTarget.value })}
@@ -389,7 +400,10 @@ function SecurityCard({ settings, onSaved }) {
 				<Form onSubmit={submit} busy={busy} aria-label={ADMIN.settingsSections.security.title}>
 					<Input
 						label={ADMIN.security.sessionHours}
+						type="number"
 						inputMode="numeric"
+						min={bounds.min}
+						max={bounds.max}
 						value={values.hours}
 						onChange={(e) => set('hours', e.currentTarget.value)}
 						help={ADMIN.security.sessionHelp(bounds.min, bounds.max)}
@@ -431,6 +445,7 @@ function BillingRulesCard({ settings, onSaved }) {
 				<Form onSubmit={submit} busy={busy} aria-label={ADMIN.settingsSections.billing.title}>
 					<Input
 						label={ADMIN.billingRules.graceDays}
+						type="number"
 						inputMode="numeric"
 						min={grace.min}
 						max={grace.max}
@@ -442,6 +457,7 @@ function BillingRulesCard({ settings, onSaved }) {
 					/>
 					<Input
 						label={ADMIN.billingRules.lowBalanceDays}
+						type="number"
 						inputMode="numeric"
 						min={low.min}
 						max={low.max}

@@ -113,10 +113,14 @@ function TwoStepStep({ challenge, onDone, onRestart, onProblem }) {
 				label={useRecovery ? AUTH.recoveryCode : AUTH.code}
 				name="code"
 				value={code}
-				onChange={(e) => setCode(e.currentTarget.value)}
-				autoComplete="one-time-code"
+				onChange={(e) => {
+					setCode(e.currentTarget.value);
+					if (error) setError(null);
+				}}
+				autoComplete={useRecovery ? 'off' : 'one-time-code'}
 				inputMode={useRecovery ? 'text' : 'numeric'}
-				maxLength={useRecovery ? 11 : 6}
+				maxLength={useRecovery ? 16 : 6}
+				placeholder={useRecovery ? 'abcd-efgh-...' : '123456'}
 				error={error ?? fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
 				autoFocus
 				required
@@ -188,6 +192,7 @@ function CreateAdmin({ branding }) {
 					label={AUTH.email}
 					type="email"
 					autoComplete="email"
+					inputMode="email"
 					value={email}
 					onChange={(e) => setEmail(e.currentTarget.value)}
 					error={errors.email}
@@ -279,6 +284,7 @@ export function SignInView({ branding, firstAdmin, next = null, notice = null })
 					type="email"
 					name="email"
 					autoComplete="username"
+					inputMode="email"
 					value={email}
 					onChange={(e) => setEmail(e.currentTarget.value)}
 					error={errors.email}
@@ -349,9 +355,14 @@ export function ForgotPasswordView({ branding }) {
 						label={AUTH.email}
 						type="email"
 						autoComplete="email"
+						inputMode="email"
 						value={email}
-						onChange={(e) => setEmail(e.currentTarget.value)}
+						onChange={(e) => {
+							setEmail(e.currentTarget.value);
+							if (error) setError(null);
+						}}
 						error={error ?? fieldErrors(problem).email}
+						autoFocus
 						required
 					/>
 					<FormError problem={problem} fields={['email']} />

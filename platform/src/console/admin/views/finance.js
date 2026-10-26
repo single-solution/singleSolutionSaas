@@ -153,7 +153,15 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
 				</dl>
 			) : (
 				<Form onSubmit={review} aria-label={BILLING.addCredits}>
-					<Input label={F.credits} inputMode="numeric" help={F.creditsHelp} required {...field('credits')} />
+					<Input
+						label={F.credits}
+						type="number"
+						min={1}
+						inputMode="numeric"
+						help={F.creditsHelp}
+						required
+						{...field('credits')}
+					/>
 					<Input
 						label={F.amountPaid}
 						inputMode="decimal"

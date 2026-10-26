@@ -177,9 +177,9 @@ function RecoveryCodes({ codes, saved, setSaved, onDone }) {
 
 /**
  * Password plus a two-step or recovery code (turn two-step off, new recovery codes).
- * @param {{ title: string, help: string, label: string, path: string, onDone: (data: any) => void, onCancel: () => void }} props
+ * @param {{ title: string, help: string, label: string, path: string, danger?: boolean, onDone: (data: any) => void, onCancel: () => void }} props
  */
-function ProveForm({ title, help, label, path, onDone, onCancel }) {
+function ProveForm({ title, help, label, path, danger = false, onDone, onCancel }) {
 	const [password, setPassword] = useState('');
 	const [code, setCode] = useState('');
 	const [useRecovery, setUseRecovery] = useState(false);
@@ -230,7 +230,7 @@ function ProveForm({ title, help, label, path, onDone, onCancel }) {
 			</div>
 			<FormError problem={problem} fields={['password', 'code', 'recoveryCode']} />
 			<div className="flex flex-wrap gap-2">
-				<Button type="submit" loading={busy} variant="danger">
+				<Button type="submit" loading={busy} variant={danger ? 'danger' : 'primary'}>
 					{label}
 				</Button>
 				<Button variant="secondary" onClick={onCancel}>
@@ -278,6 +278,7 @@ export function TwoStepPanel({ twoStep, onChange }) {
 						title={TWO_STEP.turnOff}
 						help={TWO_STEP.turnOffHelp}
 						label={TWO_STEP.turnOff}
+						danger
 						path="/v1/me/two-step/off"
 						onDone={() => {
 							setMode('idle');
@@ -422,7 +423,7 @@ export function PasswordPanel({ twoStepOn }) {
 	const [error, setError] = useState(/** @type {string | null} */ (null));
 	const submit = async () => {
 		if (next.length < PASSWORD_MIN) {
-			setError(`Use at least ${PASSWORD_MIN} characters.`);
+			setError(AUTH.passwordShort(PASSWORD_MIN));
 			return;
 		}
 		setError(null);
@@ -457,8 +458,12 @@ export function PasswordPanel({ twoStepOn }) {
 					label={AUTH.newPassword}
 					type="password"
 					autoComplete="new-password"
+					help={AUTH.passwordShort(PASSWORD_MIN)}
 					value={next}
-					onChange={(e) => setNext(e.currentTarget.value)}
+					onChange={(e) => {
+						setNext(e.currentTarget.value);
+						if (error) setError(null);
+					}}
 					error={error ?? fieldErrors(problem).newPassword}
 					required
 				/>

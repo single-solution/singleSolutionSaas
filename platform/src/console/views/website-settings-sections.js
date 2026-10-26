@@ -391,6 +391,8 @@ export function BusinessSection(props) {
 								<Input
 									label={B.phoneNumber}
 									type="tel"
+									inputMode="tel"
+									autoComplete="tel"
 									value={item.number}
 									error={form.error(['phones', index, 'number'])}
 									onChange={(event) => update({ ...item, number: valueOf(event) })}
@@ -437,6 +439,8 @@ export function BusinessSection(props) {
 								<Input
 									label={B.socialUrl}
 									type="url"
+									inputMode="url"
+									autoComplete="url"
 									value={item.url}
 									error={form.error(['social', index, 'url'])}
 									onChange={(event) => update({ ...item, url: valueOf(event) })}
@@ -822,6 +826,8 @@ export function RegionSection(props) {
 					<Input
 						label={R.callingCode}
 						help={R.callingCodeHelp}
+						type="tel"
+						inputMode="tel"
 						value={d.phone.callingCode}
 						maxLength={4}
 						error={form.error(['phone', 'callingCode'])}
@@ -830,6 +836,8 @@ export function RegionSection(props) {
 					<Input
 						label={R.trunkPrefix}
 						help={R.trunkPrefixHelp}
+						type="tel"
+						inputMode="tel"
 						value={d.phone.trunkPrefix}
 						maxLength={2}
 						error={form.error(['phone', 'trunkPrefix'])}
@@ -1182,6 +1190,8 @@ export function TeamSection(props) {
 					<Input
 						label={M.supportEmail}
 						type="email"
+						inputMode="email"
+						autoComplete="email"
 						value={d.support.email}
 						error={form.error(['support', 'email'])}
 						onChange={(event) => form.change(['support', 'email'], valueOf(event))}
@@ -1189,6 +1199,8 @@ export function TeamSection(props) {
 					<Input
 						label={M.supportPhone}
 						type="tel"
+						inputMode="tel"
+						autoComplete="tel"
 						value={d.support.phone}
 						error={form.error(['support', 'phone'])}
 						onChange={(event) => form.change(['support', 'phone'], valueOf(event))}
@@ -1204,12 +1216,15 @@ export function TeamSection(props) {
 					<>
 						<Input
 							label={M.name}
+							autoComplete="name"
 							value={person.name}
 							onChange={(event) => form.change(['recipients', editing, 'name'], valueOf(event))}
 						/>
 						<Input
 							label={M.email}
 							type="email"
+							inputMode="email"
+							autoComplete="email"
 							value={person.email}
 							error={form.error(['recipients', editing, 'email'])}
 							onChange={(event) => form.change(['recipients', editing, 'email'], valueOf(event))}
@@ -1218,6 +1233,8 @@ export function TeamSection(props) {
 							label={M.phone}
 							help={M.phoneHelp}
 							type="tel"
+							inputMode="tel"
+							autoComplete="tel"
 							value={person.phone}
 							error={form.error(['recipients', editing, 'phone']) ?? form.error(['recipients', editing])}
 							onChange={(event) => form.change(['recipients', editing, 'phone'], valueOf(event))}

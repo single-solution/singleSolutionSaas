@@ -125,6 +125,7 @@ function ConnectDialog({ open, title, description, submitLabel, urlRequired, pat
 				<Input
 					label={urlRequired ? PRODUCTS.url : PRODUCTS.urlOptional}
 					help={urlRequired ? PRODUCTS.urlHelp : PRODUCTS.urlOptionalHelp}
+					type="url"
 					placeholder="https://"
 					inputMode="url"
 					autoComplete="off"

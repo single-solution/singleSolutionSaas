@@ -293,7 +293,14 @@ export function ConnectionsSection({ view, manage, canWrite, twoStepOn = false, 
 						{parts.map(([key]) => (
 							<Input
 								key={key}
-								type={key === 'secretAccessKey' || key === 'accessKeyId' ? 'password' : 'text'}
+								type={
+									key === 'secretAccessKey' || key === 'accessKeyId'
+										? 'password'
+										: key === 'publicBaseUrl' || key === 'endpoint'
+											? 'url'
+											: 'text'
+								}
+								inputMode={key === 'publicBaseUrl' || key === 'endpoint' ? 'url' : undefined}
 								autoComplete="off"
 								label={S[key]}
 								{...(key === 'publicBaseUrl' ? { help: T.data.storage.publicBaseUrlHelp, placeholder: 'https://' } : {})}
@@ -351,6 +358,8 @@ export function ConnectionsSection({ view, manage, canWrite, twoStepOn = false, 
 						/>
 						{compatible ? (
 							<Input
+								type="url"
+								inputMode="url"
 								autoComplete="off"
 								label={T.data.ai.fields.baseUrl}
 								help={T.data.ai.baseUrlHelp}

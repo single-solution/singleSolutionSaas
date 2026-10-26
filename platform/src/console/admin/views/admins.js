@@ -207,6 +207,7 @@ function InviteDrawer({ open, onClose, onInvited, twoStepOn = false }) {
 						label="Email"
 						type="email"
 						autoComplete="email"
+						inputMode="email"
 						value={email}
 						onChange={(e) => setEmail(e.currentTarget.value)}
 						error={fieldErrors(problem).email}
@@ -422,10 +423,24 @@ function AdminPageView({ current, me, list, activityInitial, onReload, onInvite 
 						{ADMIN.correctEmail}
 					</Button>
 				}>
-				<Form id={emailForm} onSubmit={() => setAsking(true)} aria-label={ADMIN.correctEmail}>
+				<Form
+					id={emailForm}
+					onSubmit={(e) => {
+						e.preventDefault();
+						const val = email.trim();
+						if (!val || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+							setProblem({ status: 422, errors: [{ path: '/email', message: 'Enter a valid email address.' }] });
+							return;
+						}
+						setProblem(null);
+						setAsking(true);
+					}}
+					aria-label={ADMIN.correctEmail}>
 					<Input
 						label="Email"
 						type="email"
+						autoComplete="email"
+						inputMode="email"
 						value={email}
 						onChange={(e) => setEmail(e.currentTarget.value)}
 						error={fieldErrors(problem).email}
