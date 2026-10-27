@@ -27,7 +27,7 @@ import { resealEach, sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
 import { linkFor } from './core/links.js';
 import { presentAdmin, presentMerchant, twoStepOf } from './core/present.js';
-import { SETUP_TTL_MS } from './core/tokens.js';
+import { SETUP_TTL_MS, newToken } from './core/tokens.js';
 import { checkSecondFactor, failAttempt, insertUnique, openTotpSecret, sendLater, throttleGate, totpAad } from './repo.js';
 
 /** @typedef {import('./repo.js').Deps} Deps */
@@ -491,12 +491,78 @@ export const createAccounts = (deps) => {
 		 * A fresh confirmation of the signed-in person before something that must not happen from a stolen session:
 		 * the current password, plus a two-step or recovery code while two-step is on (the same throttle as signing in).
 		 * @param {Kind} kind
-		 * @param {SecondFactor & { id: string, password: string }} input
+		 * @param {SecondFactor & { id: string, password?: string }} input
 		 * @param {Meta} meta
 		 */
 		confirm: async (kind, { id, password, code, recoveryCode }, meta) => {
 			const doc = await loadLogin(kind, id);
-			await proveLogin(kind, doc, password, { ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) }, meta);
+			if (password !== undefined && password !== '') {
+				await proveLogin(kind, doc, password, { ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) }, meta);
+				return;
+			}
+			await accounts.confirmOtp(kind, { id, code, recoveryCode }, meta);
+		},
+
+		/**
+		 * Step-up confirmation with OTP (authenticator code or recovery code, or email OTP) (PLAN §8, §10 A5).
+		 * A stolen session without OTP proof is rejected.
+		 * @param {Kind} kind
+		 * @param {SecondFactor & { id: string }} input
+		 * @param {Meta} meta
+		 */
+		confirmOtp: async (kind, { id, code, recoveryCode }, meta) => {
+			const doc = await loadLogin(kind, id);
+			const key = throttleKey(kind, doc.email);
+			await throttleGate(ctx, key, meta);
+			if (code === undefined && recoveryCode === undefined) {
+				throw problem('validation_failed', 'Enter a two-step code or a recovery code.', {
+					errors: [{ path: '/code', message: 'is required' }],
+				});
+			}
+			if (doc.totp) {
+				const passed = await checkSecondFactor(ctx, logins(kind), doc, {
+					...(code === undefined ? {} : { code }),
+					...(recoveryCode === undefined ? {} : { recoveryCode }),
+				});
+				if (!passed) return failAttempt(ctx, key, meta, BAD_CODE);
+				await ctx.loginThrottle.recordSuccess({ account: key });
+				return;
+			}
+			// Merchant/Admin without TOTP: check active step_up_otp token
+			const tokenDoc = await repo.peekTokenBySubject('step_up_otp', `${kind}:${doc._id}`);
+			if (tokenDoc && tokenDoc.data?.otp && code && tokenDoc.data.otp === code) {
+				await repo.consumeTokenBySubject('step_up_otp', `${kind}:${doc._id}`);
+				await ctx.loginThrottle.recordSuccess({ account: key });
+				return;
+			}
+			if (tokenDoc) {
+				return failAttempt(ctx, key, meta, BAD_CODE);
+			}
+			throw problem('two_step_required', 'Two-step verification is required for step-up.');
+		},
+
+		/**
+		 * Send a single-use step-up OTP email for an account without TOTP (PLAN §8 A5).
+		 * @param {Kind} kind
+		 * @param {string} id
+		 * @param {Meta} meta
+		 */
+		sendStepUpOtp: async (kind, id, meta) => {
+			const doc = await loadLogin(kind, id);
+			const otp = String(Math.floor(100000 + Math.random() * 900000));
+			const tokenPlaintext = newToken(ctx.randomBytes);
+			await repo.dropTokens('step_up_otp', `${kind}:${id}`);
+			await repo.issueToken('step_up_otp', {
+				subject: `${kind}:${id}`,
+				data: { otp, tokenPlaintext },
+				ttlMs: 10 * 60_000,
+			});
+			await sendLater(deps, {
+				to: doc.email,
+				template: 'step_up_otp',
+				data: { otp, brand: ctx.config.settings.branding.name },
+			});
+			return { sent: true };
 		},
 
 		/**

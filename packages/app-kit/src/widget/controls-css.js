@@ -14,10 +14,10 @@
  * selects and `details` / `summary` take the theme too. Spacing uses logical properties, so the blocks follow
  * a right to left page. Motion is short and stops with `prefers-reduced-motion`.
  *
- * The fallbacks follow the consoles' tokens (redesign 2, `@ss/ui` theme.css): Integrity blue for the accent and focus,
- * and the meaning colors as AA text shades — green success, yellow-amber warning, red danger, teal info (`--ss-kit-info`),
- * orange needs-attention (`--ss-kit-attn`) and pink new (`--ss-kit-new`) — with navy hairlines and shadows, and the
- * lighter shades on a navy card in dark mode.
+ * The fallbacks follow the consoles' tokens (Unite, `@ss/ui` theme.css): teal for the accent and focus, and the
+ * meaning colors as AA text shades — green success, amber warning, rose danger, bright teal info (`--ss-kit-info`),
+ * amber needs-attention (`--ss-kit-attn`) and pink new (`--ss-kit-new`) — with ink hairlines and shadows, and the
+ * lighter shades on an ink card in dark mode.
  *
  * The classes the builders in controls.js set: `check` (checkbox or radio with its text), `switch`, `setting`
  * (`wide` when its control is a field), `choice-grid` with `choice` (cards), `segmented`, `field` with `hint` (`error`), `fields` (a grid of fields),
@@ -26,18 +26,18 @@
  */
 export const CONTROLS_CSS = `
 [hidden] { display: none !important; }
-:host { --ss-kit-focus: var(--ss-color-accent, #2226f7); --ss-kit-ok: var(--ss-color-success, #177a57);
-  --ss-kit-warn: var(--ss-color-warning, #7a5c00); --ss-kit-bad: var(--ss-color-danger, #d1212a);
-  --ss-kit-info: var(--ss-color-info, #057971); --ss-kit-attn: var(--ss-color-attention, #b54a2a); --ss-kit-new: var(--ss-color-new, #bf3080);
+:host { --ss-kit-focus: var(--ss-color-accent, #0f766e); --ss-kit-ok: var(--ss-color-success, #047857);
+  --ss-kit-warn: var(--ss-color-warning, #92400e); --ss-kit-bad: var(--ss-color-danger, #be123c);
+  --ss-kit-info: var(--ss-color-info, #0f766e); --ss-kit-attn: var(--ss-color-attention, #b45309); --ss-kit-new: var(--ss-color-new, #be185d);
   --ss-kit-line: var(--ss-color-border, color-mix(in srgb, currentColor 20%, transparent));
   --ss-kit-hair: color-mix(in srgb, currentColor 10%, transparent); --ss-kit-soft: color-mix(in srgb, currentColor 7%, transparent);
-  --ss-kit-r: var(--ss-radius, 8px); --ss-kit-rc: calc(var(--ss-radius, 8px) * 1.5); --ss-kit-card: var(--ss-color-background, #ffffff);
-  --ss-kit-shadow: 0 1px 2px rgb(10 28 64 / 0.04); --ss-kit-pop: 0 16px 40px -12px rgb(10 28 64 / 0.22);
+  --ss-kit-r: var(--ss-radius, 0.35rem); --ss-kit-rc: var(--ss-radius, 0.35rem); --ss-kit-card: var(--ss-color-background, #ffffff);
+  --ss-kit-shadow: 0 1px 2px rgb(11 18 32 / 0.04); --ss-kit-pop: 0 12px 32px -12px rgb(11 18 32 / 0.2);
   --ss-kit-thumb: color-mix(in srgb, currentColor 22%, transparent); }
-:host([data-ss-mode='dark']) { --ss-kit-focus: var(--ss-color-accent, #8a8dfb); --ss-kit-ok: var(--ss-color-success, #24d56d);
-  --ss-kit-warn: var(--ss-color-warning, #ffd527); --ss-kit-bad: var(--ss-color-danger, #f96063);
-  --ss-kit-info: var(--ss-color-info, #00d6a3); --ss-kit-attn: var(--ss-color-attention, #fe6e36); --ss-kit-new: var(--ss-color-new, #ff5baa);
-  --ss-kit-card: var(--ss-color-background, #132447); --ss-kit-shadow: 0 0 #0000; --ss-kit-pop: 0 0 0 1px var(--ss-kit-hair); }
+:host([data-ss-mode='dark']) { --ss-kit-focus: var(--ss-color-accent, #2dd4bf); --ss-kit-ok: var(--ss-color-success, #4ade80);
+  --ss-kit-warn: var(--ss-color-warning, #fbbf24); --ss-kit-bad: var(--ss-color-danger, #fb7185);
+  --ss-kit-info: var(--ss-color-info, #2dd4bf); --ss-kit-attn: var(--ss-color-attention, #fbbf24); --ss-kit-new: var(--ss-color-new, #f472b6);
+  --ss-kit-card: var(--ss-color-background, #141c2c); --ss-kit-shadow: 0 0 #0000; --ss-kit-pop: 0 0 0 1px var(--ss-kit-hair); }
 * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
 *:hover, *:focus-within { scrollbar-color: var(--ss-kit-thumb) transparent; }
 ::selection { background: color-mix(in srgb, var(--ss-kit-focus) 22%, transparent); }
@@ -142,7 +142,7 @@ legend { float: left; width: 100%; margin: 0 0 12px; padding: 0; font-size: 0.93
 .block-head h3 { margin: 0; font-size: 0.9375em; font-weight: 600; } .block-head p { margin: 2px 0 0; font-size: 0.8125em; opacity: 0.7; }
 .block-head .actions { margin: 0; align-items: center; }
 button { font: inherit; font-weight: 500; line-height: 1.25; min-height: 36px; padding: 8px 14px; border: 0; border-radius: var(--ss-kit-r); cursor: pointer;
-  background: var(--ss-color-accent, #2226f7); color: var(--ss-color-onAccent, #ffffff);
+  background: var(--ss-color-accent, #0f766e); color: var(--ss-color-onAccent, #ffffff);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(10 28 64 / 0.12); transition: filter 120ms, background-color 120ms, transform 80ms; }
 button:not(.secondary, .link, .chip):hover:not(:disabled) { filter: brightness(1.1); }
 button:active:not(:disabled) { transform: translateY(1px); }

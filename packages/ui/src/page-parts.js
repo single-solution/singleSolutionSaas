@@ -91,7 +91,7 @@ export function ShellMenuButton({ texts }) {
 			type="button"
 			onClick={openNav}
 			aria-label={texts?.menu ?? PAGE_TEXTS.menu}
-			className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
+			className="ss-motion ss-press shrink-0 rounded-control p-2 text-fg hover:bg-surface-2 lg:hidden">
 			<Icon name="menu" size={18} />
 		</button>
 	);
@@ -108,7 +108,7 @@ export function Crumbs({ crumbs, linkAs, titleId, texts }) {
 	const last = crumbs.length - 1;
 	return (
 		<nav aria-label={texts?.breadcrumb ?? PAGE_TEXTS.breadcrumb} className="min-w-0">
-			<ol className="flex min-w-0 items-center gap-1.5 text-sm">
+			<ol className="flex min-w-0 items-center gap-1.5">
 				{crumbs.map((crumb, i) =>
 					i === last ? (
 						<li key={i} className="max-w-full shrink-0 truncate">
@@ -116,27 +116,28 @@ export function Crumbs({ crumbs, linkAs, titleId, texts }) {
 								id={titleId}
 								aria-current="page"
 								{...(typeof crumb.label === 'string' ? { title: crumb.label } : {})}
-								className="truncate text-title font-semibold text-fg">
+								className="truncate font-display text-title font-semibold tracking-[-0.02em] text-fg">
 								{crumb.label}
 							</h1>
 						</li>
 					) : (
 						<Fragment key={i}>
-							<li className="hidden max-w-[10rem] min-w-8 shrink truncate text-muted @[40rem]:block">
+							<li className="hidden max-w-[10rem] min-w-8 shrink truncate font-mono text-micro tracking-[0.04em] text-muted uppercase @[40rem]:block">
 								{crumb.href ? (
 									<LinkTag
 										href={crumb.href}
 										{...(typeof crumb.label === 'string' ? { title: crumb.label } : {})}
-										className="ss-motion rounded hover:text-fg">
+										className="ss-motion rounded-control hover:text-fg">
 										{crumb.label}
 									</LinkTag>
 								) : (
 									crumb.label
 								)}
 							</li>
-							<li aria-hidden="true" className="hidden shrink-0 text-subtle @[40rem]:block">
-								<Icon name="chevronRight" size={14} />
-							</li>
+							<li
+								aria-hidden="true"
+								className="hidden shrink-0 font-mono text-micro text-subtle before:content-['/'] @[40rem]:block"
+							/>
 						</Fragment>
 					),
 				)}
@@ -145,9 +146,9 @@ export function Crumbs({ crumbs, linkAs, titleId, texts }) {
 	);
 }
 
-/** The look of every fact: a small rounded chip with a muted label and the value in full color; it cuts its own text. */
+/** The look of every fact: a hard Unite chip with a muted label and the value in full color; it cuts its own text. */
 const FACT =
-	'inline-flex h-7 max-w-full min-w-0 shrink items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-2 px-2.5 text-label text-muted';
+	'inline-flex h-7 max-w-full min-w-0 shrink items-center gap-1.5 whitespace-nowrap rounded-control border border-line bg-canvas px-2.5 text-label text-muted';
 
 /**
  * One fact of the header.
@@ -179,7 +180,7 @@ export function Fact({ fact, linkAs }) {
 				className={cx(
 					FACT,
 					'ss-motion ss-press focus-visible:outline-2 focus-visible:outline-focus',
-					fact.active ? 'bg-primary-soft text-on-primary-soft' : 'hover:bg-line-soft',
+					fact.active ? 'border-line bg-surface text-fg ss-hard' : 'hover:bg-surface-2',
 				)}>
 				{body}
 			</button>
@@ -230,13 +231,13 @@ export function InfoButton({ label, children }) {
 				aria-expanded={open}
 				{...(open ? { 'aria-controls': id } : {})}
 				onClick={() => setOpen((o) => !o)}
-				className="ss-motion ss-press flex size-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
+				className="ss-motion ss-press flex size-8 items-center justify-center rounded-control text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
 				<Icon name="info" size={16} />
 			</button>
 			{open ? (
 				<div
 					id={id}
-					className="absolute top-full left-0 z-30 mt-2 w-80 max-w-[85vw] origin-top-left animate-ss-pop rounded-card border border-line-soft bg-surface p-3 text-sm text-pretty text-muted shadow-overlay">
+					className="absolute top-full left-0 z-30 mt-2 w-80 max-w-[85vw] origin-top-left animate-ss-pop rounded-card border border-line bg-surface p-3 text-sm text-pretty text-muted shadow-overlay">
 					{children}
 				</div>
 			) : null}

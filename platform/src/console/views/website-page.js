@@ -19,7 +19,6 @@ import {
 	LocalTime,
 	Page,
 	Skeleton,
-	Timeline,
 	TypedConfirmDialog,
 	copyText,
 	describeProblem,
@@ -30,14 +29,14 @@ import { MORE, SETUP, WEBSITE, WEBSITE_SETTINGS as T } from '../../texts/console
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
-import { api } from '../paths.js';
+import { api, routes } from '../paths.js';
 import { parseWebsitePart, SETTINGS_SECTIONS } from '../website-parts.js';
-import { UsageView, productStatusLabel, productTone } from './billing.js';
+import { productStatusLabel, productTone } from './billing.js';
 import { openDashboard } from './common.js';
 import { ConfirmChange } from './confirm-change.js';
 import { SetupView, useSetupSheet } from './setup.js';
 import { SettingsSectionBody, contextOf, readinessLines, useWebsiteSettings } from './website-settings.js';
-import { AddProductDrawer, InstallBlock, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from './website.js';
+import { AddProductDrawer, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from './website.js';
 
 /** @typedef {import('./website.js').ProductCard} ProductCard */
 /**
@@ -165,6 +164,7 @@ export function WebsitePageView({
 	const [opening, setOpening] = useState(/** @type {string | null} */ (null));
 	/** Product waiting for password confirm before launch. */
 	const [launching, setLaunching] = useState(/** @type {ProductCard | null} */ (null));
+	const [sharingPack, setSharingPack] = useState(false);
 	// the website was removed: the page waits (as a skeleton) for the list to open
 	const [gone, setGone] = useState(false);
 
@@ -184,19 +184,14 @@ export function WebsitePageView({
 	const productId = parsed?.kind === 'product' ? parsed.id : null;
 	const shown = productId ? (cards.find((c) => c.productId === productId) ?? null) : null;
 	// pages of their own (not the product-rows home)
-	const own =
-		kind === 'settings'
-			? 'settings'
-			: kind === 'setup'
-				? 'setup'
-				: kind === 'install'
-					? 'install'
-					: kind === 'usage'
-						? 'usage'
-						: kind === 'changes'
-							? 'changes'
-							: null;
+	const own = kind === 'settings' ? 'settings' : kind === 'setup' ? 'setup' : null;
 	const onSetup = own === 'setup' && setupState.sheet !== null;
+
+	useEffect(() => {
+		if (parsed?.kind === 'redirect') {
+			nav.go(hrefOf(parsed.to));
+		}
+	}, [parsed, hrefOf, nav]);
 
 	// what stands in place of the body when the address is not a page of this website or the person may not see it
 	/** @type {string | null} */
@@ -204,25 +199,19 @@ export function WebsitePageView({
 	if (error) {
 		// a missing website
 	} else if (parsed === null) error = WEBSITE.noSuchPage;
+	else if (parsed.kind === 'redirect') error = null;
 	else if (parsed.kind === 'product' && !shown) error = WEBSITE.noSuchProduct;
 	else if (parsed.kind === 'settings')
 		error = !can.settings ? WEBSITE.noSuchPage : settings && !settings.ok ? describeProblem(settings.problem) : null;
-	else if (parsed.kind === 'changes') error = !can.settings ? WEBSITE.noSuchPage : null;
-	else if (parsed.kind === 'usage') error = null;
-	else if (parsed.kind === 'install' || parsed.kind === 'setup') {
+	else if (parsed.kind === 'setup') {
 		error = !can.tokens
 			? WEBSITE.noSuchPage
-			: parsed.kind === 'setup' && setup && !setup.ok
+			: setup && !setup.ok
 				? describeProblem(setup.problem)
 				: null;
 	}
 
 	const onHome = own === null && !error && !gone;
-	const onInstall = own === 'install' && !error && !gone;
-	const onUsage = own === 'usage' && !error && !gone;
-	const onChanges = own === 'changes' && !error && !gone;
-	const usage = useOnce(onUsage ? api.usage(merchantId, { websiteId }) : null);
-	const tokens = useOnce(onInstall && can.tokens ? api.tokens(merchantId, websiteId) : null);
 	const meResult = useOnce('/v1/me');
 	const twoStepOn = initialTwoStepOn !== undefined ? initialTwoStepOn : twoStepOnOf(meResult);
 
@@ -243,7 +232,7 @@ export function WebsitePageView({
 	const setCards = (next) => setCardsState(next);
 	/** @param {ProductCard} card */
 	const askOpen = (card) => setLaunching(card);
-	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	/** @param {{ code?: string, recoveryCode?: string }} confirmation */
 	const sendLaunch = async (confirmation) => {
 		if (!launching)
 			return { ok: /** @type {const} */ (false), problem: /** @type {any} */ ({ status: 400, title: 'Nothing to open' }) };
@@ -254,6 +243,33 @@ export function WebsitePageView({
 		if (!result.ok) return result;
 		setLaunching(null);
 		return { ok: /** @type {const} */ (true) };
+	};
+	/** @param {{ code?: string, recoveryCode?: string }} confirmation */
+	const sendDeveloperPack = async (confirmation) => {
+		try {
+			const result = await apiFetch(api.developerPack(merchantId, websiteId), {
+				method: 'POST',
+				body: confirmation,
+			});
+			if (!result.ok) return result;
+			const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `developer-pack-${website.domain}.json`;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+			toast.show({ title: WEBSITE.developerPackDownloaded });
+			setSharingPack(false);
+			return { ok: /** @type {const} */ (true) };
+		} catch (err) {
+			return {
+				ok: /** @type {const} */ (false),
+				problem: { status: 500, detail: err instanceof Error ? err.message : 'The request failed.' },
+			};
+		}
 	};
 	const removeProduct = async () => {
 		if (!removing) return;
@@ -320,6 +336,20 @@ export function WebsitePageView({
 	];
 	/** Home header: at most two secondary actions (Page rule); the rest open from More. */
 	const homeSecondary = [
+		...(can.tokens
+			? [
+					{
+						label: WEBSITE.shareWithDeveloper,
+						icon: /** @type {const} */ ('arrowDown'),
+						onClick: () => setSharingPack(true),
+					},
+					{
+						label: WEBSITE.setupSheet,
+						icon: /** @type {const} */ ('layers'),
+						onClick: () => nav.go(hrefOf('setup')),
+					},
+				]
+			: []),
 		...(hasSettings
 			? [
 					{
@@ -329,20 +359,11 @@ export function WebsitePageView({
 					},
 				]
 			: []),
-		...(can.tokens
-			? [
-					{
-						label: WEBSITE.installCeremony,
-						icon: /** @type {const} */ ('code'),
-						onClick: () => nav.go(hrefOf('install')),
-					},
-					{
-						label: WEBSITE.setupSheet,
-						icon: /** @type {const} */ ('layers'),
-						onClick: () => nav.go(hrefOf('setup')),
-					},
-				]
-			: []),
+		{
+			label: WEBSITE.docs,
+			icon: /** @type {const} */ ('external'),
+			onClick: () => void window.open(routes.docs, '_blank', 'noopener,noreferrer'),
+		},
 	];
 	/** @type {import('@ss/ui').PageActions} */
 	const actions = {
@@ -402,12 +423,9 @@ export function WebsitePageView({
 				{ id: 'overview', label: WEBSITE.overview, icon: 'home' },
 				...(can.tokens
 					? [
-							{ id: 'install', label: WEBSITE.installCeremony, icon: /** @type {const} */ ('code') },
 							{ id: 'setup', label: WEBSITE.setupSheet, icon: /** @type {const} */ ('layers') },
 						]
 					: []),
-				{ id: 'usage', label: WEBSITE.usageDetails, icon: /** @type {const} */ ('trendingUp') },
-				...(can.settings ? [{ id: 'changes', label: WEBSITE.recentChanges, icon: /** @type {const} */ ('clock') }] : []),
 			],
 		},
 		...(hasSettings
@@ -431,18 +449,7 @@ export function WebsitePageView({
 				]
 			: []),
 	];
-	const current =
-		parsed?.kind === 'settings'
-			? `settings/${parsed.section}`
-			: own === 'install'
-				? 'install'
-				: own === 'usage'
-					? 'usage'
-					: own === 'changes'
-						? 'changes'
-						: own === 'setup'
-							? 'setup'
-							: 'overview';
+	const current = parsed?.kind === 'settings' ? `settings/${parsed.section}` : own === 'setup' ? 'setup' : 'overview';
 
 	/** @type {import('react').ReactNode} */
 	let body = null;
@@ -476,71 +483,6 @@ export function WebsitePageView({
 				canSwitch={canSwitch}
 				settingsHref={hrefOf('settings')}
 			/>
-		);
-	else if (onInstall) {
-		const entries = /** @type {import('./website.js').TokenEntry[]} */ (tokens?.ok ? (tokens.data?.items ?? []) : []);
-		body = (
-			<div className="space-y-4">
-				<p className="text-sm text-muted">{WEBSITE.installCeremonyHelp}</p>
-				{tokens && !tokens.ok ? <Callout tone="danger">{describeProblem(tokens.problem)}</Callout> : null}
-				{cards.length === 0 ? (
-					<EmptyState
-						compact
-						icon="box"
-						title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
-						description={can.manage ? WEBSITE.noProductsHelp : WEBSITE.noProductsMerchantHelp}
-						action={
-							can.manage ? (
-								<Button size="sm" icon={<Icon name="plus" size={14} />} onClick={() => setDialog('add')}>
-									{WEBSITE.addProduct}
-								</Button>
-							) : undefined
-						}
-					/>
-				) : !tokens ? (
-					<Skeleton lines={4} />
-				) : (
-					cards.map((card) => {
-						const entry = entries.find((e) => e.productId === card.productId) ?? null;
-						return entry ? (
-							<Card key={card.productId} lead={<IconBadge product={card.productId} size="sm" />} title={card.name}>
-								<InstallBlock
-									key={`${websiteId}:${card.productId}`}
-									entry={entry}
-									domain={website.domain}
-									merchantId={merchantId}
-									websiteId={websiteId}
-									twoStepOn={twoStepOn}
-								/>
-							</Card>
-						) : null;
-					})
-				)}
-			</div>
-		);
-	} else if (onUsage)
-		body = (
-			<div id="usage">
-				{!usage ? (
-					<Skeleton lines={4} />
-				) : usage.ok ? (
-					<UsageView usage={usage.data} showWebsite={false} chart />
-				) : (
-					<Callout tone="danger">{describeProblem(usage.problem)}</Callout>
-				)}
-			</div>
-		);
-	else if (onChanges)
-		body = (
-			<div id="activity">
-				<Card title={WEBSITE.recentChanges} subtitle={T.changes.intro}>
-					{settings && !settings.ok ? (
-						<Callout tone="danger">{describeProblem(settings.problem)}</Callout>
-					) : (
-						<ChangesTimeline changes={state.changes} />
-					)}
-				</Card>
-			</div>
 		);
 	else if (onHome) {
 		sections = [
@@ -595,7 +537,7 @@ export function WebsitePageView({
 				status={[pills[dot]]}
 				facts={facts}
 				actions={actions}
-				info={kind === 'settings' ? T.intro : own === 'install' ? WEBSITE.installCeremonyHelp : WEBSITE.pageInfo}
+				info={kind === 'settings' ? T.intro : WEBSITE.pageInfo}
 				{...(own !== null
 					? {
 							nav: {
@@ -633,9 +575,21 @@ export function WebsitePageView({
 				help={WEBSITE.openConfirmHelp}
 				confirmLabel={WEBSITE.openConfirmLabel}
 				twoStepOn={twoStepOn}
+				otpOnly={true}
 				send={sendLaunch}
 				onClose={() => setLaunching(null)}
 				onDone={() => setLaunching(null)}
+			/>
+			<ConfirmChange
+				open={sharingPack}
+				title={WEBSITE.developerPack}
+				help={WEBSITE.developerPackHelp}
+				confirmLabel={WEBSITE.downloadPack}
+				twoStepOn={twoStepOn}
+				otpOnly={true}
+				send={sendDeveloperPack}
+				onClose={() => setSharingPack(false)}
+				onDone={() => setSharingPack(false)}
 			/>
 			<TypedConfirmDialog
 				open={Boolean(removing)}

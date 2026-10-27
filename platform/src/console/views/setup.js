@@ -206,7 +206,7 @@ function Part({ title, children }) {
 function Settings({ settings }) {
 	if (settings.length === 0) return <p className="text-xs text-muted">{SETUP.noSettings}</p>;
 	return (
-		<dl className="divide-y divide-line-soft rounded-card border border-line-soft">
+		<dl className="divide-y divide-line-soft rounded-card border border-line">
 			{settings.map((setting) => (
 				<div key={setting.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 py-2">
 					<dt className="min-w-0 text-label text-fg">{setting.title}</dt>
@@ -398,7 +398,7 @@ function ProductPanel({ product, valuesShown }) {
 						<ul className="flex flex-wrap gap-1.5">
 							{product.events.map((event) => (
 								<li key={event}>
-									<code className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg">{event}</code>
+									<code className="rounded-control bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg">{event}</code>
 								</li>
 							))}
 						</ul>
@@ -481,7 +481,7 @@ function Recommendations({ sheet, actions }) {
 					<p className="text-sm text-fg">{off.length === 0 ? SETUP.allRecommendedOn : SETUP.recommendedOn(onCount)}</p>
 					{off.length > 0 ? (
 						<Part title={SETUP.recommendedOff}>
-							<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+							<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 								{off.map(({ product, entry }) => {
 									const needed = neededOff(product, entry.feature);
 									return (
@@ -924,7 +924,7 @@ function ShareLinks({ manage, initial }) {
 			{links.length === 0 ? (
 				<EmptyState compact icon="link" title={SETUP.noLinks} />
 			) : (
-				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+				<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 					{links.map((link) => (
 						<Row
 							key={link.linkId}

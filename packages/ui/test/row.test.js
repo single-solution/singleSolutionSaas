@@ -68,7 +68,8 @@ describe('Row', () => {
 		expect(box.hasAttribute('data-selected')).toBe(false);
 		rerender(<Row title="Acme" onSelect={onSelect} selected />);
 		expect(box.hasAttribute('data-selected')).toBe(true);
-		expect(box.className).toContain('bg-primary-soft');
+		expect(box.className).toContain('ss-hard');
+		expect(box.className).toContain('border-line');
 	});
 
 	it('does not select when a click or a key happens inside the trailing control', () => {

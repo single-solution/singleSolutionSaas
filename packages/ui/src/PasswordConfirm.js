@@ -29,9 +29,9 @@ export const PASSWORD_CONFIRM_TEXTS =
 	);
 
 /**
- * @param {{ open: boolean, onClose: () => void, onConfirm: (input: { password: string, code: string }) => void,
+ * @param {{ open: boolean, onClose: () => void, onConfirm: (input: { password?: string, code: string }) => void,
  *   title: ReactNode, description?: ReactNode, children?: ReactNode, confirmLabel?: string, cancelLabel?: string,
- *   busy?: boolean, danger?: boolean, showCode?: boolean, expected?: string,
+ *   busy?: boolean, danger?: boolean, showCode?: boolean, otpOnly?: boolean, expected?: string,
  *   errors?: { password?: ReactNode, code?: ReactNode, form?: ReactNode },
  *   texts?: Partial<Record<'password' | 'passwordHelp' | 'code' | 'codeHelp' | 'recoveryCode' | 'recoveryHelp' | 'useRecovery' | 'useTwoStep', string>> }} props
  */
@@ -47,6 +47,7 @@ export function PasswordConfirmDialog({
 	busy = false,
 	danger = false,
 	showCode = false,
+	otpOnly = false,
 	expected,
 	errors = {},
 	texts,
@@ -65,8 +66,12 @@ export function PasswordConfirmDialog({
 			setUseRecovery(false);
 		}
 	}, [open]);
+	const effectiveShowCode = otpOnly || showCode;
 	const ready =
-		password !== '' && (!showCode || code.trim() !== '') && (expected === undefined || typed.trim() === expected) && !busy;
+		(otpOnly || password !== '') &&
+		(!effectiveShowCode || code.trim() !== '') &&
+		(expected === undefined || typed.trim() === expected) &&
+		!busy;
 	return (
 		<Dialog
 			open={open}
@@ -90,21 +95,23 @@ export function PasswordConfirmDialog({
 				className="space-y-4"
 				onSubmit={(event) => {
 					event.preventDefault();
-					if (ready) onConfirm({ password, code: code.trim() });
+					if (ready) onConfirm({ ...(otpOnly ? {} : { password }), code: code.trim() });
 				}}>
 				{children}
-				<Input
-					label={T.password}
-					help={T.passwordHelp}
-					type="password"
-					autoComplete="current-password"
-					value={password}
-					onChange={(event) => setPassword(event.currentTarget.value)}
-					error={errors.password}
-					required
-					data-autofocus
-				/>
-				{showCode ? (
+				{otpOnly ? null : (
+					<Input
+						label={T.password}
+						help={T.passwordHelp}
+						type="password"
+						autoComplete="current-password"
+						value={password}
+						onChange={(event) => setPassword(event.currentTarget.value)}
+						error={errors.password}
+						required
+						data-autofocus
+					/>
+				)}
+				{effectiveShowCode ? (
 					<div className="space-y-2">
 						<Input
 							label={useRecovery ? (T.recoveryCode ?? 'Recovery code') : T.code}
@@ -118,6 +125,7 @@ export function PasswordConfirmDialog({
 							onChange={(event) => setCode(event.currentTarget.value)}
 							error={errors.code}
 							required
+							data-autofocus={otpOnly ? true : undefined}
 						/>
 						<div className="flex justify-end">
 							<Button
@@ -156,4 +164,12 @@ export function PasswordConfirmDialog({
 			</form>
 		</Dialog>
 	);
+}
+
+/**
+ * Step-up confirmation dialog using OTP only (no password prompt).
+ * @param {Omit<Parameters<typeof PasswordConfirmDialog>[0], 'otpOnly'>} props
+ */
+export function OtpConfirmDialog(props) {
+	return <PasswordConfirmDialog {...props} otpOnly />;
 }

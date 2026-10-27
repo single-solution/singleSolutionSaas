@@ -35,8 +35,8 @@ export const confirmationErrors = (problem) => {
  * A refusal that is not about the password or the code (a value the Portal does not accept) closes the dialog, so the
  * form behind it can show the reason.
  * @param {{ open: boolean, title: string, help: string, confirmLabel: string, danger?: boolean, expected?: string,
- *   twoStepOn?: boolean,
- *   send: (confirmation: { password: string, code?: string, recoveryCode?: string }) => Promise<{ ok: true } | { ok: false, problem: Problem }>,
+ *   twoStepOn?: boolean, otpOnly?: boolean,
+ *   send: (confirmation: { password?: string, code?: string, recoveryCode?: string }) => Promise<{ ok: true } | { ok: false, problem: Problem }>,
  *   onClose: () => void, onDone: () => void }} props
  */
 export function ConfirmChange({
@@ -48,24 +48,26 @@ export function ConfirmChange({
 	expected,
 	send,
 	twoStepOn = false,
+	otpOnly = false,
 	onClose,
 	onDone,
 }) {
 	const [busy, setBusy] = useState(false);
 	const [errors, setErrors] = useState(/** @type {{ password?: string, code?: string, form?: string }} */ ({}));
-	const [wantsCode, setWantsCode] = useState(twoStepOn);
+	const [wantsCode, setWantsCode] = useState(otpOnly || twoStepOn);
 	useEffect(() => {
 		if (open) {
-			setWantsCode(twoStepOn);
+			setWantsCode(otpOnly || twoStepOn);
 			setErrors({});
 		}
-	}, [open, twoStepOn]);
-	/** @param {{ password: string, code: string }} input */
+	}, [open, twoStepOn, otpOnly]);
+	/** @param {{ password?: string, code: string }} input */
 	const confirm = async ({ password, code }) => {
 		setBusy(true);
 		setErrors({});
 		try {
-			const result = await send({ password, ...factorOf(code) });
+			const payload = otpOnly ? factorOf(code) : { ...(password !== undefined ? { password } : {}), ...factorOf(code) };
+			const result = await send(payload);
 			setBusy(false);
 			if (result.ok) {
 				onDone();
@@ -91,7 +93,8 @@ export function ConfirmChange({
 			onConfirm={(input) => void confirm(input)}
 			busy={busy}
 			danger={danger}
-			showCode={wantsCode}
+			showCode={otpOnly || wantsCode}
+			otpOnly={otpOnly}
 			{...(expected === undefined ? {} : { expected })}
 			confirmLabel={confirmLabel}
 			title={title}
@@ -100,4 +103,12 @@ export function ConfirmChange({
 			<p className="text-sm text-muted">{help}</p>
 		</PasswordConfirmDialog>
 	);
+}
+
+/**
+ * Step-up confirmation dialog using OTP only (no password field).
+ * @param {Omit<Parameters<typeof ConfirmChange>[0], 'otpOnly'>} props
+ */
+export function ConfirmOtp(props) {
+	return <ConfirmChange {...props} otpOnly />;
 }

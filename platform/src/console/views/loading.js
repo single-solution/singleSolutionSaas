@@ -64,8 +64,8 @@ export const shapeOf = (area, pathname) => {
 function AuthSkeleton() {
 	return (
 		<div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4">
-			<SkeletonBlock className="mx-auto h-9 w-9 rounded-lg [--ss-skeleton:var(--ss-surface-3)]" />
-			<div className={cx('space-y-3 rounded-card border border-line-soft bg-surface p-5 shadow-card')}>
+			<SkeletonBlock className="mx-auto h-9 w-9 rounded-control [--ss-skeleton:var(--ss-surface-3)]" />
+			<div className={cx('space-y-3 rounded-card border border-line bg-surface p-5')}>
 				<SkeletonBlock className="h-5 w-40" />
 				<SkeletonBlock className="h-4 w-full" />
 				<SkeletonBlock className="h-4 w-full" />

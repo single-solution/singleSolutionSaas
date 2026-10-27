@@ -23,7 +23,7 @@ describe('SaveBar floating at the bottom centre', () => {
 		expect(region.getAttribute('aria-label')).toBe('Save changes');
 		for (const name of [
 			'fixed',
-			'bottom-4',
+			'bottom-3',
 			'z-40',
 			'justify-center',
 			'left-[var(--ss-pane-left,0px)]',
@@ -98,10 +98,10 @@ describe('the pane the SaveBar centres on', () => {
 			</AppShell>,
 		);
 		const root = /** @type {HTMLElement} */ (container.querySelector('.h-dvh'));
-		expect(root.className).toContain('[--ss-pane-left:0.75rem]');
-		expect(root.className).toContain('lg:[--ss-pane-left:17rem]');
-		expect(root.className).toContain('[--ss-pane-right:0.75rem]');
+		expect(root.className).toContain('[--ss-pane-left:0.5rem]');
+		expect(root.className).toContain('lg:[--ss-pane-left:16.625rem]');
+		expect(root.className).toContain('[--ss-pane-right:0.5rem]');
 		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Collapse sidebar"]')));
-		expect(root.className).toContain('lg:[--ss-pane-left:6rem]');
+		expect(root.className).toContain('lg:[--ss-pane-left:5.125rem]');
 	});
 });

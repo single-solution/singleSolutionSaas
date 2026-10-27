@@ -1,11 +1,22 @@
-import { Bricolage_Grotesque, Figtree } from 'next/font/google';
+import { Figtree, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { ThemeScript } from '@ss/ui';
 import { TEXTS } from './dashboard/texts.js';
 import './globals.css';
 
-/** The interface typefaces (served with the app, no outside request): text and headings/figures (`@ss/ui` theme). */
+/** Unite faces for product dashboards (`@ss/ui` theme): text, display, mono. */
 const text = Figtree({ subsets: ['latin'], variable: '--ss-font-text', display: 'swap' });
-const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--ss-font-display', display: 'swap' });
+const display = Space_Grotesk({
+	subsets: ['latin'],
+	variable: '--ss-font-display',
+	display: 'swap',
+	weight: ['500', '600', '700'],
+});
+const mono = JetBrains_Mono({
+	subsets: ['latin'],
+	variable: '--ss-font-mono',
+	display: 'swap',
+	weight: ['400', '500', '600'],
+});
 
 export const metadata = { title: TEXTS.title, robots: { index: false, follow: false } };
 export const viewport = { width: 'device-width', initialScale: 1, colorScheme: 'light dark' };
@@ -16,7 +27,7 @@ export const viewport = { width: 'device-width', initialScale: 1, colorScheme: '
  */
 export default function RootLayout({ children }) {
 	return (
-		<html lang="en" className={`${text.variable} ${display.variable}`} suppressHydrationWarning>
+		<html lang="en" className={`${text.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
 			<head>
 				<ThemeScript />
 			</head>

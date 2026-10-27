@@ -82,7 +82,10 @@ export const identityRoutes = (ctx, service) => {
 	 */
 	const tokenOf = (c, kind) => readCookie(c.headers.get('cookie'), ctx.cookies.name(kind)) ?? '';
 	/** @param {RequestContext} c */
-	const kindOf = (c) => /** @type {'admin' | 'merchant'} */ (c.authMode === 'admin' ? 'admin' : 'merchant');
+	const kindOf = (c) =>
+		/** @type {'admin' | 'merchant'} */ (
+			c.actor?.type === 'admin' || c.session?.kind === 'admin' || c.authMode === 'admin' ? 'admin' : 'merchant'
+		);
 
 	/**
 	 * Load the website (tenant-scoped), then authorize against it.
@@ -99,9 +102,25 @@ export const identityRoutes = (ctx, service) => {
 	/**
 	 * A fresh confirmation of the signed-in person: their current password, and a code while two-step is on.
 	 * @param {RequestContext} c
-	 * @param {{ password: string, code?: string, recoveryCode?: string }} confirmation
+	 * @param {{ password?: string, code?: string, recoveryCode?: string }} confirmation
 	 */
-	const confirmed = (c, confirmation) => accounts.confirm(kindOf(c), { ...confirmation, id: sessionOf(c).subject }, metaOf(c));
+	const confirmed = (c, confirmation) => {
+		if (confirmation.code !== undefined || confirmation.recoveryCode !== undefined) {
+			return accounts.confirmOtp(kindOf(c), { code: confirmation.code, recoveryCode: confirmation.recoveryCode, id: sessionOf(c).subject }, metaOf(c));
+		}
+		if (confirmation.password !== undefined && confirmation.password !== '') {
+			return accounts.confirm(kindOf(c), { password: confirmation.password, id: sessionOf(c).subject }, metaOf(c));
+		}
+		return accounts.confirmOtp(kindOf(c), { id: sessionOf(c).subject }, metaOf(c));
+	};
+
+	/**
+	 * Step-up confirmation: OTP code or recovery code only (A5).
+	 * @param {RequestContext} c
+	 * @param {{ code?: string, recoveryCode?: string }} confirmation
+	 */
+	const confirmedOtp = (c, confirmation) =>
+		accounts.confirmOtp(kindOf(c), { ...confirmation, id: sessionOf(c).subject }, metaOf(c));
 
 	/**
 	 * The body of a high-impact call: the members of the call itself plus a fresh confirmation (password, and a code
@@ -389,6 +408,47 @@ export const identityRoutes = (ctx, service) => {
 			handler: async (c) => {
 				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
 				return ok({ items: await service.installOf({ merchantId, websiteId: String(website._id) }) });
+			},
+		},
+		{
+			method: 'POST',
+			path: '/v1/me/step-up-otp',
+			auth: ['merchant', 'admin'],
+			rateLimit: { limit: 10, windowMs: 60_000 },
+			handler: async (c) => {
+				const kind = kindOf(c);
+				const id = sessionOf(c).subject;
+				return ok(await accounts.sendStepUpOtp(kind, id, metaOf(c)));
+			},
+		},
+		{
+			method: 'POST',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/pack',
+			auth: ['merchant', 'admin'],
+			idempotent: 'no-store',
+			rateLimit: { limit: 30, windowMs: 60_000 },
+			handler: async (c) => {
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensReveal);
+				const confirmation = valid(inputs.otpConfirmation(c.body));
+				await confirmedOtp(c, confirmation);
+				const pack = await service.developerPack({
+					merchantId,
+					websiteId: String(website._id),
+					actor: actorOf(c),
+					meta: metaOf(c),
+				});
+				const download = c.query.download === '1' || c.query.download === 'true';
+				return ok(
+					pack,
+					download
+						? {
+								headers: {
+									'content-disposition': `attachment; filename="developer-pack-${website.domain}.json"`,
+									'content-type': 'application/json',
+								},
+							}
+						: {},
+				);
 			},
 		},
 		{

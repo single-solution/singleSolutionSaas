@@ -75,7 +75,7 @@ describe('EntryGroup (one entry of an editor the caller lays out)', () => {
 		);
 		const group = /** @type {HTMLElement} */ (container.firstElementChild);
 		// a hairline box, never a hand-made grey one; the caller's data attribute lands on it
-		expect(group.className).toContain('border-line-soft');
+		expect(group.className).toContain('border-line');
 		expect(group.hasAttribute('data-entry')).toBe(true);
 		expect(container.textContent).toContain('Zone 1');
 		expect(container.textContent).toContain('Fields');

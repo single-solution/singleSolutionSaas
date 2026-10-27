@@ -326,6 +326,7 @@ function WebsitesScreen({
 	part = '',
 	settings = null,
 	setup = null,
+	addable = null,
 	merchantId,
 	twoStepOn = false,
 }) {
@@ -396,8 +397,9 @@ function WebsitesScreen({
 			part={part}
 			crumbs={crumbs}
 			hrefOf={(next) => routes.websitePart(id, next)}
-			can={{ manage: false, removeWebsite: false, tokens: true, open: true, settings: true }}
+			can={{ manage: true, removeWebsite: false, tokens: true, open: true, settings: true }}
 			pills={SITE_PILLS}
+			addable={addable}
 			launch={(productId) => ({ path: api.launch(merchantId, id, productId) })}
 			afterRemoved={routes.websites()}
 			settings={settings}
@@ -428,6 +430,7 @@ export function WebsitesView(props) {
 					websiteId={String(rows[0]?.website.websiteId)}
 					fromList
 					settings={props.settings}
+					addable={props.addable}
 					merchantId={props.merchantId}
 					twoStepOn={Boolean(props.me?.merchant?.twoStep?.enabled)}
 				/>
@@ -438,7 +441,7 @@ export function WebsitesView(props) {
 
 /**
  * One website's own page in the merchant console (`Websites › domain`, the list of websites beside it): the merchant
- * cannot add or remove products here, the admin does (PLAN 0.2).
+ * can add or remove products here, and open/configure them (PLAN §7, §10 A3).
  * @param {any} props loader result of `loadWebsitePage`
  */
 export function WebsiteView(props) {
@@ -452,6 +455,7 @@ export function WebsiteView(props) {
 				part={props.part}
 				settings={props.settings}
 				setup={props.setup}
+				addable={props.addable}
 				merchantId={props.merchantId}
 				twoStepOn={Boolean(props.me?.merchant?.twoStep?.enabled)}
 			/>

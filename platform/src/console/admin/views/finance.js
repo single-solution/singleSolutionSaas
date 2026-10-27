@@ -608,7 +608,7 @@ function ChargesPart(props) {
 			}
 			{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
 			{isEmptySeries(dayBars) ? null : (
-				<div className="shrink-0 border-b border-line-soft px-4 py-3">
+				<div className="shrink-0 border-b border-line px-4 py-3">
 					{range ? <p className="mb-2 text-label text-muted">{MORE.chargesChart + ' · ' + range}</p> : null}
 					<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />
 				</div>

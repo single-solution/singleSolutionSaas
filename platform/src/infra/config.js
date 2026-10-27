@@ -117,7 +117,7 @@ export const logoUrlOf = (portalUrl, branding) =>
 export const DEFAULT_SETTINGS = Object.freeze({
 	// two-step is required for every admin until an Owner turns the requirement off (Settings → Security)
 	security: Object.freeze({ sessionHours: SETTINGS_BOUNDS.sessionHours.default, requireTwoStepForAdmins: true }),
-	branding: Object.freeze({ name: 'Single Solution', accent: '#2226f7', hasLogo: false, logoVersion: 0 }),
+	branding: Object.freeze({ name: 'Single Solution', accent: '#0f766e', hasLogo: false, logoVersion: 0 }),
 	support: Object.freeze({ channels: /** @type {import('@ss/contracts/text').SupportChannel[]} */ ([]) }),
 	billing: Object.freeze({
 		graceDays: SETTINGS_BOUNDS.graceDays.default,

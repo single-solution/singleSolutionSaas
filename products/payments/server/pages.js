@@ -62,15 +62,15 @@ const PAGE_CSS = `
 :root { color-scheme: light dark; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; box-sizing: border-box;
   font-family: var(--ss-font-family, system-ui, sans-serif); background: Canvas; color: CanvasText; }
-.box { max-width: 440px; width: 100%; padding: 24px; box-sizing: border-box; border-radius: var(--ss-radius, 8px);
+.box { max-width: 440px; width: 100%; padding: 24px; box-sizing: border-box; border-radius: var(--ss-radius, 0.35rem);
   background: var(--ss-color-background, Canvas); color: var(--ss-color-text, CanvasText);
   border: 1px solid var(--ss-color-border, GrayText); }
 h1 { font-size: 1.3em; margin: 0 0 8px; } .amount { font-size: 1.6em; font-weight: 600; margin: 8px 0 16px; }
 label { display: block; font-size: 0.9em; margin: 12px 0 4px; }
 input, select { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; color: inherit; background: transparent;
-  border: 1px solid var(--ss-color-border, GrayText); border-radius: var(--ss-radius, 8px); }
-button { width: 100%; margin-top: 12px; font: inherit; padding: 10px 18px; border: 0; border-radius: var(--ss-radius, 8px);
-  cursor: pointer; background: var(--ss-color-accent, #2226f7); color: var(--ss-color-onAccent, #ffffff); }
+  border: 1px solid var(--ss-color-border, GrayText); border-radius: var(--ss-radius, 0.35rem); }
+button { width: 100%; margin-top: 12px; font: inherit; padding: 10px 18px; border: 0; border-radius: var(--ss-radius, 0.35rem);
+  cursor: pointer; background: var(--ss-color-accent, #0f766e); color: var(--ss-color-onAccent, #ffffff); }
 button[disabled] { opacity: 0.6; } .error { color: #b91c1c; } .muted { opacity: 0.75; font-size: 0.9em; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 12px 0; } dt { opacity: 0.75; } dd { margin: 0; overflow-wrap: anywhere; }
 a { color: inherit; }

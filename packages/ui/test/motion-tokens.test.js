@@ -11,7 +11,7 @@ describe('motion tokens (layout contract item 12)', () => {
 		expect(css).toMatch(/--dur-fast:\s*120ms/);
 		expect(css).toMatch(/--dur:\s*160ms/);
 		expect(css).toMatch(/--dur-slow:\s*220ms/);
-		expect(css).toMatch(/--ease:\s*cubic-bezier\(0\.2,\s*0\.8,\s*0\.2,\s*1\)/);
+		expect(css).toMatch(/--ease:\s*cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\)/);
 	});
 
 	it('points the older motion names at the new tokens, so every curve is the one easing', () => {

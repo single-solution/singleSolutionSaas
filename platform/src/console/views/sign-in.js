@@ -61,9 +61,9 @@ function AuthFrame({ branding, title, subtitle, children, footer }) {
 				<BrandMark branding={branding} />
 				<section
 					aria-labelledby="auth-title"
-					className="space-y-6 rounded-card border border-line-soft bg-surface p-6 shadow-panel sm:p-8">
+					className="space-y-6 rounded-card border border-line bg-surface p-6 sm:p-8">
 					<div className="space-y-1">
-						<h1 id="auth-title" className="text-2xl font-extrabold tracking-tight text-fg">
+						<h1 id="auth-title" className="font-display text-2xl font-semibold tracking-[-0.02em] text-fg">
 							{title}
 						</h1>
 						{subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}

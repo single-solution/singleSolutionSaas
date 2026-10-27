@@ -1,6 +1,6 @@
 'use client';
 /**
- * Overlays (redesign 2, owner 2026-10-17: editing opens in a RIGHT DRAWER that keeps the page in view; modals only for
+ * Overlays (Unite shell: editing opens in a RIGHT DRAWER that keeps the page in view; modals only for
  * short confirmations): `role="dialog"` + `aria-modal`, labeled by its title, traps focus (Tab / Shift+Tab cycle
  * inside), close on Escape and on backdrop click, lock page scroll, and restore focus to the element that opened them.
  * A drawer slides in from the right (the whole screen on phones); a centered dialog scales in (a bottom sheet on
@@ -207,7 +207,7 @@ export function Drawer({
 								type="button"
 								onClick={onClose}
 								aria-label={closeLabel}
-								className="ss-motion ss-press rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
+								className="ss-motion ss-press rounded-control p-1.5 text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
 								<Icon name="close" size={16} />
 							</button>
 						) : null}
@@ -270,7 +270,7 @@ function CenterDialog({ open, onClose, title, description, children, footer, siz
 				aria-describedby={description ? descriptionId : undefined}
 				tabIndex={-1}
 				className={cx(
-					'flex max-h-[92vh] w-full flex-col rounded-t-card border border-line-soft bg-surface text-fg shadow-overlay focus:outline-none sm:rounded-card',
+					'flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-surface text-fg shadow-overlay focus:outline-none sm:rounded-card',
 					'animate-ss-sheet group-data-[state=closed]:animate-ss-sheet-out sm:animate-ss-pop sm:group-data-[state=closed]:animate-ss-pop-out',
 					size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : 'max-w-xl',
 				)}>
@@ -290,7 +290,7 @@ function CenterDialog({ open, onClose, title, description, children, footer, siz
 							type="button"
 							onClick={onClose}
 							aria-label={closeLabel}
-							className="ss-motion ss-press rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
+							className="ss-motion ss-press rounded-control p-1.5 text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
 							<Icon name="close" size={16} />
 						</button>
 					) : null}
@@ -299,7 +299,7 @@ function CenterDialog({ open, onClose, title, description, children, footer, siz
 					<FieldLayoutContext.Provider value="stack">{children}</FieldLayoutContext.Provider>
 				</div>
 				{footer ? (
-					<div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-soft px-6 py-4">{footer}</div>
+					<div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>
 				) : null}
 			</div>
 		</div>

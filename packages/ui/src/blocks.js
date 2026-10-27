@@ -131,7 +131,7 @@ export function SettingsCard({ title, description, actions, footer, children, id
 				bodyClassName="@container">
 				{children}
 				{footer ? (
-					<div className="-mx-5 mt-5 -mb-5 flex flex-wrap items-center justify-end gap-2 border-t border-line-soft px-5 py-3">
+					<div className="-mx-5 mt-5 -mb-5 flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
 						{footer}
 					</div>
 				) : null}
@@ -402,8 +402,8 @@ const TAB_STRIP = 'ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-contr
 /** @param {boolean} on */
 const tabLook = (on) =>
 	cx(
-		'ss-motion inline-flex h-7 shrink-0 items-center rounded-md px-3 text-label font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-		on ? 'bg-surface text-fg shadow-card ring-1 ring-line-soft' : 'text-muted hover:text-fg',
+		'ss-motion inline-flex h-7 shrink-0 items-center rounded-control px-3 text-label font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+		on ? 'bg-surface text-fg ring-1 ring-line-soft' : 'text-muted hover:text-fg',
 	);
 
 /**
@@ -446,7 +446,7 @@ export function Disclosure({ title, description, badge, defaultOpen = false, for
 	const id = useId();
 	const shown = open || forceOpen;
 	return (
-		<section className={cx('min-w-0 rounded-card border border-line-soft bg-surface', className)}>
+		<section className={cx('min-w-0 rounded-card border border-line bg-surface', className)}>
 			<button
 				type="button"
 				aria-expanded={shown}
@@ -461,7 +461,7 @@ export function Disclosure({ title, description, badge, defaultOpen = false, for
 				{description ? <span className="min-w-0 flex-1 truncate text-help text-muted">{description}</span> : null}
 			</button>
 			{shown ? (
-				<div id={id} className="min-w-0 space-y-4 border-t border-line-soft p-5">
+				<div id={id} className="min-w-0 space-y-4 border-t border-line p-5">
 					{children}
 				</div>
 			) : null}

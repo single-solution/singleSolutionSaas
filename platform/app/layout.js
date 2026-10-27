@@ -1,13 +1,24 @@
-import { Bricolage_Grotesque, Figtree } from 'next/font/google';
+import { Figtree, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { headers } from 'next/headers.js';
 import { ThemeScript } from '@ss/ui';
 import { DEFAULT_SETTINGS } from '../src/infra/config.js';
 import { portalBranding } from './_lib/server.js';
 import './globals.css';
 
-/** The interface typefaces (served with the app, no outside request): text and headings/figures (`@ss/ui` theme). */
+/** Unite faces for the whole Portal (site + console): text, display titles/figures, mono ids/paths. */
 const text = Figtree({ subsets: ['latin'], variable: '--ss-font-text', display: 'swap' });
-const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--ss-font-display', display: 'swap' });
+const display = Space_Grotesk({
+	subsets: ['latin'],
+	variable: '--ss-font-display',
+	display: 'swap',
+	weight: ['500', '600', '700'],
+});
+const mono = JetBrains_Mono({
+	subsets: ['latin'],
+	variable: '--ss-font-mono',
+	display: 'swap',
+	weight: ['400', '500', '600'],
+});
 
 /** Browser tab titles carry the Branding name (Settings → Branding); its default while the Portal cannot be read. */
 export async function generateMetadata() {
@@ -32,7 +43,7 @@ export const viewport = { width: 'device-width', initialScale: 1, colorScheme: '
 export default async function RootLayout({ children }) {
 	const nonce = (await headers()).get('x-nonce');
 	return (
-		<html lang="en-US" className={`${text.variable} ${display.variable}`} suppressHydrationWarning>
+		<html lang="en-US" className={`${text.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
 			<head>
 				<ThemeScript nonce={nonce} />
 			</head>

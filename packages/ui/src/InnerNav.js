@@ -135,11 +135,11 @@ export function InnerNav({
 				aria-current={on ? (item.href ? 'page' : 'true') : undefined}
 				onClick={() => choose(item)}
 				className={cx(
-					'ss-motion ss-press flex w-full items-center gap-2 rounded-md px-2 text-left text-label focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+					'ss-motion ss-press flex w-full items-center gap-2 rounded-control px-2 text-left text-label focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
 					METRICS.navItem,
 					on
-						? cx('font-medium text-on-primary-soft', placed ? 'bg-transparent' : 'bg-primary-soft')
-						: 'font-medium text-fg/75 hover:bg-surface-2 hover:text-fg',
+						? cx('font-medium text-fg', placed ? 'bg-transparent' : 'border border-line bg-surface ss-hard')
+						: 'font-medium text-muted hover:bg-surface/70 hover:text-fg',
 				)}>
 				{item.icon ? (
 					<span aria-hidden="true" className={cx('ss-motion shrink-0', on ? 'text-primary' : 'text-muted')}>
@@ -156,7 +156,7 @@ export function InnerNav({
 				{item.changed ? (
 					<span
 						data-ss-changed=""
-						className="shrink-0 rounded-full bg-attention-soft px-1.5 text-micro font-medium text-on-attention-soft">
+						className="shrink-0 rounded-control border border-line bg-attention-soft px-1.5 text-micro font-medium text-on-attention-soft">
 						{words.changed}
 					</span>
 				) : null}
@@ -178,7 +178,9 @@ export function InnerNav({
 			{shown.map((group, index) => (
 				<div key={group.label ?? index} className="space-y-0.5">
 					{group.label ? (
-						<p className="px-2 pt-1 pb-1 text-micro font-semibold tracking-[0.06em] text-muted uppercase">{group.label}</p>
+						<p className="px-2 pt-1 pb-1 font-mono text-micro font-semibold tracking-[0.1em] text-primary uppercase">
+							{group.label}
+						</p>
 					) : null}
 					<ul className="space-y-px">
 						{group.items.map((item) => (
@@ -212,7 +214,7 @@ export function InnerNav({
 					aria-expanded={open}
 					aria-controls={menuId}
 					onClick={() => setOpen((o) => !o)}
-					className="ss-motion ss-press flex h-10 w-full items-center gap-2.5 rounded-control border border-line-soft bg-surface px-3 text-sm font-medium text-fg">
+					className="ss-motion ss-press flex h-10 w-full items-center gap-2.5 rounded-control border border-line bg-surface px-3 text-sm font-medium text-fg">
 					{current?.icon ? (
 						<span aria-hidden="true" className="text-primary">
 							<Icon name={current.icon} size={16} />
@@ -227,12 +229,12 @@ export function InnerNav({
 					<div
 						id={menuId}
 						data-ss-inner-menu=""
-						className="ss-scroll absolute inset-x-0 top-full z-30 mt-2 max-h-[60vh] animate-ss-pop space-y-2 rounded-card border border-line-soft bg-surface p-2 shadow-overlay">
+						className="ss-scroll absolute inset-x-0 top-full z-30 mt-2 max-h-[60vh] animate-ss-pop space-y-2 rounded-card border border-line bg-surface p-2 shadow-overlay">
 						<nav aria-label={label} className="space-y-3">
 							{search}
 							{groupsView}
 						</nav>
-						{footer ? <div className="border-t border-line-soft pt-2">{footer}</div> : null}
+						{footer ? <div className="border-t border-line pt-2">{footer}</div> : null}
 					</div>
 				) : null}
 			</div>
@@ -245,15 +247,14 @@ export function InnerNav({
 							data-ss-indicator=""
 							aria-hidden="true"
 							className={cx(
-								'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-md bg-primary-soft opacity-0',
+								'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-control border border-line bg-surface ss-hard opacity-0',
 								placed && 'transition-[transform,height,opacity] duration-(--dur) ease-ss',
-							)}>
-							<span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary" />
-						</span>
+							)}
+						/>
 						{groupsView}
 					</div>
 				</nav>
-				{footer ? <div className="shrink-0 border-t border-line-soft p-3">{footer}</div> : null}
+				{footer ? <div className="shrink-0 border-t border-line p-3">{footer}</div> : null}
 			</div>
 		</>
 	);

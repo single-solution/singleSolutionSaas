@@ -248,7 +248,7 @@ export function FiguresTable({
 						if (!primary) return null;
 						const rest = columns.filter((col) => col !== primary);
 						return (
-							<div key={key} className="rounded-card border border-line-soft bg-surface p-3.5 space-y-2 shadow-xs">
+							<div key={key} className="rounded-card border border-line bg-surface p-3.5 space-y-2 shadow-xs">
 								<div className="font-semibold text-fg">{cellContent(primary, row, locale)}</div>
 								<div className="grid grid-cols-2 gap-2 text-xs">
 									{rest.map((col) => (
@@ -336,7 +336,7 @@ export function FiguresTable({
 					{sorted.map((row) => {
 						const key = rowKey(row);
 						return (
-							<tr key={key} className="hover:bg-surface-2/60 ss-motion relative border-b border-line-soft">
+							<tr key={key} className="hover:bg-surface-2/60 ss-motion relative border-b border-line">
 								{columns.map((column) => {
 									const header = column.rowHeader || column === headerColumn;
 									const Cell = header ? 'th' : 'td';

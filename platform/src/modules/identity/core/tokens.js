@@ -7,15 +7,16 @@
  */
 import { createHmac } from 'node:crypto';
 
-const TOKEN_PURPOSES = Object.freeze(['setup', 'password_reset', 'email_change', 'two_step']);
+const TOKEN_PURPOSES = Object.freeze(['setup', 'password_reset', 'email_change', 'two_step', 'step_up_otp']);
 
-/** @typedef {'setup' | 'password_reset' | 'email_change' | 'two_step'} TokenPurpose */
+/** @typedef {'setup' | 'password_reset' | 'email_change' | 'two_step' | 'step_up_otp'} TokenPurpose */
 
 /** Lifetimes (ms), PLAN 0.2: resets 30 minutes; setup links give their own ({@link SETUP_TTL_MS}). */
 export const TOKEN_TTL_MS = Object.freeze({
 	password_reset: 30 * 60_000,
 	email_change: 24 * 60 * 60_000,
 	two_step: 5 * 60_000,
+	step_up_otp: 10 * 60_000,
 });
 
 /** Setup link lifetimes per kind of login (PLAN 0.0 Setup link). */

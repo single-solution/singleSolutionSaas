@@ -268,7 +268,7 @@ function BrandingCard({ settings, onSaved }) {
 							<img
 								src={`/branding/logo?v=${settings.branding.logoVersion}`}
 								alt=""
-								className="size-16 rounded-xl bg-surface-2 object-contain"
+								className="size-16 rounded-control bg-surface-2 object-contain"
 							/>
 						) : null}
 						<Input

@@ -66,7 +66,7 @@ const full = () => {
 				faviconDark: '',
 				shareImage: '',
 			},
-			theme: { mode: 'dark', fontFamily: 'Inter', radius: 12, colors: { accent: '#2471e7' }, customCss: '.a { color: red }' },
+			theme: { mode: 'dark', fontFamily: 'Inter', radius: 12, colors: { accent: '#0f766e' }, customCss: '.a { color: red }' },
 		},
 		region: {
 			country: 'US',

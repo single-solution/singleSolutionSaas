@@ -8,10 +8,11 @@
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { AppShell, Callout, Card, Page, ToastProvider } from '@ss/ui';
+import { AppShell, Callout, Card, Icon, Page, ToastProvider, cx } from '@ss/ui';
 import { useRouter } from 'next/navigation.js';
-import { ADMIN, TWO_STEP } from '../../../texts/console.js';
+import { ADMIN, TWO_STEP, WEBSITE } from '../../../texts/console.js';
 import { Link, NavLink } from '../../link.js';
+import { routes } from '../../paths.js';
 import { accentStyle } from '../../views/brand.js';
 import { TwoStepSetup } from '../../views/login-settings.js';
 import { apiFetch } from '../../client.js';
@@ -138,7 +139,26 @@ export function AdminShell({ admin, twoStepRequired = false, attention = 0, bran
 						items: accountItems,
 						label: ADMIN.accountMenu,
 						...(admin?.role ? { role: <RoleBadge role={admin.role} /> } : {}),
-					}}>
+					}}
+					sidebarFooter={({ rail }) => (
+						<div className="space-y-0.5">
+							<a
+								href={routes.docs}
+								title={WEBSITE.docs}
+								target="_blank"
+								rel="noopener noreferrer"
+								className={cx(
+									'ss-motion ss-press flex h-9 items-center gap-2.5 rounded-control text-sm font-medium text-fg/80 hover:bg-surface-2 hover:text-fg',
+									'focus-visible:outline-2 focus-visible:outline-focus',
+									rail ? 'justify-center' : 'px-2.5',
+								)}>
+								<span aria-hidden="true" className="text-muted">
+									<Icon name="code" size={17} />
+								</span>
+								<span className={rail ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{WEBSITE.docs}</span>
+							</a>
+						</div>
+					)}>
 					{twoStepRequired ? (
 						<Page linkAs={Link} crumbs={[{ label: TWO_STEP.requiredTitle }]}>
 							<div className="mx-auto max-w-2xl space-y-6">

@@ -1,17 +1,19 @@
 # Single Solution
 
-A **Portal** plus six separately hosted **products** (Notifications, Accounts, Chat, Payments, Ecommerce, Growth). Each
-product offers an API plus ready-made widgets and has its own setup dashboard. `PLAN.md` Part 0 is the binding plan.
+A **Portal** (control plane) plus six separately hosted **products** (Notifications, Accounts, Chat, Payments,
+Ecommerce, Growth), plus a **public Docs hub** for builders. Merchants add websites, place products, and share a
+**developer pack**; site developers and AIs build from the pack + Docs hub and **never** need Portal access.
+`PLAN.md` is the binding plan — start with its **How to use** and **Don’t miss** sections so nothing is overlooked.
 
 | Folder              | What it is                                                                        | Deployed                 |
 | ------------------- | --------------------------------------------------------------------------------- | ------------------------ |
 | `platform/`         | the Portal (merchant console, admin console at `/admin`, API)                     | yes, one deployment      |
 | `products/<id>/`    | the six products                                                                  | yes, one deployment each |
 | `packages/`         | the shared kit (`app-kit`, `protocol`, `contracts`, `net`, `ui`, `cli`, `config`) | no, built into the above |
-| `packages/importer` | `ss-import`: moves a store's records into the products (PLAN 0.8.10 Migration)    | no, a command-line tool  |
+| `packages/importer` | `ss-import`: moves a store's records into the products (see PLAN — Migration)      | no, a command-line tool  |
 | `e2e/`              | system tests: the products against the real Portal                                | no                       |
 
-Every folder is a unit that builds and checks on its own, so it can be split into its own repository later (PLAN 0.10).
+Every folder is a unit that builds and checks on its own, so it can be split into its own repository later.
 Each deployable's README lists its environment variables and how to deploy it.
 
 ## Setup

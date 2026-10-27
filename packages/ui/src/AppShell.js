@@ -1,6 +1,6 @@
 'use client';
 /**
- * Console frame (owner 2026-10-17, redesign 2: app-like, premium, 60-30-10): the window is the frame and the page itself
+ * Console frame (Unite dialect via theme.css: hard borders, teal accent, dense): the window is the frame and the page itself
  * never scrolls. On the off-white canvas sit a floating WHITE sidebar, bottom-weighted (240 px; it folds to a 64 px icon
  * rail): the logo on top, the main sections in the middle, and at the bottom the website / merchant switcher, help, the
  * account, the theme and the fold button; a floating 56 px header (the menu button on phones, the breadcrumbs and the
@@ -159,16 +159,18 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 				ref={marker}
 				aria-hidden="true"
 				className={cx(
-					'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-lg bg-primary-soft opacity-0',
-					placed && 'transition-[transform,opacity] duration-(--ss-motion) ease-ss-move',
+					'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-control border border-line bg-surface ss-hard opacity-0',
+					placed && 'transition-[transform,opacity,height] duration-(--ss-motion) ease-ss-move',
 				)}
 			/>
 			{sections.map((section, i) => (
 				<div
 					key={section.label ?? i}
-					className={cx(i > 0 && (rail ? 'mt-3 border-t border-line-soft pt-3' : 'mt-6'), 'space-y-0.5')}>
+					className={cx(i > 0 && (rail ? 'mt-3 border-t border-line pt-3' : 'mt-5'), 'space-y-0.5')}>
 					{section.label && !rail ? (
-						<p className="px-2.5 pb-1.5 text-micro font-semibold tracking-[0.06em] text-muted uppercase">{section.label}</p>
+						<p className="px-2.5 pb-1.5 font-mono text-micro font-semibold tracking-[0.1em] text-primary uppercase">
+							{section.label}
+						</p>
 					) : null}
 					<ul className="space-y-0.5">
 						{section.items.map((item) => {
@@ -184,12 +186,12 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 										aria-current={item.current ? 'page' : undefined}
 										{...(rail && typeof item.label === 'string' ? { title: item.label } : {})}
 										className={cx(
-											'ss-motion ss-press relative flex h-9 items-center gap-2.5 rounded-lg text-sm',
+											'ss-motion ss-press relative flex h-9 items-center gap-2.5 rounded-control text-sm',
 											'focus-visible:outline-2 focus-visible:outline-focus',
 											rail ? 'justify-center px-0' : 'px-2.5',
 											on
-												? cx('font-medium text-on-primary-soft', placed ? 'bg-transparent' : 'bg-primary-soft')
-												: 'font-medium text-fg/80 hover:bg-surface-2 hover:text-fg',
+												? cx('font-medium text-fg', placed ? 'bg-transparent' : 'border border-line bg-surface ss-hard')
+												: 'font-medium text-muted hover:bg-surface/70 hover:text-fg',
 										)}>
 										{item.icon ? (
 											<span
@@ -224,20 +226,29 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
  * @param {{ name: ReactNode, tagline?: ReactNode, product?: string, compact?: boolean, markOnly?: boolean }} props
  */
 function Brand({ name, tagline, product, compact = false, markOnly = false }) {
+	const mark =
+		typeof name === 'string'
+			? name
+					.split(/\s+/)
+					.filter(Boolean)
+					.slice(0, 2)
+					.map((part) => part[0]?.toUpperCase() ?? '')
+					.join('') || 'SS'
+			: 'SS';
 	return (
 		<div className={cx('flex min-w-0 items-center gap-2.5', markOnly && 'justify-center')}>
 			{product ? (
 				<IconBadge product={product} size="sm" />
 			) : (
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.18)]">
-					<Icon name="zap" size={15} />
+				<span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-fg font-mono text-micro font-semibold tracking-tight text-canvas">
+					{mark}
 				</span>
 			)}
 			{markOnly ? (
 				<span className="sr-only">{name}</span>
 			) : (
 				<span className="min-w-0">
-					<span className="block truncate text-title font-semibold tracking-[-0.01em] text-fg">{name}</span>
+					<span className="block truncate text-sm font-semibold tracking-[-0.01em] text-fg">{name}</span>
 					{tagline && !compact ? <span className="block truncate text-help text-muted">{tagline}</span> : null}
 				</span>
 			)}
@@ -274,12 +285,12 @@ export function SwitcherSelect({ label, value, options, onChange, placeholder, d
 			<div
 				title={title}
 				className={cx(
-					'ss-motion relative flex size-10 min-w-0 items-center justify-center rounded-control border border-line-soft bg-surface hover:bg-surface-2',
+					'ss-motion relative flex size-10 min-w-0 items-center justify-center rounded-control border border-line bg-surface hover:bg-surface-2',
 					'hover:border-line-strong has-[select:focus-visible]:border-primary has-[select:focus-visible]:ring-[3px] has-[select:focus-visible]:ring-primary/20',
 					disabled && 'opacity-60',
 					className,
 				)}>
-				<Avatar name={title} size="sm" className="rounded-md" />
+				<Avatar name={title} size="sm" className="rounded-control" />
 				<select
 					aria-label={label}
 					value={value}
@@ -303,12 +314,12 @@ export function SwitcherSelect({ label, value, options, onChange, placeholder, d
 	return (
 		<div
 			className={cx(
-				'ss-motion relative flex h-10 min-w-0 items-center gap-2.5 rounded-control border border-line-soft bg-surface pr-8 pl-2 hover:bg-surface-2',
+				'ss-motion relative flex h-10 min-w-0 items-center gap-2.5 rounded-control border border-line bg-surface pr-8 pl-2 hover:bg-surface-2',
 				'hover:border-line-strong has-[select:focus-visible]:border-primary has-[select:focus-visible]:ring-[3px] has-[select:focus-visible]:ring-primary/20',
 				disabled && 'opacity-60',
 				className,
 			)}>
-			<Avatar name={picked?.label || placeholder || label} size="sm" className="rounded-md" />
+			<Avatar name={picked?.label || placeholder || label} size="sm" className="rounded-control" />
 			<span
 				aria-hidden="true"
 				className={cx('min-w-0 flex-1 truncate text-sm font-medium', picked ? 'text-fg' : 'text-muted')}>
@@ -348,17 +359,18 @@ function TitleTrail({ crumbs, title, linkAs }) {
 	const LinkTag = linkAs ?? 'a';
 	return (
 		<nav aria-label="Breadcrumb" className="min-w-0">
-			<ol className="flex min-w-0 items-center gap-1.5 text-sm">
+			<ol className="flex min-w-0 items-center gap-1.5">
 				{crumbs.map((crumb, i) => (
 					<Fragment key={i}>
 						{i > 0 ? (
-							<li aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
-								<Icon name="chevronRight" size={14} />
-							</li>
+							<li
+								aria-hidden="true"
+								className="hidden shrink-0 font-mono text-micro text-subtle before:content-['/'] sm:block"
+							/>
 						) : null}
-						<li className="hidden min-w-0 shrink truncate text-muted sm:block">
+						<li className="hidden min-w-0 shrink truncate font-mono text-micro tracking-[0.04em] text-muted uppercase sm:block">
 							{crumb.href ? (
-								<LinkTag href={crumb.href} className="ss-motion rounded hover:text-fg">
+								<LinkTag href={crumb.href} className="ss-motion rounded-control hover:text-fg">
 									{crumb.label}
 								</LinkTag>
 							) : (
@@ -370,11 +382,14 @@ function TitleTrail({ crumbs, title, linkAs }) {
 				{title ? (
 					<>
 						{crumbs.length > 0 ? (
-							<li aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
-								<Icon name="chevronRight" size={14} />
-							</li>
+							<li
+								aria-hidden="true"
+								className="hidden shrink-0 font-mono text-micro text-subtle before:content-['/'] sm:block"
+							/>
 						) : null}
-						<li aria-current="page" className="min-w-0 truncate text-title font-semibold text-fg">
+						<li
+							aria-current="page"
+							className="min-w-0 truncate font-display text-title font-semibold tracking-[-0.02em] text-fg">
 							{title}
 						</li>
 					</>
@@ -487,19 +502,23 @@ export function AppShell({
 	const sidebar = (/** @type {boolean} */ narrow, /** @type {boolean} */ inDrawer) => (
 		<ShellContext.Provider value={{ ...shell, rail: narrow }}>
 			<div className="flex h-full min-h-0 flex-col">
-				<div className={cx('flex h-16 shrink-0 items-center gap-2 px-4', narrow ? 'justify-center px-0' : 'justify-between')}>
+				<div
+					className={cx(
+						'flex h-14 shrink-0 items-center gap-2 px-3',
+						narrow ? 'justify-center px-0' : 'justify-between',
+					)}>
 					<Brand {...brand} markOnly={narrow} />
 					{inDrawer ? (
 						<button
 							type="button"
 							onClick={() => setOpen(false)}
 							aria-label="Close navigation"
-							className="ss-motion ss-press rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg">
+							className="ss-motion ss-press rounded-control p-1.5 text-muted hover:bg-surface-2 hover:text-fg">
 							<Icon name="close" size={16} />
 						</button>
 					) : null}
 				</div>
-				<ScrollArea className="flex-1 overflow-x-hidden px-3 pt-2 pb-3">
+				<ScrollArea className="flex-1 overflow-x-hidden px-2.5 pt-1 pb-2">
 					<Nav
 						sections={sections}
 						{...(linkAs ? { linkAs } : {})}
@@ -509,7 +528,7 @@ export function AppShell({
 				</ScrollArea>
 				<div
 					data-ss-part="sidebar-bottom"
-					className={cx('shrink-0 space-y-1 border-t border-line-soft p-3', narrow && 'flex flex-col items-center')}>
+					className={cx('shrink-0 space-y-1 border-t border-line p-3', narrow && 'flex flex-col items-center')}>
 					{switcher ? (
 						<div className={cx('pb-2', narrow && 'flex w-full justify-center')}>{slotOf(switcher, narrow)}</div>
 					) : null}
@@ -538,7 +557,7 @@ export function AppShell({
 									aria-label="Expand sidebar"
 									aria-pressed={true}
 									title="Expand sidebar"
-									className="ss-motion ss-press flex size-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg">
+									className="ss-motion ss-press flex size-9 items-center justify-center rounded-control text-muted hover:bg-surface-2 hover:text-fg">
 									<Icon name="panelLeft" size={16} />
 								</button>
 							) : null}
@@ -553,7 +572,7 @@ export function AppShell({
 									aria-label="Collapse sidebar"
 									aria-pressed={false}
 									title="Collapse sidebar"
-									className="ss-motion ss-press flex size-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg">
+									className="ss-motion ss-press flex size-8 items-center justify-center rounded-control text-muted hover:bg-surface-2 hover:text-fg">
 									<Icon name="panelLeft" size={16} />
 								</button>
 							) : null}
@@ -567,111 +586,113 @@ export function AppShell({
 	return (
 		<NavigationProgress>
 			<ShellContext.Provider value={shell}>
+				{/* Unite portal-kit frame: one hard shell, sidebar flush with main (no floating panels) */}
 				<div
 					className={cx(
-						'flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4',
-						// where the page area starts and ends in the window: the floating save bar centres on it
-						'[--ss-pane-left:0.75rem] [--ss-pane-right:0.75rem] lg:[--ss-pane-right:1rem]',
-						rail ? 'lg:[--ss-pane-left:6rem]' : 'lg:[--ss-pane-left:17rem]',
+						'flex h-dvh w-full overflow-hidden bg-canvas p-2 text-fg sm:p-2.5',
+						// save bar centres on the page area inside the frame
+						'[--ss-pane-left:0.5rem] [--ss-pane-right:0.5rem] sm:[--ss-pane-left:0.625rem] sm:[--ss-pane-right:0.625rem]',
+						rail ? 'lg:[--ss-pane-left:5.125rem]' : 'lg:[--ss-pane-left:16.625rem]',
 					)}>
 					<a
 						href={`#${mainId}`}
-						className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
+						className="sr-only z-[70] rounded-control bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
 						Skip to content
 					</a>
-					<aside
-						data-rail={rail || undefined}
-						className={cx(
-							// visible overflow: the account and theme menus open upward over the page from the rail
-							'relative z-30 hidden h-full shrink-0 rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
-							'transition-[width] duration-(--ss-motion) ease-ss',
-							rail ? 'w-16' : 'w-60',
-						)}>
-						{sidebar(rail, false)}
-					</aside>
-					{drawer.mounted ? (
-						<div
-							ref={drawer.ref}
-							data-state={drawer.closing ? 'closed' : 'open'}
-							className="group fixed inset-0 z-50 animate-ss-fade bg-overlay p-3 data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
-							onMouseDown={(event) => {
-								if (event.target === event.currentTarget) setOpen(false);
-							}}>
+					<div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-panel border border-line bg-surface">
+						<aside
+							data-rail={rail || undefined}
+							className={cx(
+								// menus open upward over the page from the rail
+								'relative z-30 hidden h-full shrink-0 border-r border-line bg-canvas/65 [view-transition-name:ss-sidebar] lg:block',
+								'transition-[width] duration-(--ss-motion) ease-ss',
+								rail ? 'w-16' : 'w-[15.5rem]',
+							)}>
+							{sidebar(rail, false)}
+						</aside>
+						{drawer.mounted ? (
 							<div
-								ref={panel}
-								role="dialog"
-								aria-modal="true"
-								aria-label="Navigation"
-								className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line-soft bg-surface shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
-								{sidebar(false, true)}
-							</div>
-						</div>
-					) : null}
-					<div className="group/main flex h-full min-w-0 flex-1 flex-col gap-3 lg:gap-4">
-						<header className="flex h-14 shrink-0 items-center gap-2 group-has-[[data-ss-page]]/main:hidden rounded-panel border border-line-soft bg-surface px-2 shadow-panel [view-transition-name:ss-topbar] sm:gap-3 sm:px-4">
-							<button
-								type="button"
-								onClick={() => setOpen(true)}
-								aria-label="Open navigation"
-								aria-expanded={open}
-								className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
-								<Icon name="menu" size={18} />
-							</button>
-							<div className="flex min-w-0 flex-1 items-center gap-2.5">
-								{pageTitle || trail.length > 0 ? (
-									<TitleTrail crumbs={trail} title={pageTitle} {...(linkAs ? { linkAs } : {})} />
-								) : (
-									<span className="lg:hidden">
-										<Brand {...brand} compact />
-									</span>
-								)}
-								{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
-							</div>
-							{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
-							{actions || back || account || themeToggle ? (
-								<div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-									{back ? (
-										<a
-											href={back.href}
-											className="ss-motion inline-flex h-8 items-center gap-1 rounded-control px-2 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg">
-											<Icon name="chevronLeft" size={14} />
-											<span className="sr-only sm:not-sr-only">{back.label}</span>
-										</a>
-									) : null}
-									{actions}
-									{/* the sidebar holds the account and the theme on wide screens, the header on phones */}
-									{account ? (
-										<span className="lg:hidden">
-											<AccountMenu
-												name={account.name}
-												{...(account.email ? { email: account.email } : {})}
-												items={account.items}
-												{...(account.label ? { label: account.label } : {})}
-												theme={themeToggle}
-												compact
-											/>
-										</span>
-									) : themeToggle ? (
-										<span className="lg:hidden">
-											<ThemeMenu />
-										</span>
-									) : null}
+								ref={drawer.ref}
+								data-state={drawer.closing ? 'closed' : 'open'}
+								className="group fixed inset-0 z-50 animate-ss-fade bg-overlay p-2 data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
+								onMouseDown={(event) => {
+									if (event.target === event.currentTarget) setOpen(false);
+								}}>
+								<div
+									ref={panel}
+									role="dialog"
+									aria-modal="true"
+									aria-label="Navigation"
+									className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line bg-canvas group-data-[state=closed]:animate-ss-drawer-out">
+									{sidebar(false, true)}
 								</div>
-							) : null}
-						</header>
-						<ScrollArea
-							ref={pane}
-							className="-mx-1 flex-1 px-1 [--ss-pane-h:calc(100dvh-6rem)] lg:[--ss-pane-h:calc(100dvh-6.5rem)] has-[[data-ss-page]]:overflow-hidden has-[[data-ss-page]]:pb-1">
-							<div className="flex w-full min-w-0 flex-col gap-6 pb-6 has-[[data-ss-page]]:h-full has-[[data-ss-page]]:gap-3 has-[[data-ss-page]]:pb-0 lg:has-[[data-ss-page]]:gap-4">
-								{banner}
-								<main
-									id={mainId}
-									tabIndex={-1}
-									className="min-w-0 space-y-6 focus:outline-none has-[[data-ss-page]]:flex has-[[data-ss-page]]:min-h-0 has-[[data-ss-page]]:flex-1 has-[[data-ss-page]]:flex-col">
-									{children}
-								</main>
 							</div>
-						</ScrollArea>
+						) : null}
+						<div className="group/main flex h-full min-w-0 flex-1 flex-col ss-grid-wash">
+							<header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-2 group-has-[[data-ss-page]]/main:hidden [view-transition-name:ss-topbar] sm:gap-3 sm:px-3">
+								<button
+									type="button"
+									onClick={() => setOpen(true)}
+									aria-label="Open navigation"
+									aria-expanded={open}
+									className="ss-motion ss-press shrink-0 rounded-control p-2 text-fg hover:bg-surface-2 lg:hidden">
+									<Icon name="menu" size={18} />
+								</button>
+								<div className="flex min-w-0 flex-1 items-center gap-2.5">
+									{pageTitle || trail.length > 0 ? (
+										<TitleTrail crumbs={trail} title={pageTitle} {...(linkAs ? { linkAs } : {})} />
+									) : (
+										<span className="lg:hidden">
+											<Brand {...brand} compact />
+										</span>
+									)}
+									{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
+								</div>
+								{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
+								{actions || back || account || themeToggle ? (
+									<div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+										{back ? (
+											<a
+												href={back.href}
+												className="ss-motion inline-flex h-8 items-center gap-1 rounded-control border border-transparent px-2 text-label font-medium text-muted hover:border-line hover:bg-surface hover:text-fg">
+												<Icon name="chevronLeft" size={14} />
+												<span className="sr-only sm:not-sr-only">{back.label}</span>
+											</a>
+										) : null}
+										{actions}
+										{account ? (
+											<span className="lg:hidden">
+												<AccountMenu
+													name={account.name}
+													{...(account.email ? { email: account.email } : {})}
+													items={account.items}
+													{...(account.label ? { label: account.label } : {})}
+													theme={themeToggle}
+													compact
+												/>
+											</span>
+										) : themeToggle ? (
+											<span className="lg:hidden">
+												<ThemeMenu />
+											</span>
+										) : null}
+									</div>
+								) : null}
+							</header>
+							<ScrollArea
+								ref={pane}
+								className="flex-1 [--ss-pane-h:calc(100dvh-5.5rem)] lg:[--ss-pane-h:calc(100dvh-5.75rem)] has-[[data-ss-page]]:overflow-hidden has-[[data-ss-page]]:pb-1">
+								<div className="flex w-full min-w-0 flex-col gap-5 p-3 pb-5 has-[[data-ss-page]]:h-full has-[[data-ss-page]]:gap-2 has-[[data-ss-page]]:p-2 has-[[data-ss-page]]:pb-0 lg:has-[[data-ss-page]]:gap-3 sm:p-3.5">
+									{banner}
+									<main
+										id={mainId}
+										tabIndex={-1}
+										className="min-w-0 space-y-5 focus:outline-none has-[[data-ss-page]]:flex has-[[data-ss-page]]:min-h-0 has-[[data-ss-page]]:flex-1 has-[[data-ss-page]]:flex-col">
+										{children}
+									</main>
+								</div>
+							</ScrollArea>
+						</div>
 					</div>
 				</div>
 			</ShellContext.Provider>

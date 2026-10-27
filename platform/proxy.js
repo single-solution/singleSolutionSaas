@@ -18,6 +18,14 @@ export function proxy(request) {
 
 export const config = {
 	matcher: [
+		// Explicit `/` so the marketing home gets a CSP nonce (the catch-all below can miss the root).
+		{
+			source: '/',
+			missing: [
+				{ type: 'header', key: 'next-router-prefetch' },
+				{ type: 'header', key: 'purpose', value: 'prefetch' },
+			],
+		},
 		{
 			source: '/((?!api|v1|branding/|\\.well-known|_next/static|_next/image|favicon.ico).*)',
 			missing: [

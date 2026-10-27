@@ -10,8 +10,8 @@ import { PHONE_MEDIA } from '../core/widgets.js';
 
 export const WIDGET_CSS = `${CONTROLS_CSS}
 :host { display: block; font-family: var(--ss-font-family, inherit); color: var(--ss-color-text, #1f2937);
-  --bg: var(--ss-kit-card); --line: var(--ss-kit-line); --accent: var(--ss-color-accent, #2226f7);
-  --on-accent: var(--ss-color-onAccent, #ffffff); --soft: var(--ss-color-muted, #f3f4f6); --r: var(--ss-radius, 8px); }
+  --bg: var(--ss-kit-card); --line: var(--ss-kit-line); --accent: var(--ss-color-accent, #0f766e);
+  --on-accent: var(--ss-color-onAccent, #ffffff); --soft: var(--ss-color-muted, #f3f4f6); --r: var(--ss-radius, 0.35rem); }
 :host([data-ss-mode='dark']) { color: var(--ss-color-text, #f3f4f6); --soft: var(--ss-color-muted, #1f2937); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
   white-space: nowrap; border: 0; }

@@ -23,13 +23,13 @@ export const METRICS = Object.freeze({
 	/** the header and the footer of a drawer */
 	drawerHeader: 'h-14',
 	drawerFooter: 'h-16',
-	/** left and right padding of every pane (16 px on phones) */
-	gutter: 'px-4 sm:px-6',
+	/** left and right padding of every pane (Unite denser gutters) */
+	gutter: 'px-3 sm:px-4',
 });
 
 /** The inner navigation panel on wide screens (about 224 px, own scroll). */
 export const NAV_PANEL =
-	'hidden min-h-0 w-56 shrink-0 flex-col overflow-hidden rounded-panel border border-line-soft bg-surface shadow-panel lg:flex';
+	'hidden min-h-0 w-56 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface lg:flex';
 
 /** Drawer widths: about 480 px (`md`), about 760 px (`lg`), the whole screen on phones. */
 export const DRAWER_WIDTH = Object.freeze({
@@ -44,10 +44,10 @@ export const DRAWER_WIDTH = Object.freeze({
  */
 export const DRAWER = Object.freeze({
 	layer: 'justify-end p-0 sm:p-3',
-	panel: 'flex h-full w-full flex-col border-line-soft bg-surface text-fg shadow-overlay sm:rounded-panel sm:border',
-	header: `relative z-10 flex ${METRICS.drawerHeader} shrink-0 items-center gap-3 border-b border-line-soft px-4 sm:px-6`,
-	body: 'ss-scroll min-h-0 flex-1 space-y-4 px-4 py-4 sm:px-6 sm:py-5',
-	footer: `flex ${METRICS.drawerFooter} shrink-0 items-center justify-end gap-2 border-t border-line-soft px-4 sm:px-6`,
+	panel: 'flex h-full w-full flex-col border-line bg-surface text-fg sm:rounded-panel sm:border',
+	header: `relative z-10 flex ${METRICS.drawerHeader} shrink-0 items-center gap-3 border-b border-line px-3 sm:px-4`,
+	body: 'ss-scroll min-h-0 flex-1 space-y-4 px-3 py-4 sm:px-4 sm:py-5',
+	footer: `flex ${METRICS.drawerFooter} shrink-0 items-center justify-end gap-2 border-t border-line px-3 sm:px-4`,
 });
 
 /** How many table rows come in one after the other on first load, and the gap between them (ms). */
@@ -69,9 +69,9 @@ export const FIGURES_TABLE = Object.freeze({
 	/** separate borders, so the hairlines stay with the sticky header row; no forced min-width so phones don't scroll horizontally */
 	table: 'w-full border-separate border-spacing-0 text-sm',
 	/** a header cell: sticky, opaque */
-	th: `sticky top-0 z-10 border-b border-line-soft bg-surface text-xs font-medium whitespace-nowrap text-muted ${METRICS.thead}`,
+	th: `sticky top-0 z-10 border-b border-line bg-surface text-xs font-medium whitespace-nowrap text-muted ${METRICS.thead}`,
 	/** a body cell: one fixed-height row with a hairline under it */
-	td: `border-b border-line-soft align-middle text-fg ${METRICS.row}`,
+	td: `border-b border-line align-middle text-fg ${METRICS.row}`,
 	/** a total row in the footer: prominent border above, bold text */
 	tfoot: 'sticky bottom-0 z-10 border-t-2 border-line-strong bg-surface font-semibold',
 	/** a total cell: matches cell height */
@@ -102,21 +102,21 @@ export const columnClass = ({ kind = 'text', align, low, wrap, className }) =>
  * navigation beside the main panel), and in the main panel the fixed toolbar, the one scrolling body and the fixed footer.
  */
 export const PAGE = Object.freeze({
-	root: 'flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:gap-4',
+	root: 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 lg:gap-3',
 	// a size container: the parts of the header decide by its own width (see `Page`); z-25 keeps its menus over the toolbar
 	// (z-20) and under the sidebar (z-30) now that the container is a stacking context of its own
-	header: `@container z-[25] flex ${METRICS.header} min-w-0 shrink-0 items-center gap-2 rounded-panel border border-line-soft bg-surface px-2 shadow-panel sm:gap-3 sm:px-4`,
-	area: 'flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:gap-4',
-	main: 'relative flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line-soft bg-surface shadow-panel',
+	header: `@container z-[25] flex ${METRICS.header} min-w-0 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-2 sm:gap-3 sm:px-3`,
+	area: 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3',
+	main: 'relative flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line bg-surface ss-grid-wash',
 	// above the body, so the menus of its filters open over the list
-	toolbar: 'relative z-20 shrink-0 rounded-t-panel border-b border-line-soft',
-	footer: `relative z-10 flex shrink-0 items-center rounded-b-panel border-t border-line-soft ${METRICS.footer} ${METRICS.gutter}`,
+	toolbar: 'relative z-20 shrink-0 rounded-t-panel border-b border-line bg-surface/90',
+	footer: `relative z-10 flex shrink-0 items-center rounded-b-panel border-t border-line bg-surface ${METRICS.footer} ${METRICS.gutter}`,
 	/** the padding of a body that is not a list */
-	padded: 'flex flex-col gap-6 p-4 sm:p-6',
+	padded: 'flex flex-col gap-5 p-3 sm:p-4',
 	/** the body of a list: the table uses all of it */
 	flush: 'flex min-h-0 flex-1 flex-col',
 	/** the area of a page with a list column: the column beside the main panel (one of them alone on phones) */
-	listArea: 'flex min-h-0 min-w-0 flex-1 gap-3 lg:gap-4',
+	listArea: 'flex min-h-0 min-w-0 flex-1 gap-2 lg:gap-3',
 });
 
 /**
@@ -127,7 +127,7 @@ export const PAGE = Object.freeze({
 export const LIST = Object.freeze({
 	/** the side column: a panel like the inner navigation, 320 px wide beside the page, the whole width on phones */
 	column:
-		'flex min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-panel border border-line-soft bg-surface shadow-panel sm:w-80',
+		'flex min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface sm:w-80',
 	/** the search box and the filter chips above the rows (they stay put) */
 	head: 'flex shrink-0 flex-col gap-2 p-2 pb-0',
 	/** the box of the rows that scrolls; `group/list` and `data-ss-slide` tell a row that the highlight is drawn for it */
@@ -135,12 +135,12 @@ export const LIST = Object.freeze({
 	/** one row (the outer box); the intrinsic size is the row's height */
 	row: 'h-14 [content-visibility:auto] [contain-intrinsic-size:auto_3.5rem]',
 	/** the highlight under the picked row: one element that moves with `transform` (`slideMove` after its first place) */
-	slide: 'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-md bg-primary-soft opacity-0',
+	slide: 'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-control border border-line bg-surface ss-hard opacity-0',
 	slideMove: 'transition-[transform,height,opacity] duration-(--ss-motion) ease-ss',
-	/** a filter chip, off and on */
-	chip: 'ss-motion ss-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-micro font-medium focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
-	chipOff: 'bg-surface-2 text-muted hover:text-fg',
-	chipOn: 'bg-primary-soft text-on-primary-soft',
+	/** a filter chip, off and on — hard corners (not pills) */
+	chip: 'ss-motion ss-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-control border border-line px-2.5 text-micro font-medium focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
+	chipOff: 'bg-canvas text-muted hover:bg-surface hover:text-fg',
+	chipOn: 'border-line bg-surface text-fg ss-hard',
 });
 
 /** The color of the one line under a row's title (and of its warning), by meaning. */
@@ -161,11 +161,11 @@ export const pageBody = ({ toolbar = false, footer = false }) =>
 
 /** The card and the summary tile, shared by the real ones (`Card`, `Stat`) and their skeletons. */
 export const CARD = Object.freeze({
-	box: 'min-w-0 rounded-card border border-line-soft bg-surface shadow-card',
-	header: 'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-4',
-	body: 'p-5',
-	bodyWithHeader: 'px-5 pt-3 pb-5',
-	tile: '@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4',
+	box: 'min-w-0 rounded-card border border-line bg-surface',
+	header: 'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-3.5',
+	body: 'p-4',
+	bodyWithHeader: 'px-4 pt-2.5 pb-4',
+	tile: '@container min-w-0 rounded-card border border-line bg-surface px-4 py-3.5 ss-lift',
 });
 
 /**
@@ -174,6 +174,6 @@ export const CARD = Object.freeze({
  * centred at the bottom.
  */
 export const SAVE_BAR = {
-	strip: 'pointer-events-none fixed bottom-4 left-[var(--ss-pane-left,0px)] right-[var(--ss-pane-right,0px)] z-40 flex justify-center px-3 transition-[left,right] duration-(--ss-motion) ease-ss',
-	bar: 'pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line-soft bg-surface py-2 pr-2 pl-4 shadow-bar',
+	strip: 'pointer-events-none fixed bottom-3 left-[var(--ss-pane-left,0px)] right-[var(--ss-pane-right,0px)] z-40 flex justify-center px-3 transition-[left,right] duration-(--ss-motion) ease-ss',
+	bar: 'pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line bg-surface py-2 pr-2 pl-4 ss-hard',
 };

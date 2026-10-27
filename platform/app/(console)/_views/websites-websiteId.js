@@ -1,7 +1,8 @@
+import { redirect } from 'next/navigation';
 import { loadWebsitePage } from '../../../src/console/loaders.js';
 import { routes } from '../../../src/console/paths.js';
 import { WebsiteView } from '../../../src/console/views/websites.js';
-import { websitePartOf } from '../../../src/console/website-parts.js';
+import { LEGACY_PEER_REDIRECTS, websitePartOf } from '../../../src/console/website-parts.js';
 import { merchantContext } from '../_lib/server.js';
 
 export const metadata = { title: 'Website' };
@@ -10,6 +11,9 @@ export const metadata = { title: 'Website' };
 /** @param {{ params: Promise<{ websiteId: string, part?: string, sub?: string }> }} props */
 export default async function WebsitePage({ params }) {
 	const { websiteId, part, sub } = await params;
+	if (part && LEGACY_PEER_REDIRECTS.includes(/** @type {any} */ (part))) {
+		redirect(routes.website(websiteId));
+	}
 	const path = websitePartOf(part, sub);
 	const { api, merchantId } = await merchantContext(routes.websitePart(websiteId, path));
 	return <WebsiteView {...await loadWebsitePage(api, merchantId, websiteId, path)} />;

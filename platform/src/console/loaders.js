@@ -244,11 +244,12 @@ export const loadWebsiteSettings = async (api, merchantId, websiteId) => {
  * @param {string} part the part of the address (`website-parts.js`)
  */
 export const loadWebsitePage = async (api, merchantId, websiteId, part) => {
-	const [websites, billing, settings, setup] = await Promise.all([
+	const [websites, billing, settings, setup, active] = await Promise.all([
 		loadWebsiteRows(api, merchantId),
 		api.get(paths.billing(merchantId)),
 		loadWebsiteSettings(api, merchantId, websiteId),
 		part === 'setup' ? loadSetup(api, merchantId, websiteId) : null,
+		api.get(paths.catalogProducts({ status: 'active' })).catch(() => null),
 	]);
 	if (websites.failed) return websites.failed;
 	return {
@@ -258,6 +259,7 @@ export const loadWebsitePage = async (api, merchantId, websiteId, part) => {
 		part,
 		rows: websites.rows,
 		billing: /** @type {any} */ (orElse(billing, null)),
+		addable: active?.ok ? itemsOf(active).map((p) => ({ productId: String(p.productId), name: String(p.name) })) : null,
 		settings,
 		setup,
 	};

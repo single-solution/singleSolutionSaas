@@ -346,7 +346,7 @@ export const SEO_PREVIEW_CSS = `
 :host([data-ss-mode='dark']) .ss-seo { ${DARK} }
 :root[data-theme='dark'] .ss-seo { ${DARK} }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .ss-seo { ${DARK} } }
-.ss-seo > section { min-width: 0; border: 1px solid var(--ss-seo-line); border-radius: var(--ss-radius, 8px); padding: 12px; }
+.ss-seo > section { min-width: 0; border: 1px solid var(--ss-seo-line); border-radius: var(--ss-radius, 0.35rem); padding: 12px; }
 .ss-seo p { margin: 0; }
 .ss-seo .ss-seo-head { margin: 0 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ss-seo-muted); }
 .ss-seo-result { font-family: arial, sans-serif; }
@@ -362,7 +362,7 @@ export const SEO_PREVIEW_CSS = `
 .ss-seo .ss-seo-meter { margin: 8px 0 0; font-size: 12px; color: var(--ss-seo-muted); }
 .ss-seo .ss-seo-warn { margin: 4px 0 0; font-size: 12px; color: var(--ss-seo-warn); }
 .ss-seo-warn span { display: block; }
-.ss-seo-frame { overflow: hidden; border: 1px solid var(--ss-seo-line); border-radius: var(--ss-radius, 8px); }
+.ss-seo-frame { overflow: hidden; border: 1px solid var(--ss-seo-line); border-radius: var(--ss-radius, 0.35rem); }
 .ss-seo-frame img, .ss-seo-noimage { display: block; width: 100%; aspect-ratio: 1.91 / 1; object-fit: cover; background: var(--ss-seo-panel); }
 .ss-seo-noimage { display: grid; place-items: center; font-size: 12px; color: var(--ss-seo-muted); }
 .ss-seo-body { display: grid; gap: 2px; padding: 8px 12px; background: var(--ss-seo-panel); }

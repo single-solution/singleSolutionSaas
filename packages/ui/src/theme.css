@@ -6,22 +6,16 @@
  * ratio of at least 4.5:1 (WCAG AA) in both themes; `line-strong` (checkboxes, a hovered control) keeps 3:1 against
  * surfaces. `subtle` text (placeholders, meta that is also said elsewhere) is decorative only.
  *
- * Visual system (owner 2026-10-17, redesign 2: 60-30-10 and colors that carry meaning):
- * - 60 % base: the off-white canvas #F7F8F5 (dark: the deep navy #0A1C40). 30 % structure: white sidebar and surfaces,
- *   navy #0A1C40 text (never black), pale sage (`surface-2`) for hover and selected rows, hairlines in navy at 7-12 %.
- * - 10 % meaning, used sparingly: Integrity blue #2226F7 (`primary`: main buttons, links, the active item, focus),
- *   Natural green #24D56D (`success`), Excitement red #F72226 (`danger`: errors and destructive actions only),
- *   Happiness yellow #FFD527 (`warning`, always with dark text), Energetic orange #FE5E20 (`attention`: setup steps,
- *   alerts, Needs you; never a button), Kindness teal #00D6A3 (`info`: tips, help, empty states) and Originality pink
- *   #FF3797 (`new`: new, featured, promotions). Each meaning has the brand hue (`-solid`, for dots, bars and fills), a
- *   50 tint (`-soft`) and an AA text shade (the plain name and `on-*-soft`), darkened where the hue is too light for
- *   text; dark mode uses lighter shades on navy.
- * - Radii: panels 14, cards 12, controls 8, pills full.
- * - Elevation: level 1 (panels, cards) a hairline and `0 1px 2px`; level 2 (sticky bars) a soft 12px lift; level 3
- *   (menus, dialogs, toasts) a deep 32px shadow. In dark, shadows give way to borders.
- * - A 4-pt spacing scale: page padding 24, card gap 16, section gap 24.
- * - Type: body 14/20, labels 13/18 medium, help 12.5/18 muted, section titles 15/22 semibold, page titles 20/28
- *   semibold. Figtree for text and Bricolage Grotesque for key figures (`font-display`), loaded by each app's layout.
+ * Visual system (Unite dialect — one kit for Portal marketing + console + product dashboards):
+ * - 60 % base: cool gray canvas #F0F3F7 (dark: ink #0B1220). 30 % structure: white surfaces, ink #0B1220 text,
+ *   cool hover (`surface-2`), hard 1px lines at ~10 % ink.
+ * - 10 % meaning: teal #0F766E (`primary`: buttons, links, active, focus), lime/ok green (`success`), rose (`danger`),
+ *   amber (`warning` / `attention`), bright teal (`info`), pink (`new`). Each meaning has `-solid`, `-soft`, and AA
+ *   text shades; dark mode lifts hues on the ink canvas.
+ * - Radii: hard 0.35rem for panels, cards, and controls (pills stay full).
+ * - Elevation: prefer the border; light hairline shadow only. Dark: borders carry the edge.
+ * - Type: Figtree (UI/body), Space Grotesk (`font-display` titles/figures), JetBrains Mono (`font-mono` ids/paths),
+ *   loaded by each app's root layout into `--ss-font-text` / `--ss-font-display` / `--ss-font-mono`.
  */
 @theme inline {
 	--color-canvas: var(--ss-canvas);
@@ -54,8 +48,8 @@
 	--color-success-solid: var(--ss-success-solid);
 	--color-warning-solid: var(--ss-warning-solid);
 	--color-on-warning: var(--ss-on-warning);
-	/* text and icons on a solid meaning hue (a done step's green, a yellow chip): navy in both themes */
-	--color-on-solid: #0a1c40;
+	/* text and icons on a solid meaning hue (a done step's green, a yellow chip): ink in both themes */
+	--color-on-solid: #0b1220;
 	--color-danger-solid: var(--ss-danger-solid);
 	--color-attention: var(--ss-attention);
 	--color-attention-solid: var(--ss-attention-solid);
@@ -71,10 +65,10 @@
 	--color-line-soft: var(--ss-line-soft);
 	--color-surface-3: var(--ss-surface-3);
 	--color-overlay: var(--ss-overlay);
-	/* text and key figures: each app's layout loads the faces (`--ss-font-text`, `--ss-font-display`) */
+	/* faces: each app's layout loads `--ss-font-text` / `--ss-font-display` / `--ss-font-mono` */
 	--font-sans: var(--ss-font-text, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	--font-display: var(--ss-font-display, var(--ss-font-text, ui-sans-serif)), ui-sans-serif, system-ui, sans-serif;
-	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+	--font-mono: var(--ss-font-mono, ui-monospace), ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 	/* the type scale: micro 11px (group labels, counters), help 12.5/18 (help text), label 13/18 (labels, buttons,
 	   compact rows), body 14/20 (Tailwind's text-sm), title 15/22 (card and section titles), lead 16 (large buttons),
 	   page 20/28 (page and dialog titles), figure 28 (key figures) */
@@ -94,12 +88,11 @@
 	--text-page--line-height: 1.75rem;
 	--text-figure: 1.75rem;
 	--text-figure--line-height: 2.125rem;
-	/* panels (sidebars, header) 14px, cards 12px, controls 8px */
-	--radius-panel: 0.875rem;
-	--radius-card: 0.75rem;
-	--radius-control: 0.5rem;
-	/* level 1 (panels and cards), level 2 (sticky bars), level 3 (menus, dialogs, toasts); in dark the borders carry
-	   the edges and the shadows go (see the color blocks); a glow shows on hovered filled buttons only */
+	/* hard Unite corners: panels, cards, and controls share 0.35rem */
+	--radius-panel: 0.35rem;
+	--radius-card: 0.35rem;
+	--radius-control: 0.35rem;
+	/* level 1–3: hairline first; dark mode drops soft shadows for borders; glow only on filled primary hover */
 	--shadow-glow-primary: var(--ss-glow-primary);
 	--shadow-glow-danger: var(--ss-glow-danger);
 	--shadow-knob: 0 1px 2px rgb(15 23 42 / 0.25);
@@ -138,7 +131,7 @@
 	--dur-fast: 120ms;
 	--dur: 160ms;
 	--dur-slow: 220ms;
-	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 	/* the older names stay and follow the tokens above (one curve for entering, moving and leaving) */
 	--ss-motion-fast: var(--dur-fast);
 	--ss-motion: var(--dur);
@@ -367,21 +360,36 @@
 	transition-timing-function: var(--ss-ease);
 }
 
-/* press feedback (buttons, rows, menu items) */
+/* press feedback — quiet Unite press (not a deep squash) */
 @utility ss-press {
 	&:active:not(:disabled, [aria-disabled='true']) {
-		scale: 0.98;
+		scale: 0.99;
 	}
 }
 
-/* a clickable card or row rises 1px on hover */
+/* hard offset chrome (active nav, hot tiles) — light + dark via --ss-hard */
+@utility ss-hard {
+	box-shadow: var(--ss-hard);
+}
+
+/* a clickable card or row nudges with a hard edge on hover */
 @utility ss-lift {
 	transition-property: translate, box-shadow, background-color, border-color;
 	transition-duration: var(--dur-fast);
 	transition-timing-function: var(--ease);
 	&:hover {
-		translate: 0 -1px;
+		translate: -1px -1px;
+		box-shadow: var(--ss-lift);
 	}
+}
+
+/* quiet graph paper behind console main panes (line color flips in dark) */
+@utility ss-grid-wash {
+	background-color: var(--ss-surface);
+	background-image:
+		linear-gradient(var(--ss-grid-line) 1px, transparent 1px),
+		linear-gradient(90deg, var(--ss-grid-line) 1px, transparent 1px);
+	background-size: 32px 32px;
 }
 
 /* the first load of a table: rows come in one after the other (`--ss-i` is the row number, at most 10 steps of 15ms) */
@@ -496,185 +504,195 @@
 	}
 }
 
-/* light (the default): 60 % the off-white canvas, 30 % white surfaces and navy text, 10 % the meaning colors */
+/* light (the default): cool gray canvas, white surfaces, ink text, teal primary */
 :root {
 	color-scheme: light;
-	--ss-canvas: #f7f8f5;
+	--ss-canvas: #f0f3f7;
 	--ss-surface: #ffffff;
-	/* pale sage: hover and selected rows */
-	--ss-surface-2: #eff1ec;
-	--ss-surface-3: #e5e8e1;
-	--ss-line: rgb(10 28 64 / 0.12);
-	--ss-line-soft: rgb(10 28 64 / 0.07);
+	/* cool hover / selected rows */
+	--ss-surface-2: #e6ecf3;
+	--ss-surface-3: #d9e1eb;
+	--ss-line: rgb(11 18 32 / 0.12);
+	--ss-line-soft: rgb(11 18 32 / 0.08);
 	--ss-line-strong: #8790a3;
-	--ss-fg: #0a1c40;
-	--ss-muted: #566176;
-	--ss-subtle: #98a1b2;
-	/* Integrity blue: main buttons, links, the active item, focus */
-	--ss-primary: #2226f7;
-	--ss-primary-hover: #1b20d0;
+	--ss-fg: #0b1220;
+	--ss-muted: #5a6475;
+	--ss-subtle: #8b94a5;
+	/* teal: main buttons, links, the active item, focus */
+	--ss-primary: #0f766e;
+	--ss-primary-hover: #0d5f59;
 	--ss-on-primary: #ffffff;
-	--ss-primary-soft: #ebebfe;
-	--ss-on-primary-soft: #1b20d0;
-	/* Natural green: success, paid, active, done */
-	--ss-success: #177a57;
-	--ss-success-solid: #24d56d;
-	--ss-success-soft: #e9fbf0;
-	--ss-on-success-soft: #156a53;
-	/* Happiness yellow: warnings and soft highlights, always with dark text */
-	--ss-warning: #7a5c00;
-	--ss-warning-solid: #ffd527;
-	--ss-on-warning: #0a1c40;
-	--ss-warning-soft: #fff8db;
-	--ss-on-warning-soft: #6b5100;
-	/* Excitement red: errors and destructive actions only (the fill darkened for white text) */
-	--ss-danger: #d1212a;
-	--ss-danger-hover: #b0202e;
-	--ss-danger-solid: #f72226;
+	--ss-primary-soft: #e6f5f3;
+	--ss-on-primary-soft: #0d5f59;
+	/* lime/ok: success, paid, active, done */
+	--ss-success: #047857;
+	--ss-success-solid: #16a34a;
+	--ss-success-soft: #e8f8ef;
+	--ss-on-success-soft: #046c4e;
+	/* amber: warnings, always with dark text */
+	--ss-warning: #92400e;
+	--ss-warning-solid: #f59e0b;
+	--ss-on-warning: #0b1220;
+	--ss-warning-soft: #fff7e8;
+	--ss-on-warning-soft: #7c370c;
+	/* rose: errors and destructive actions only */
+	--ss-danger: #be123c;
+	--ss-danger-hover: #9f1239;
+	--ss-danger-solid: #e11d48;
 	--ss-on-danger: #ffffff;
-	--ss-danger-soft: #fee9e9;
-	--ss-on-danger-soft: #ab202e;
-	/* Energetic orange: needs attention (setup steps, alerts, Needs you); never a button */
-	--ss-attention: #b54a2a;
-	--ss-attention-solid: #fe5e20;
-	--ss-attention-soft: #ffefe9;
-	--ss-on-attention-soft: #95422e;
-	/* Kindness teal: info and help (tips, guidance, empty-state hints) */
-	--ss-info: #057971;
-	--ss-info-solid: #00d6a3;
-	--ss-info-soft: #e6fbf6;
-	--ss-on-info-soft: #066869;
-	/* Originality pink: new, featured, promotions */
-	--ss-new: #bf3080;
-	--ss-new-solid: #ff3797;
-	--ss-new-soft: #ffebf5;
-	--ss-on-new-soft: #9d2c74;
-	--ss-focus: #2226f7;
-	--ss-overlay: rgb(10 28 64 / 0.32);
-	--ss-shadow-1: 0 1px 2px rgb(10 28 64 / 0.04);
-	--ss-shadow-2: 0 6px 16px -4px rgb(10 28 64 / 0.1);
-	--ss-shadow-3: 0 16px 40px -12px rgb(10 28 64 / 0.22);
-	--ss-glow-primary: 0 4px 12px -4px rgb(34 38 247 / 0.45);
-	--ss-glow-danger: 0 4px 12px -4px rgb(209 33 42 / 0.4);
-	--ss-scrollbar: rgb(10 28 64 / 0.18);
-	--ss-scrollbar-hover: rgb(10 28 64 / 0.32);
-	--ss-selection: rgb(34 38 247 / 0.16);
+	--ss-danger-soft: #fce8ee;
+	--ss-on-danger-soft: #9f1239;
+	/* amber-attention: Needs you / setup; never a button fill */
+	--ss-attention: #b45309;
+	--ss-attention-solid: #f59e0b;
+	--ss-attention-soft: #fff4e6;
+	--ss-on-attention-soft: #9a4508;
+	/* bright teal: info and help */
+	--ss-info: #0f766e;
+	--ss-info-solid: #14b8a6;
+	--ss-info-soft: #e6f5f3;
+	--ss-on-info-soft: #0d5f59;
+	/* pink: new, featured, promotions */
+	--ss-new: #be185d;
+	--ss-new-solid: #ec4899;
+	--ss-new-soft: #fce7f3;
+	--ss-on-new-soft: #9d174d;
+	--ss-focus: #0f766e;
+	--ss-overlay: rgb(11 18 32 / 0.36);
+	/* Unite: border first; hard offset for “hot” chrome; soft lift only for overlays */
+	--ss-shadow-1: 0 0 #0000;
+	--ss-shadow-2: 2px 2px 0 rgb(15 118 110 / 0.12);
+	--ss-shadow-3: 0 12px 32px -12px rgb(11 18 32 / 0.16);
+	--ss-hard: 2px 2px 0 rgb(15 118 110 / 0.12);
+	--ss-lift: 3px 3px 0 rgb(15 118 110 / 0.14);
+	--ss-grid-line: rgb(11 18 32 / 0.03);
+	--ss-glow-primary: 0 0 #0000;
+	--ss-glow-danger: 0 0 #0000;
+	--ss-scrollbar: rgb(11 18 32 / 0.18);
+	--ss-scrollbar-hover: rgb(11 18 32 / 0.32);
+	--ss-selection: rgb(15 118 110 / 0.16);
 }
 
-/* dark, on the deep navy base: from the OS setting unless light was chosen, or chosen (the two blocks hold the same
-   values); every meaning color takes a lighter shade that keeps 4.5:1 on the navy surfaces */
+/* dark, on the ink canvas: from the OS setting unless light was chosen, or chosen (the two blocks hold the same
+   values); every meaning color takes a lighter shade that keeps 4.5:1 on the dark surfaces */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--ss-canvas: #0a1c40;
-		--ss-surface: #132447;
-		--ss-surface-2: #1b2c4d;
-		--ss-surface-3: #253555;
-		--ss-line: #2f3e5d;
-		--ss-line-soft: #243354;
+		--ss-canvas: #0b1220;
+		--ss-surface: #141c2c;
+		--ss-surface-2: #1a2436;
+		--ss-surface-3: #243044;
+		--ss-line: #2a3548;
+		--ss-line-soft: #1f2a3c;
 		--ss-line-strong: #6a7a9e;
-		--ss-fg: #eef1f7;
-		--ss-muted: #a3b0ca;
-		--ss-subtle: #6f7c99;
-		--ss-primary: #8a8dfb;
-		--ss-primary-hover: #a3a5fc;
-		--ss-on-primary: #0a1c40;
-		--ss-primary-soft: #152463;
-		--ss-on-primary-soft: #b9bbfd;
-		--ss-success: #24d56d;
-		--ss-success-solid: #24d56d;
-		--ss-success-soft: #16404d;
-		--ss-on-success-soft: #5fe397;
-		--ss-warning: #ffd527;
-		--ss-warning-solid: #ffd527;
-		--ss-on-warning: #0a1c40;
-		--ss-warning-soft: #394042;
-		--ss-on-warning-soft: #ffe066;
-		--ss-danger: #f96063;
-		--ss-danger-hover: #fb8a8c;
-		--ss-danger-solid: #f72226;
-		--ss-on-danger: #0a1c40;
-		--ss-danger-soft: #372442;
-		--ss-on-danger-soft: #fb8a8c;
-		--ss-attention: #fe6e36;
-		--ss-attention-solid: #fe5e20;
-		--ss-attention-soft: #392d41;
-		--ss-on-attention-soft: #fe9466;
-		--ss-info: #00d6a3;
-		--ss-info-solid: #00d6a3;
-		--ss-info-soft: #104056;
-		--ss-on-info-soft: #4fe3bf;
-		--ss-new: #ff5baa;
-		--ss-new-solid: #ff3797;
-		--ss-new-soft: #392754;
-		--ss-on-new-soft: #ff8cc4;
-		--ss-focus: #a3a5fc;
-		--ss-overlay: rgb(3 10 26 / 0.7);
+		--ss-fg: #eef2f7;
+		--ss-muted: #a3adbd;
+		--ss-subtle: #6f7c90;
+		--ss-primary: #2dd4bf;
+		--ss-primary-hover: #5eead4;
+		--ss-on-primary: #0b1220;
+		--ss-primary-soft: #123038;
+		--ss-on-primary-soft: #5eead4;
+		--ss-success: #4ade80;
+		--ss-success-solid: #22c55e;
+		--ss-success-soft: #143028;
+		--ss-on-success-soft: #86efac;
+		--ss-warning: #fbbf24;
+		--ss-warning-solid: #f59e0b;
+		--ss-on-warning: #0b1220;
+		--ss-warning-soft: #2e2818;
+		--ss-on-warning-soft: #fcd34d;
+		--ss-danger: #fb7185;
+		--ss-danger-hover: #fda4af;
+		--ss-danger-solid: #e11d48;
+		--ss-on-danger: #0b1220;
+		--ss-danger-soft: #2e1a24;
+		--ss-on-danger-soft: #fda4af;
+		--ss-attention: #fbbf24;
+		--ss-attention-solid: #f59e0b;
+		--ss-attention-soft: #2e2818;
+		--ss-on-attention-soft: #fcd34d;
+		--ss-info: #2dd4bf;
+		--ss-info-solid: #14b8a6;
+		--ss-info-soft: #123038;
+		--ss-on-info-soft: #5eead4;
+		--ss-new: #f472b6;
+		--ss-new-solid: #ec4899;
+		--ss-new-soft: #2a1a2e;
+		--ss-on-new-soft: #f9a8d4;
+		--ss-focus: #5eead4;
+		--ss-overlay: rgb(3 8 18 / 0.72);
 		--ss-shadow-1: 0 0 #0000;
-		--ss-shadow-2: 0 0 #0000;
-		--ss-shadow-3: 0 0 0 1px #2f3e5d, 0 16px 40px -12px rgb(0 0 0 / 0.5);
+		--ss-shadow-2: 2px 2px 0 rgb(45 212 191 / 0.22);
+		--ss-shadow-3: 0 0 0 1px #2a3548, 0 16px 40px -12px rgb(0 0 0 / 0.5);
+		--ss-hard: 2px 2px 0 rgb(45 212 191 / 0.22);
+		--ss-lift: 3px 3px 0 rgb(45 212 191 / 0.28);
+		--ss-grid-line: rgb(238 242 247 / 0.04);
 		--ss-glow-primary: 0 0 #0000;
 		--ss-glow-danger: 0 0 #0000;
 		--ss-scrollbar: rgb(255 255 255 / 0.16);
 		--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
-		--ss-selection: rgb(138 141 251 / 0.3);
+		--ss-selection: rgb(45 212 191 / 0.28);
 	}
 }
 
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--ss-canvas: #0a1c40;
-	--ss-surface: #132447;
-	--ss-surface-2: #1b2c4d;
-	--ss-surface-3: #253555;
-	--ss-line: #2f3e5d;
-	--ss-line-soft: #243354;
+	--ss-canvas: #0b1220;
+	--ss-surface: #141c2c;
+	--ss-surface-2: #1a2436;
+	--ss-surface-3: #243044;
+	--ss-line: #2a3548;
+	--ss-line-soft: #1f2a3c;
 	--ss-line-strong: #6a7a9e;
-	--ss-fg: #eef1f7;
-	--ss-muted: #a3b0ca;
-	--ss-subtle: #6f7c99;
-	--ss-primary: #8a8dfb;
-	--ss-primary-hover: #a3a5fc;
-	--ss-on-primary: #0a1c40;
-	--ss-primary-soft: #152463;
-	--ss-on-primary-soft: #b9bbfd;
-	--ss-success: #24d56d;
-	--ss-success-solid: #24d56d;
-	--ss-success-soft: #16404d;
-	--ss-on-success-soft: #5fe397;
-	--ss-warning: #ffd527;
-	--ss-warning-solid: #ffd527;
-	--ss-on-warning: #0a1c40;
-	--ss-warning-soft: #394042;
-	--ss-on-warning-soft: #ffe066;
-	--ss-danger: #f96063;
-	--ss-danger-hover: #fb8a8c;
-	--ss-danger-solid: #f72226;
-	--ss-on-danger: #0a1c40;
-	--ss-danger-soft: #372442;
-	--ss-on-danger-soft: #fb8a8c;
-	--ss-attention: #fe6e36;
-	--ss-attention-solid: #fe5e20;
-	--ss-attention-soft: #392d41;
-	--ss-on-attention-soft: #fe9466;
-	--ss-info: #00d6a3;
-	--ss-info-solid: #00d6a3;
-	--ss-info-soft: #104056;
-	--ss-on-info-soft: #4fe3bf;
-	--ss-new: #ff5baa;
-	--ss-new-solid: #ff3797;
-	--ss-new-soft: #392754;
-	--ss-on-new-soft: #ff8cc4;
-	--ss-focus: #a3a5fc;
-	--ss-overlay: rgb(3 10 26 / 0.7);
+	--ss-fg: #eef2f7;
+	--ss-muted: #a3adbd;
+	--ss-subtle: #6f7c90;
+	--ss-primary: #2dd4bf;
+	--ss-primary-hover: #5eead4;
+	--ss-on-primary: #0b1220;
+	--ss-primary-soft: #123038;
+	--ss-on-primary-soft: #5eead4;
+	--ss-success: #4ade80;
+	--ss-success-solid: #22c55e;
+	--ss-success-soft: #143028;
+	--ss-on-success-soft: #86efac;
+	--ss-warning: #fbbf24;
+	--ss-warning-solid: #f59e0b;
+	--ss-on-warning: #0b1220;
+	--ss-warning-soft: #2e2818;
+	--ss-on-warning-soft: #fcd34d;
+	--ss-danger: #fb7185;
+	--ss-danger-hover: #fda4af;
+	--ss-danger-solid: #e11d48;
+	--ss-on-danger: #0b1220;
+	--ss-danger-soft: #2e1a24;
+	--ss-on-danger-soft: #fda4af;
+	--ss-attention: #fbbf24;
+	--ss-attention-solid: #f59e0b;
+	--ss-attention-soft: #2e2818;
+	--ss-on-attention-soft: #fcd34d;
+	--ss-info: #2dd4bf;
+	--ss-info-solid: #14b8a6;
+	--ss-info-soft: #123038;
+	--ss-on-info-soft: #5eead4;
+	--ss-new: #f472b6;
+	--ss-new-solid: #ec4899;
+	--ss-new-soft: #2a1a2e;
+	--ss-on-new-soft: #f9a8d4;
+	--ss-focus: #5eead4;
+	--ss-overlay: rgb(3 8 18 / 0.72);
 	--ss-shadow-1: 0 0 #0000;
-	--ss-shadow-2: 0 0 #0000;
-	--ss-shadow-3: 0 0 0 1px #2f3e5d, 0 16px 40px -12px rgb(0 0 0 / 0.5);
+	--ss-shadow-2: 2px 2px 0 rgb(45 212 191 / 0.22);
+	--ss-shadow-3: 0 0 0 1px #2a3548, 0 16px 40px -12px rgb(0 0 0 / 0.5);
+	--ss-hard: 2px 2px 0 rgb(45 212 191 / 0.22);
+	--ss-lift: 3px 3px 0 rgb(45 212 191 / 0.28);
+	--ss-grid-line: rgb(238 242 247 / 0.04);
 	--ss-glow-primary: 0 0 #0000;
 	--ss-glow-danger: 0 0 #0000;
 	--ss-scrollbar: rgb(255 255 255 / 0.16);
 	--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
-	--ss-selection: rgb(138 141 251 / 0.3);
+	--ss-selection: rgb(45 212 191 / 0.28);
 }
 
 /*

@@ -11,13 +11,13 @@ import { CARD } from './layout-metrics.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /**
- * What a color means (theme.css): `primary` Integrity blue (the accent), `success` Natural green, `warning` Happiness
- * yellow, `danger` Excitement red, `attention` Energetic orange (needs you), `info` Kindness teal (help, tips),
- * `new` Originality pink (new, featured); `neutral` carries no meaning.
+ * What a color means (theme.css): `primary` teal (the accent), `success` lime/ok green, `warning` amber,
+ * `danger` rose, `attention` amber (needs you), `info` bright teal (help, tips),
+ * `new` pink (new, featured); `neutral` carries no meaning.
  * @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'attention' | 'new'} Tone
  */
 /**
- * Kind of thing a tile, badge or menu item stands for. It names the thing in the code; every kind takes the one blue
+ * Kind of thing a tile, badge or menu item stands for. It names the thing in the code; every kind takes the one teal
  * accent (color rule: one accent, neutral surfaces, the other colors for their meaning only), so a `kind` marks an item
  * as accented and its absence leaves it neutral.
  * @typedef {'overview' | 'merchant' | 'website' | 'product' | 'feature' | 'credit' | 'price' | 'admin' | 'settings'
@@ -99,7 +99,7 @@ export function IconBadge({ icon, kind, tone, product, size = 'md', className })
 			className={cx(
 				'inline-flex shrink-0 items-center justify-center',
 				TINTS[tone ?? look?.tone ?? (kind ? 'primary' : 'neutral')],
-				size === 'xs' ? 'size-6 rounded-md' : size === 'sm' ? 'size-8 rounded-lg' : 'size-9 rounded-[10px]',
+				size === 'xs' ? 'size-6 rounded-control' : size === 'sm' ? 'size-8 rounded-control' : 'size-9 rounded-control',
 				className,
 			)}>
 			<Icon name={name} size={size === 'xs' ? 13 : size === 'sm' ? 15 : 17} />
@@ -126,7 +126,7 @@ export function Avatar({ name, size = 'md', className }) {
 		<span
 			aria-hidden="true"
 			className={cx(
-				'inline-flex shrink-0 items-center justify-center rounded-full bg-primary-soft font-semibold text-on-primary-soft',
+				'inline-flex shrink-0 items-center justify-center rounded-full border border-line bg-canvas font-semibold text-fg',
 				size === 'sm' ? 'size-6 text-micro' : 'size-8 text-label',
 				className,
 			)}>
@@ -337,7 +337,7 @@ export function Badge({ tone = 'neutral', kind, children, dot = false, icon, cla
 		<span
 			title={title}
 			className={cx(
-				'inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-xs leading-4 font-medium',
+				'inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-control border px-2 text-xs leading-4 font-medium',
 				TONES[look],
 				className,
 			)}>
@@ -523,7 +523,7 @@ export function EmptyState({ title, description, action, icon = 'box', kind, ton
 				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
-			<span className={cx('flex size-10 items-center justify-center rounded-xl', TINTS[tone ?? (kind ? 'primary' : 'info')])}>
+			<span className={cx('flex size-10 items-center justify-center rounded-control', TINTS[tone ?? (kind ? 'primary' : 'info')])}>
 				<Icon name={icon} size={18} />
 			</span>
 			<div className="max-w-sm space-y-0.5">
@@ -543,7 +543,7 @@ export function EmptyState({ title, description, action, icon = 'box', kind, ton
 export function ErrorState({ title = 'This could not be loaded', message, action, className }) {
 	return (
 		<div role="alert" className={cx('flex flex-col items-center gap-3 px-6 py-12 text-center', className)}>
-			<span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-danger">
+			<span className="flex size-10 items-center justify-center rounded-control bg-danger-soft text-danger">
 				<Icon name="alert" size={18} />
 			</span>
 			<div className="max-w-md space-y-0.5">
@@ -562,7 +562,7 @@ export function ErrorState({ title = 'This could not be loaded', message, action
 export function RemovedState({ title, message = 'This item was removed or you no longer have access.', action, className }) {
 	return (
 		<div role="status" className={cx('flex flex-col items-center gap-3 px-6 py-12 text-center', className)}>
-			<span className="flex size-10 items-center justify-center rounded-xl bg-surface-2 text-muted">
+			<span className="flex size-10 items-center justify-center rounded-control bg-surface-2 text-muted">
 				<Icon name="box" size={18} />
 			</span>
 			<div className="max-w-md space-y-0.5">
@@ -582,7 +582,7 @@ export function Skeleton({ className, lines = 1, label = 'Loading' }) {
 	return (
 		<div role="status" aria-label={label} aria-busy="true" className="animate-ss-fade space-y-2">
 			{Array.from({ length: lines }, (_, i) => (
-				<div key={i} className={cx('ss-shimmer h-4 rounded-lg', i === lines - 1 && lines > 1 && 'w-2/3', className)} />
+				<div key={i} className={cx('ss-shimmer h-4 rounded-control', i === lines - 1 && lines > 1 && 'w-2/3', className)} />
 			))}
 		</div>
 	);
@@ -593,7 +593,7 @@ export function Skeleton({ className, lines = 1, label = 'Loading' }) {
  * @param {{ className?: string }} props
  */
 export function SkeletonBlock({ className }) {
-	return <div aria-hidden="true" className={cx('ss-shimmer rounded-lg', className)} />;
+	return <div aria-hidden="true" className={cx('ss-shimmer rounded-control', className)} />;
 }
 
 /**
@@ -615,7 +615,7 @@ export function LockedState({ title, description, note, action, compact = false,
 				aria-hidden="true"
 				className={cx(
 					'flex shrink-0 items-center justify-center bg-surface-2 text-muted',
-					compact ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
+					compact ? 'size-8 rounded-control' : 'size-10 rounded-control',
 				)}>
 				<Icon name="lock" size={compact ? 15 : 18} />
 			</span>
@@ -686,7 +686,7 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 						) : (
 							<span
 								aria-hidden="true"
-								className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted">
+								className="inline-flex size-6 shrink-0 items-center justify-center rounded-control bg-surface-2 text-muted">
 								<Icon name={icon} size={13} />
 							</span>
 						)

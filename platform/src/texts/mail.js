@@ -37,6 +37,15 @@ export const MAIL_TEXTS = Object.freeze({
 		footer:
 			'The link works once and expires in 30 minutes. If you did not ask for a reset, ignore this message; your password is unchanged.',
 	},
+	step_up_otp: {
+		subject: (d) => `Your ${d.brand} verification code`,
+		lines: (d) => [
+			`Your single-use verification code is ${d.otp ?? '000000'}.`,
+			'Enter this code to complete your step-up action in the Portal.',
+		],
+		action: null,
+		footer: 'The code expires in 10 minutes. If you did not ask for this code, ignore this message.',
+	},
 	email_change_confirm: {
 		subject: (d) => `Confirm your new ${d.brand} sign-in email`,
 		lines: () => ['Confirm this address to use it as your sign-in email. Until you do, your old address stays in use.'],

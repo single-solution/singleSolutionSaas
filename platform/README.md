@@ -1,8 +1,8 @@
 # Portal (`@ss/platform`)
 
 Where our admins (Owner, Support, Finance) manage merchants, their websites, the products on each website and credits,
-and where merchants see their websites, tokens, install code, usage and credits and open each product's dashboard
-(PLAN.md Part 0). Each website has a **Setup** page (merchant, Owner, Support): its Setup sheet (`ss.blueprint/1`) with
+and where merchants see their websites, tokens, usage and credits and open each product's dashboard (see `PLAN.md`).
+Each website has a **Setup** page (merchant, Owner, Support): its Setup sheet (`ss.blueprint/1`) with
 every product's features, settings, connections state, widgets, install snippets, staff permissions, events, to-dos,
 what the website builds and docs, gathered from the products on request, as a page and as JSON (Download, Copy), and
 read-only share links for a client or a developer (`/shared-setup#key=…`, 1–30 days, revocable, never secrets). Its
@@ -16,8 +16,8 @@ products. Next.js 16, React 19, MongoDB. The modules and their services are desc
 
 ## Environment
 
-Exactly three variables, plus one optional during a key change and an optional log level (PLAN 0.11,
-`.env.example`), validated at start (only names are reported, never values):
+Exactly three variables, plus one optional during a key change and an optional log level (see `.env.example`),
+validated at start (only names are reported, never values):
 
 | Variable                  | What it is                                                                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |

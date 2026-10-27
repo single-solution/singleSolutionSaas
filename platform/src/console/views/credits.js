@@ -129,7 +129,7 @@ export function CreditsView(props) {
 						{receiptsPaged.rows.length === 0 ? (
 							<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />
 						) : (
-							<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+							<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 								{receiptsPaged.rows.map((r) => (
 									<Row
 										key={r.receiptId}

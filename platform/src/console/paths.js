@@ -23,8 +23,9 @@ export const query = (params) => {
  */
 export const withCursor = (path, cursor) => (cursor ? `${path}${path.includes('?') ? '&' : '?'}cursor=${e(cursor)}` : path);
 
-/** The public pages (no console frame): sign-in, the pages of emailed links and a shared Setup sheet. */
+/** The public pages (no console frame): marketing home, sign-in, emailed-link pages and a shared Setup sheet. */
 export const PUBLIC_PATHS = Object.freeze([
+	'/',
 	'/login',
 	'/forgot-password',
 	'/reset-password',
@@ -56,14 +57,22 @@ export const routes = Object.freeze({
 	account: () => '/account',
 	/** a part of the Account page: details (the page's own address), sign-in, two-step or activity */
 	accountPart: (/** @type {string} */ part) => (part === 'details' ? '/account' : `/account#${e(part)}`),
+	/** Public Docs hub */
+	docs: () => '/docs',
 });
 
 /** Portal API paths used by the consoles. */
 export const api = Object.freeze({
 	me: () => '/v1/me',
+	stepUpOtp: () => '/v1/me/step-up-otp',
 	signOut: () => '/v1/auth/sign-out',
+	/** active catalog products for Add product */
+	catalogProducts: (/** @type {{ status?: string | null }} */ q = {}) => `/v1/products${query(q)}`,
 	websites: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/websites`,
 	website: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}`,
+	/** Developer pack: aggregated bundle of tokens, endpoints, docs for website builders */
+	developerPack: (/** @type {string} */ m, /** @type {string} */ w, /** @type {{ download?: boolean }} */ q = {}) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/pack${query({ download: q.download ? '1' : null })}`,
 	/** products on a website (cards); `POST { productId }` adds one (Owner, Support) */
 	websiteProducts: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/products`,
 	/** `DELETE` removes a product from a website (Owner, Support) */

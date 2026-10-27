@@ -257,7 +257,7 @@ export function PageSkeleton({
 				{list ? (
 					<aside aria-hidden="true" className={cx(LIST.column, 'animate-ss-fade hidden lg:flex')}>
 						<div className="p-2">
-							<SkeletonBlock className="h-9 w-full rounded-md" />
+							<SkeletonBlock className="h-9 w-full rounded-control" />
 						</div>
 						<div className="flex-1 space-y-1 p-2">
 							<RowListSkeleton rows={8} />
@@ -316,7 +316,7 @@ export function DrawerSkeleton({ size = 'md', footer = true, label = 'Loading', 
 		<div aria-busy="true" className={cx(DRAWER.panel, DRAWER_WIDTH[size], 'animate-ss-fade', className)}>
 			<div data-ss-part="header" className={DRAWER.header}>
 				<SkeletonBlock className="h-5 w-48 max-w-full" />
-				<SkeletonBlock className="ml-auto size-8 shrink-0 rounded-lg" />
+				<SkeletonBlock className="ml-auto size-8 shrink-0 rounded-control" />
 			</div>
 			<div data-ss-part="body" className={DRAWER.body}>
 				<DrawerBodySkeleton label={label} />

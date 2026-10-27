@@ -749,7 +749,7 @@ describe('Settings (stored in the database, never in the environment; Owner only
 		const branding = await call('GET', '/v1/branding');
 		expect(branding.json).toEqual({
 			name: 'Single Solution',
-			accent: '#2226f7',
+			accent: '#0f766e',
 			logoUrl: null,
 			support: { channels: [] },
 		});

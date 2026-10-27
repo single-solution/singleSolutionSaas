@@ -82,7 +82,7 @@ const setToken = (token) => {
 const PASSWORD = 'correct horse battery';
 const BRANDING = {
 	name: 'Single Solution',
-	accent: '#4f46e5',
+	accent: '#0f766e',
 	logoUrl: null,
 	support: {
 		channels: [

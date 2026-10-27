@@ -179,7 +179,7 @@ function FrameFooter({ rail, note, links }) {
 	return (
 		<div className="space-y-1">
 			{note && !rail ? (
-				<p className="rounded-lg border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-label font-medium text-warning">
+				<p className="rounded-control border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-label font-medium text-warning">
 					{note}
 				</p>
 			) : null}
@@ -190,7 +190,7 @@ function FrameFooter({ rail, note, links }) {
 					title={link.label}
 					{...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
 					className={cx(
-						'ss-motion ss-press flex h-9 items-center gap-2.5 rounded-lg text-sm font-medium text-fg/80 hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus',
+						'ss-motion ss-press flex h-9 items-center gap-2.5 rounded-control text-sm font-medium text-fg/80 hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus',
 						rail ? 'justify-center' : 'px-2.5',
 					)}>
 					<span aria-hidden="true" className="text-muted">

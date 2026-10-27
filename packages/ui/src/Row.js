@@ -112,13 +112,15 @@ export function Row({
 					: undefined
 			}
 			className={cx(
-				'ss-motion relative flex w-full min-w-0 items-center gap-3 rounded-md px-2.5 text-left',
+				'ss-motion relative flex w-full min-w-0 items-center gap-3 rounded-control px-2.5 text-left',
 				LIST.row,
 				live && 'ss-press cursor-pointer',
 				button
 					? 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus'
 					: 'has-[a:focus-visible]:outline-2 has-[a:focus-visible]:-outline-offset-2 has-[a:focus-visible]:outline-focus',
-				selected ? 'bg-primary-soft group-data-[ss-slide]/list:bg-transparent' : live && 'hover:bg-surface-2',
+				selected
+					? 'border border-line bg-surface ss-hard group-data-[ss-slide]/list:border-transparent group-data-[ss-slide]/list:bg-transparent group-data-[ss-slide]/list:shadow-none'
+					: live && 'hover:bg-surface-2',
 				disabled && 'cursor-not-allowed opacity-50',
 				className,
 			)}>

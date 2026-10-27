@@ -24,12 +24,12 @@ const PAGE_CSS = `
 :root { color-scheme: light dark; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; box-sizing: border-box;
   font-family: var(--ss-font-family, system-ui, sans-serif); background: Canvas; color: CanvasText; }
-.box { max-width: 420px; width: 100%; padding: 24px; border-radius: var(--ss-radius, 8px);
+.box { max-width: 420px; width: 100%; padding: 24px; border-radius: var(--ss-radius, 0.35rem);
   background: var(--ss-color-background, Canvas); color: var(--ss-color-text, CanvasText);
   border: 1px solid var(--ss-color-border, GrayText); }
 h1 { font-size: 1.3em; margin: 0 0 12px; }
-button { font: inherit; padding: 10px 18px; border: 0; border-radius: var(--ss-radius, 8px); cursor: pointer;
-  background: var(--ss-color-accent, #2226f7); color: var(--ss-color-onAccent, #ffffff); }
+button { font: inherit; padding: 10px 18px; border: 0; border-radius: var(--ss-radius, 0.35rem); cursor: pointer;
+  background: var(--ss-color-accent, #0f766e); color: var(--ss-color-onAccent, #ffffff); }
 fieldset { border: 0; padding: 0; margin: 0 0 16px; }
 label { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }

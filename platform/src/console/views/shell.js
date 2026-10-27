@@ -1,6 +1,6 @@
 'use client';
 /**
- * The signed-in merchant console frame (PLAN 0.6, redesign 2 2026-10-17): the menu Overview · Websites · Usage and
+ * The signed-in merchant console frame (PLAN 0.6, Unite dialect): the menu Overview · Websites · Usage and
  * credits · Account; at the bottom of the sidebar (and its phone drawer) the website switcher, help and the account menu
  * (My account, the theme, Sign out) and the credit balance (a link to Usage and credits); the billing banner on top;
  * and a mark on the Usage and credits entry while the balance is low, in grace or stopped, with the Branding. The page

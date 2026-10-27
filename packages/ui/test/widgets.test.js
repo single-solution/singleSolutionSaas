@@ -714,7 +714,7 @@ describe('toasts, code blocks and forms', () => {
 				<FieldGrid className="mt-4">
 					<Input label="Alone" />
 				</FieldGrid>
-				<Input label="Accent" type="color" defaultValue="#4f46e5" />
+				<Input label="Accent" type="color" defaultValue="#0f766e" />
 			</div>,
 		);
 		const grid = /** @type {HTMLElement} */ (container.querySelector('form > div'));

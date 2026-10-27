@@ -375,7 +375,7 @@ export function ConnectionsSection({ view, manage, canWrite, twoStepOn = false, 
 				{view.products.length === 0 ? (
 					<EmptyState compact icon="box" title={T.data.noProducts} description={T.data.noProductsHelp} />
 				) : (
-					<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+					<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 						{view.products.map((product) => (
 							<Row
 								key={product.productId}
@@ -443,7 +443,7 @@ export function LinksSection({ view, manage, canWrite, twoStepOn = false, onChan
 			{view.links.length === 0 ? (
 				<EmptyState compact icon="link" title={T.links.empty} />
 			) : (
-				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+				<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 					{view.links.map((link) => (
 						<Row
 							key={`${link.caller}>${link.callee}`}

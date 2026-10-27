@@ -69,6 +69,28 @@ export const catalogRoutes = (service, commerce, identity) => {
 		});
 
 	return [
+		// ---------------------------------------------------------------- catalog products (merchants and admins for Add product)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/products',
+			auth: ['merchant', 'admin'],
+			permission: P.productsRead,
+			handler: async (c) => {
+				const status = c.query.status ?? 'active';
+				if (status !== 'active' && status !== 'inactive')
+					return problem('bad_request', 'status must be active or inactive');
+				const items = await service.listProducts({ status });
+				return ok({
+					items: items.map((p) => ({
+						productId: p.productId,
+						name: p.name,
+						status: p.status,
+						features: p.features,
+					})),
+				});
+			},
+		}),
+
 		// ---------------------------------------------------------------- admin: Products
 		defineRoute({
 			method: 'GET',

@@ -325,7 +325,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn =
 				) : shown && value ? (
 					<CodeBlock code={value} label={WEBSITE.serverToken} />
 				) : (
-					<p className="rounded-control border border-line-soft bg-surface-2 px-3 py-2.5 font-mono text-xs text-muted">
+					<p className="rounded-control border border-line bg-surface-2 px-3 py-2.5 font-mono text-xs text-muted">
 						<span aria-hidden="true">••••••••••••••••••••</span>
 						<span className="sr-only">{WEBSITE.hidden}</span>
 					</p>

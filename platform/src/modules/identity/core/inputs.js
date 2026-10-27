@@ -327,15 +327,19 @@ export const inputs = Object.freeze({
 			(b, options) => object(b, { domain: domain(options) })
 		),
 	websiteRemove: /** @type {(b: unknown) => Parsed<{ confirm: string }>} */ ((b) => object(b, { confirm: text(253) })),
-	// a fresh confirmation: the current password, and a two-step or recovery code while two-step is on
-	confirmation: /** @type {(b: unknown) => Parsed<SecondFactor & { password: string }>} */ (
-		(b) => object(b, { password, code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
+	// a fresh confirmation: password and/or two-step OTP
+	confirmation: /** @type {(b: unknown) => Parsed<SecondFactor & { password?: string }>} */ (
+		(b) => object(b, { password: { optional: password }, code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
 	),
-	tokenRegenerate: /** @type {(b: unknown) => Parsed<SecondFactor & { kind: 'browser' | 'server', password: string }>} */ (
+	// step-up confirmation: OTP only (A5)
+	otpConfirmation: /** @type {(b: unknown) => Parsed<SecondFactor>} */ (
+		(b) => object(b, { code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
+	),
+	tokenRegenerate: /** @type {(b: unknown) => Parsed<SecondFactor & { kind: 'browser' | 'server', password?: string }>} */ (
 		(b) =>
 			object(b, {
 				kind: oneOf(/** @type {const} */ (['browser', 'server'])),
-				password,
+				password: { optional: password },
 				code: { optional: otp },
 				recoveryCode: { optional: recoveryCode },
 			})

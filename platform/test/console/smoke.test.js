@@ -69,7 +69,7 @@ const text = (html) =>
 
 const BRANDING = {
 	name: 'Single Solution',
-	accent: '#4f46e5',
+	accent: '#0f766e',
 	logoUrl: null,
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@ss.test' }] },
 };

@@ -64,7 +64,7 @@ export function NextStep({ icon = 'bulb', tone = 'accent', children, action, onD
 					aria-label={words.dismiss}
 					title={words.dismiss}
 					onClick={onDismiss}
-					className="ss-motion ss-press -mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-fg/10 focus-visible:outline-2 focus-visible:outline-focus">
+					className="ss-motion ss-press -mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-control hover:bg-fg/10 focus-visible:outline-2 focus-visible:outline-focus">
 					<Icon name="close" size={13} />
 				</button>
 			) : null}

@@ -13,6 +13,7 @@ import { commerceModule } from '../../src/modules/commerce/index.js';
 import { websiteModule } from '../../src/modules/website/index.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import { act, byLabel, type } from '@ss/ui/testing';
+import { totpCode } from '../../src/infra/auth.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { ENCRYPTION_KEY, PORTAL_URL, createTestLogger, testConfig } from '../helpers.js';
 import { startFakeProduct } from '../modules/catalog/fakes/product.js';
@@ -307,6 +308,8 @@ export const createWorld = async ({ db }) => {
 	};
 	/** @type {Array<Awaited<ReturnType<typeof startFakeProduct>>>} */
 	const products = [];
+	/** @type {any} */
+	let world;
 
 	// the first admin (an Owner, created from the sign-in page) seeds the world
 	const ownerBrowser = browserOf(portal, 'owner password 123!');
@@ -326,6 +329,7 @@ export const createWorld = async ({ db }) => {
 		const created = await ownerBrowser.api.post('/v1/admin/merchants', { name: merchantName, ownerName: 'Sam Seller', email });
 		if (!created.ok) throw new Error(`merchant: ${JSON.stringify(created.problem)}`);
 		const b = browserOf(portal, password);
+		b.world = world;
 		const set = await b.api.post('/v1/auth/set-password', { token: tokenOf(email, 'merchant_setup'), password });
 		if (!set.ok) throw new Error(`setup: ${JSON.stringify(set.problem)}`);
 		const me = await b.api.get('/v1/me');
@@ -344,6 +348,7 @@ export const createWorld = async ({ db }) => {
 		const r = await ownerBrowser.api.post('/v1/admin/admins', { email, role, password: 'owner password 123!' });
 		if (!r.ok) throw new Error(`invite: ${JSON.stringify(r.problem)}`);
 		const b = browserOf(portal, 'admin password 123!');
+		b.world = world;
 		const set = await b.api.post('/v1/auth/set-password', {
 			token: tokenOf(email, 'admin_invite'),
 			password: 'admin password 123!',
@@ -415,14 +420,31 @@ export const createWorld = async ({ db }) => {
 		if (!r.ok) throw new Error(`credit: ${JSON.stringify(r.problem)}`);
 	};
 
-	return {
+	/** @param {any} b */
+	const enable2fa = async (b) => {
+		const started = await b.api.post('/v1/me/two-step/start', {});
+		if (!started.ok) throw new Error(`start 2fa: ${JSON.stringify(started.problem)}`);
+		const secret = started.data.secret;
+		const code = totpCode(secret, Date.now());
+		const confirmed = await b.api.post('/v1/me/two-step/confirm', { code });
+		if (!confirmed.ok) throw new Error(`confirm 2fa: ${JSON.stringify(confirmed.problem)}`);
+		b.totpSecret = secret;
+		return secret;
+	};
+
+	world = {
 		portal,
 		mail,
 		tokenOf,
+		lastOtp: (to) => {
+			const m = [...mail].reverse().find((item) => (!to || item.to === to) && item.template === 'step_up_otp');
+			return m ? String(m.data?.otp ?? '') : null;
+		},
 		ownerBrowser,
 		owner,
 		signup,
 		adminOf,
+		enable2fa,
 		addWebsite,
 		connect,
 		addProduct,
@@ -432,6 +454,8 @@ export const createWorld = async ({ db }) => {
 			for (const product of products.splice(0)) await product.close();
 		},
 	};
+	ownerBrowser.world = world;
+	return world;
 };
 
 /** Silence React/jsdom noise (navigation is not implemented in jsdom) for the duration of a test. */

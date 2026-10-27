@@ -127,6 +127,10 @@ export const createRepo = (ctx) => {
 			const doc = await tokens.findOne({ _id: hashToken(secret, purpose, value), purpose });
 			return doc && doc.expireAt.getTime() > ctx.now() ? doc : null;
 		},
+		peekTokenBySubject: async (purpose, subject) => {
+			const doc = await tokens.findOne({ purpose, subject });
+			return doc && doc.expireAt.getTime() > ctx.now() ? doc : null;
+		},
 		/**
 		 * Consume a token atomically (single use): only one concurrent caller gets the document.
 		 * @param {TokenPurpose} purpose
@@ -137,6 +141,12 @@ export const createRepo = (ctx) => {
 			const doc = await tokens.findOne({ _id: id, purpose });
 			if (!doc || doc.expireAt.getTime() <= ctx.now()) return null;
 			const { deletedCount } = await tokens.deleteOne({ _id: id, purpose });
+			return deletedCount === 1 ? doc : null;
+		},
+		consumeTokenBySubject: async (purpose, subject) => {
+			const doc = await tokens.findOne({ purpose, subject });
+			if (!doc || doc.expireAt.getTime() <= ctx.now()) return null;
+			const { deletedCount } = await tokens.deleteOne({ _id: doc._id, purpose });
 			return deletedCount === 1 ? doc : null;
 		},
 		/**

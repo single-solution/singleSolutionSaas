@@ -18,6 +18,7 @@ import { WebsiteView, WebsitesView } from '../../src/console/views/websites.js';
 import { InstallBlock, twoStepOnOf } from '../../src/console/views/website.js';
 import { WebsitePageView } from '../../src/console/views/website-page.js';
 import { startMongo } from '../helpers.js';
+import { totpCode } from '../../src/infra/auth.js';
 import {
 	button,
 	buttons,
@@ -35,11 +36,31 @@ import {
 } from './merchant-harness.js';
 import { testRouter } from './router.js';
 
-/** Confirm the Open configure password dialog and wait for the launch. */
-const confirmOpen = async (/** @type {{ password: string, waitCall: Function }} */ browser, /** @type {string} */ path) => {
-	fillDialog('Your password', browser.password);
+/** Confirm the Open configure password/OTP dialog and wait for the launch. */
+const confirmOpen = async (/** @type {any} */ browser, /** @type {string} */ path) => {
+	const codeLabel = [...dialog().querySelectorAll('label')].find((l) => /code/i.test(l.textContent ?? ''));
+	if (codeLabel) {
+		let code = browser.totpSecret ? totpCode(browser.totpSecret, Date.now()) : null;
+		if (!code) {
+			await browser.api.post('/v1/me/step-up-otp', {});
+			if (browser.world?.lastOtp) code = browser.world.lastOtp();
+		}
+		fillDialog('Two-step or recovery code', code || '123456');
+	} else {
+		fillDialog('Your password', browser.password);
+	}
+	const fromIndex = browser.calls.length;
 	await pressDialog('Open configure');
-	return browser.waitCall('POST', path, (/** @type {number} */ st) => st === 200);
+	const found = await until(() => {
+		const call = browser.calls.slice(fromIndex).find((c) => c.method === 'POST' && c.path === path);
+		if (!call) return false;
+		return call;
+	});
+	if (found.status !== 200) {
+		throw new Error(`Open launch answered ${found.status}: ${JSON.stringify(found.body)}`);
+	}
+	await settle(3);
+	return found;
 };
 
 vi.mock('next/navigation.js', async (importOriginal) => {
@@ -222,79 +243,45 @@ describe('website page (jsdom)', () => {
 			expect(buttons('Actions for Chatty')).toHaveLength(0);
 			cleanup();
 
-			// ---------------------------------------------------------------- Install and tokens, its own page
+			// ---------------------------------------------------------------- Install and Usage redirect away (A1)
 			const installDetail = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'install', owner);
 			withToasts(<AdminWebsiteView detail={installDetail} admin={owner} />);
-			await ownerBrowser.waitCall('GET', `/v1/merchants/${merchantId}/websites/${websiteId}/tokens`);
-			const tag = /** @type {HTMLElement} */ (
-				await until(() => [...document.querySelectorAll('pre')].find((p) => p.textContent?.startsWith('<script')))
-			);
-			expect(tag.textContent).toMatch(
-				/^<script src="https:\/\/notes\.example\.dev\/widget\.js" data-token="ey[^"]+" async><\/script>$/,
-			);
-			expect(shows('Accepted only from https://shop.example.com and from localhost')).toBe(true);
-			expect(document.querySelector('a[href$="/docs"]')?.textContent).toContain('Docs');
-			// Reveal asks for the password in a dialog: a wrong one is said under the field and shows nothing
-			await press('Reveal');
-			expect(shows('Show the server token of Notes')).toBe(true);
-			expect(button('Show token', dialog()).disabled).toBe(true);
-			fillDialog('Your password', 'not my password');
-			await pressDialog('Show token');
-			await ownerBrowser.waitCall(
-				'POST',
-				`/v1/merchants/${merchantId}/websites/${websiteId}/tokens/notes/reveal`,
-				(st) => st === 401,
-			);
-			await until(() => shows('That password is not right. Check it and try again.'));
-			expect(dialog().querySelector('[aria-invalid="true"]')).not.toBeNull();
-			// the right password shows it and closes the dialog
-			fillDialog('Your password', ownerBrowser.password);
-			await pressDialog('Show token');
-			const revealed = await ownerBrowser.waitCall(
-				'POST',
-				`/v1/merchants/${merchantId}/websites/${websiteId}/tokens/notes/reveal`,
-				(st) => st === 200,
-			);
-			await until(() => shows(revealed.body.serverToken));
-			expect(document.querySelector('[role="dialog"] [aria-invalid]')).toBeNull();
-			await press('Hide');
-			expect(shows(revealed.body.serverToken)).toBe(false);
-			// the token is in memory: showing it again and copying it ask for nothing
-			await press('Copy', /** @type {HTMLElement} */ (button('Regenerate').parentElement));
-			await until(() => shows('Copied to the clipboard.'));
-			expect(writeText).toHaveBeenLastCalledWith(revealed.body.serverToken);
-			// a failing copy says so
-			writeText.mockRejectedValueOnce(new Error('denied'));
-			await press('Copy', /** @type {HTMLElement} */ (button('Regenerate').parentElement));
-			await until(() => shows('Copy failed.'));
-			// regenerate: the product name and the password; the old token stops at once
-			await press('Regenerate');
-			expect(shows('the old one stops at once')).toBe(true);
-			expect(button('Regenerate', dialog()).disabled).toBe(true);
-			type(confirmInput(), 'Notes');
-			expect(button('Regenerate', dialog()).disabled).toBe(true);
-			fillDialog('Your password', ownerBrowser.password);
-			await pressDialog('Regenerate');
-			const regenerated = await ownerBrowser.waitCall(
-				'POST',
-				`/v1/merchants/${merchantId}/websites/${websiteId}/tokens/notes/regenerate`,
-				(st) => st === 200,
-			);
-			expect(regenerated.body).toMatchObject({ productId: 'notes', kind: 'server' });
-			expect(regenerated.body.token).not.toBe(revealed.body.serverToken);
-			await until(() => shows('New server token made. The old one no longer works.'));
-			expect(shows(regenerated.body.token)).toBe(true);
-			const activity = await world.ownerBrowser.api.get(`/v1/merchants/${merchantId}/activity`);
-			expect(activity.ok && activity.data.items.map((/** @type {any} */ e) => e.action)).toEqual(
-				expect.arrayContaining(['token.revealed', 'token.regenerated', 'product.removed', 'product.added']),
-			);
+			await settle(2);
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}`);
 			cleanup();
-
-			// ---------------------------------------------------------------- Usage, a section of the page (its old address opens it)
 			const usageDetail = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'usage', owner);
 			withToasts(<AdminWebsiteView detail={usageDetail} admin={owner} />);
-			await until(() => shows('Usage details'));
-			expect(document.querySelector('#usage')).not.toBeNull();
+			await settle(2);
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}`);
+			cleanup();
+
+			// ---------------------------------------------------------------- Developer pack: OTP step-up -> pack JSON (A2 + A5)
+			withToasts(<AdminWebsiteView detail={detail} admin={owner} />);
+			expect(buttons('Share with developer')).toHaveLength(1);
+			await press('Share with developer');
+			expect(shows('Developer pack')).toBe(true);
+			await ownerBrowser.api.post('/v1/me/step-up-otp', {});
+			const packOtp = world.lastOtp(owner.email) || '123456';
+			fillDialog('Two-step or recovery code', packOtp);
+			await pressDialog('Download developer pack');
+			const packCall = await ownerBrowser.waitCall(
+				'POST',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/pack`,
+				(st) => st === 200,
+			);
+			expect(packCall.body).toMatchObject({
+				docsHubUrl: '/docs',
+				domain: 'shop.example.com',
+				products: expect.arrayContaining([
+					expect.objectContaining({
+						id: 'notes',
+						name: 'Notes',
+						browserToken: expect.any(String),
+						serverToken: expect.any(String),
+					}),
+				]),
+			});
+			await until(() => shows('Developer pack downloaded.'));
 			cleanup();
 
 			// ---------------------------------------------------------------- Remove website once its products are removed
@@ -361,38 +348,31 @@ describe('website page (jsdom)', () => {
 			const open = vi.fn();
 			vi.stubGlobal('open', open);
 
-			// the merchant: product rows home; Install is its own page; no admin actions
+			// the merchant: product rows home; Add product (A3); Share with developer (A2); Open (A5)
 			merchant.use();
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, websiteId, '')} />);
 			expect(document.querySelector('h1')?.textContent).toBe('shop.example.com');
 			expect(document.querySelector('nav[aria-label="Breadcrumb"] a')?.getAttribute('href')).toBe('/websites');
 			expect(document.querySelector('#product-notes')).not.toBeNull();
-			expect(buttons('Add product')).toHaveLength(0);
-			expect(buttons('Reveal')).toHaveLength(0);
+			expect(buttons('Add product')).toHaveLength(1);
+			expect(buttons('Share with developer')).toHaveLength(1);
 			// the merchant's website menu: Visit website and Copy domain, never Remove website
 			await menu('More actions');
 			expect(menuItem('Visit website')).toBeTruthy();
 			expect(menuItem('Remove website')).toBeUndefined();
 			keydown(document, 'Escape');
-			// a product's row: Open only, never Remove (it has no menu for a merchant)
+			// a product's row: Open and Actions (A3 merchant removal)
 			expect(buttons('Open Notes')).toHaveLength(1);
-			expect(buttons('Actions for Notes')).toHaveLength(0);
+			expect(buttons('Actions for Notes')).toHaveLength(1);
 			expect(shows('Your admin adds products to this website.')).toBe(false);
 			await press('Open Notes');
 			const mine = await confirmOpen(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/products/notes/launch`);
 			expect(open).toHaveBeenLastCalledWith(mine.body.url, '_blank', 'noopener,noreferrer');
 			cleanup();
-			// Install ceremony: tokens and Reveal
+			// Install ceremony redirects away (A1)
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, websiteId, 'install')} />);
-			await until(() => buttons('Reveal').length === 1);
-			await press('Reveal');
-			fillDialog('Your password', merchant.password);
-			await pressDialog('Show token');
-			await merchant.waitCall(
-				'POST',
-				`/v1/merchants/${merchantId}/websites/${websiteId}/tokens/notes/reveal`,
-				(st) => st === 200,
-			);
+			await settle(2);
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/websites/${websiteId}`);
 			cleanup();
 			// the list filters by domain
 			withToasts(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} />);
@@ -406,7 +386,7 @@ describe('website page (jsdom)', () => {
 			expect(shows('Clear search')).toBe(true);
 			cleanup();
 
-			// Support: the admin launch with the website id; Install and Setup as header actions
+			// Support: the admin launch with the website id; Share with developer and Setup as header actions
 			const { admin: support, b: supportBrowser } = await world.adminOf('support');
 			supportBrowser.use();
 			withToasts(
@@ -418,11 +398,11 @@ describe('website page (jsdom)', () => {
 			await press('Open Notes');
 			const theirs = await confirmOpen(supportBrowser, '/v1/admin/products/notes/launch');
 			expect(open).toHaveBeenLastCalledWith(theirs.body.url, '_blank', 'noopener,noreferrer');
-			expect(buttons('Install').length + buttons('Setup sheet').length).toBeGreaterThan(0);
+			expect(buttons('Share with developer').length + buttons('Setup sheet').length).toBeGreaterThan(0);
 			expect(buttons('Reveal')).toHaveLength(0);
 			cleanup();
 
-			// Finance: no Install, no Open, no admin actions
+			// Finance: no Share pack, no Open, no admin actions
 			const { admin: finance, b: financeBrowser } = await world.adminOf('finance');
 			financeBrowser.use();
 			withToasts(
@@ -440,17 +420,18 @@ describe('website page (jsdom)', () => {
 			expect(buttons('Open Notes')).toHaveLength(0);
 			expect(buttons('Reveal')).toHaveLength(0);
 			expect(buttons('Setup sheet')).toHaveLength(0);
-			expect(buttons('Install')).toHaveLength(0);
+			expect(buttons('Share with developer')).toHaveLength(0);
 			expect(financeBrowser.calls.some((c) => c.path.endsWith('/tokens'))).toBe(false);
 			cleanup();
-			// Finance has no Install page: the address says so
+			// Finance has no Install page: the address redirects away (A1)
 			withToasts(
 				<AdminWebsiteView
 					detail={await admin.loadAdminWebsite(financeBrowser.api, merchantId, websiteId, 'install', finance)}
 					admin={finance}
 				/>,
 			);
-			expect(shows('This page does not exist.')).toBe(true);
+			await settle(2);
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}`);
 			expect(financeBrowser.calls.some((c) => c.path.endsWith('/tokens'))).toBe(false);
 			cleanup();
 
@@ -460,13 +441,7 @@ describe('website page (jsdom)', () => {
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, websiteId, '')} />);
 			await world.ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/suspend`, { reason: 'check' });
 			await press('Open Notes');
-			fillDialog('Your password', merchant.password);
-			await pressDialog('Open configure');
-			await merchant.waitCall(
-				'POST',
-				`/v1/merchants/${merchantId}/websites/${websiteId}/products/notes/launch`,
-				(st) => st === 401,
-			);
+			await confirmOpen(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/products/notes/launch`);
 			expect(open.mock.calls.length).toBe(calls);
 			cleanup();
 		} finally {
@@ -563,9 +538,7 @@ describe('website page (jsdom)', () => {
 					<WebsiteView {...await loaders.loadWebsitePage(merchant.api, merchantId, String(shop.websiteId), 'changes')} />,
 				);
 				await settle(2);
-				expect(shows('Recent changes')).toBe(true);
-				expect(document.querySelector('#activity')).not.toBeNull();
-				expect(scrolled).not.toHaveBeenCalled();
+				expect(testRouter.push).toHaveBeenLastCalledWith(`/websites/${shop.websiteId}`);
 				cleanup();
 			} finally {
 				// @ts-expect-error jsdom has no scrollIntoView of its own
@@ -583,7 +556,7 @@ describe('website page (jsdom)', () => {
 		}
 	});
 
-	it('shows failed token and usage loads on their pages', async () => {
+	it('redirects old install and usage addresses to the website home', async () => {
 		stubApi(async () => ({ ok: false, status: 500, problem: { status: 500, title: 'Boom' } }));
 		const props = {
 			website: { websiteId: 'web_1', merchantId: 'mer_1', domain: 'shop.com' },
@@ -607,10 +580,12 @@ describe('website page (jsdom)', () => {
 		await closeDialog();
 		cleanup();
 		withToasts(<WebsitePageView {...props} part="install" />);
-		await until(() => shows('Something went wrong on our side.'));
+		await settle(2);
+		expect(testRouter.push).toHaveBeenLastCalledWith('/websites/web_1');
 		cleanup();
 		withToasts(<WebsitePageView {...props} part="usage" />);
-		await until(() => shows('Something went wrong on our side.'));
+		await settle(2);
+		expect(testRouter.push).toHaveBeenLastCalledWith('/websites/web_1');
 	});
 
 	it('shows `Cannot be shown: regenerate` and other token failures', async () => {

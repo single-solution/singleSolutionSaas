@@ -81,7 +81,7 @@ export {
 } from './skeletons.js';
 export { METRICS } from './layout-metrics.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
-export { PasswordConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
+export { PasswordConfirmDialog, OtpConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
 export { TOAST_TEXTS, ToastOnce, ToastProvider, useToast } from './Toast.js';
 export { UNSAVED_TEXTS, askLeave, hasUnsaved } from './unsaved.js';
 export { CodeBlock, copyText } from './CodeBlock.js';

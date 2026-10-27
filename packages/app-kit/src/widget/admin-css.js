@@ -2,7 +2,7 @@
  * The CSS of the admin widget building blocks (admin.js), shared by every product so a status badge, a More menu, a dialog or an empty state looks and
  * behaves the same in Accounts, Ecommerce, Growth and Payments. A product puts it right after `CONTROLS_CSS` (which has
  * the tokens it uses) in its own widget CSS and adds only what is its own. Colors come from the website's theme
- * (`--ss-color-<name>`) with a fallback for light and dark (the consoles' tokens, redesign 2); each color keeps its
+ * (`--ss-color-<name>`) with a fallback for light and dark (Unite tokens in `@ss/ui` theme.css); each color keeps its
  * meaning: green success, yellow-amber warning, red danger, teal info, orange needs attention, pink new. A `wide` dialog
  * (an edit form) opens as a right drawer that keeps the page in view, like the consoles; a plain dialog (a short
  * confirmation) stays centered.

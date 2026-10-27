@@ -80,7 +80,7 @@ export function ListEditor({
 			</legend>
 			{help ? <p className="text-help text-muted">{help}</p> : null}
 			{items.length === 0 ? <p className="text-sm text-muted">{T.empty}</p> : null}
-			<ol className="divide-y divide-line-soft border-y border-line-soft empty:hidden">
+			<ol className="divide-y divide-line-soft border-y border-line empty:hidden">
 				{items.map((item, index) => {
 					const name = nameOf(item, index);
 					return (
@@ -161,7 +161,7 @@ export function EntryGroup({
 }) {
 	const T = { ...LIST_EDITOR_TEXTS, ...texts };
 	const Tag = as;
-	const box = cx('min-w-0 space-y-3 border-t border-line-soft', compact ? 'pt-3' : 'pt-4', className);
+	const box = cx('min-w-0 space-y-3 border-t border-line', compact ? 'pt-3' : 'pt-4', className);
 	if (summary)
 		return (
 			<details {...rest} className={box}>

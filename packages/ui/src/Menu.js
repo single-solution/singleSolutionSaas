@@ -159,7 +159,7 @@ export function ActionMenu({
 					onClick={toggle}
 					className={
 						triggerClassName ??
-						'ss-motion ss-press flex w-full min-w-0 items-center gap-2.5 rounded-lg p-1 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-surface-2'
+						'ss-motion ss-press flex w-full min-w-0 items-center gap-2.5 rounded-control p-1 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-surface-2'
 					}>
 					{trigger}
 				</button>
@@ -190,7 +190,7 @@ export function ActionMenu({
 					data-state={presence.closing ? 'closed' : 'open'}
 					{...(floating && anchor ? { style: anchor.style } : {})}
 					className={cx(
-						'z-40 max-w-[calc(100vw-2rem)] rounded-card border border-line-soft bg-surface p-1 shadow-overlay',
+						'z-40 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-surface p-1 shadow-overlay',
 						floating && anchor
 							? cx('fixed w-60', ORIGINS[`${anchor.up ? 'bottom' : 'top'}-${align}`])
 							: placement === 'up'
@@ -200,7 +200,7 @@ export function ActionMenu({
 									: 'absolute right-0 mt-2 w-60 origin-top-right',
 						'animate-ss-pop data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-pop-out',
 					)}>
-					{header ? <div className="mb-1 border-b border-line-soft px-2.5 pt-1.5 pb-2.5">{header}</div> : null}
+					{header ? <div className="mb-1 border-b border-line px-2.5 pt-1.5 pb-2.5">{header}</div> : null}
 					{items.map((item, index) => {
 						const before = items[index - 1];
 						const heading = item.section && item.section !== before?.section ? item.section : null;
@@ -220,7 +220,7 @@ export function ActionMenu({
 						return (
 							<div key={`${item.section ?? ''}:${item.label}`} className={item.className}>
 								{divided ? (
-									<div aria-hidden="true" className={cx('-mx-1 my-1 border-t border-line-soft', hiddenAbove)} />
+									<div aria-hidden="true" className={cx('-mx-1 my-1 border-t border-line', hiddenAbove)} />
 								) : null}
 								{heading ? (
 									<p
@@ -240,7 +240,7 @@ export function ActionMenu({
 										item.onSelect();
 									}}
 									className={cx(
-										'ss-motion flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-medium hover:bg-surface-2 focus:bg-surface-2',
+										'ss-motion flex h-8 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-sm font-medium hover:bg-surface-2 focus:bg-surface-2',
 										'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50',
 										'disabled:hover:bg-transparent',
 										item.danger ? 'text-danger' : 'text-fg',

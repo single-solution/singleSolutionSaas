@@ -423,7 +423,7 @@ export function ListColumn({
 			{selection?.mode ? (
 				<div
 					data-ss-bulk=""
-					className="animate-ss-enter flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line-soft bg-surface-2 p-2.5 text-sm">
+					className="animate-ss-enter flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-surface-2 p-2.5 text-sm">
 					<p role="status" className="min-w-0 truncate font-medium">
 						{typeof words.selected === 'function'
 							? words.selected(selection.count ?? 0)

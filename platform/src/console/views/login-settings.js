@@ -64,7 +64,7 @@ export function QrCode({ text, size = 192 }) {
 			viewBox={`0 0 ${box} ${box}`}
 			width={size}
 			height={size}
-			className="rounded-lg bg-white"
+			className="rounded-control bg-white"
 			shapeRendering="crispEdges">
 			<rect width={box} height={box} fill="#ffffff" />
 			<path d={cells.join('')} fill="#000000" />
@@ -603,7 +603,7 @@ export function ActivityTable({
 			{items.length === 0 ? (
 				<EmptyState compact icon="activity" kind="activity" title={empty} />
 			) : (
-				<div aria-label={caption} className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+				<div aria-label={caption} className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 					{items.map((e) => {
 						const name = actorName(e);
 						const who =
@@ -672,7 +672,7 @@ export function OwnActivityTimeline({
 			{list.items.length === 0 && !list.loading ? (
 				<EmptyState compact icon="activity" kind="activity" title={empty} />
 			) : (
-				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+				<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 					{list.items.map((e) => (
 						<Row
 							key={e.activityId}

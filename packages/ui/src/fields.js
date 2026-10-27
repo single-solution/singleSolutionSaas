@@ -69,7 +69,7 @@ export const FieldLayoutContext = createContext(/** @type {'stack' | 'row'} */ (
  */
 export const ROW_LIST =
 	'flex flex-col [&>[data-cell]]:py-4 [&>[data-cell]:first-child]:pt-0 [&>[data-cell]:last-child]:pb-0 ' +
-	'[&>[data-cell]:has(+:not([data-cell]))]:pb-0 [&>[data-cell]+[data-cell]]:border-t [&>[data-cell]+[data-cell]]:border-line-soft ' +
+	'[&>[data-cell]:has(+:not([data-cell]))]:pb-0 [&>[data-cell]+[data-cell]]:border-t [&>[data-cell]+[data-cell]]:border-line ' +
 	'[&>:not([data-cell])]:mt-4 [&>:first-child:not([data-cell])]:mt-0 [&>a]:self-start [&>button]:self-start';
 
 /**
@@ -85,7 +85,7 @@ export function FieldGrid({ children, className }) {
 }
 // flat at rest; focus shows the accent edge with a soft halo (no outline jump)
 const CONTROL =
-	'w-full max-w-[35rem] rounded-control border bg-surface px-3 py-2 text-sm text-fg shadow-card placeholder:text-subtle ss-motion ' +
+	'w-full max-w-[35rem] rounded-control border bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtle ss-motion ' +
 	'focus:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 ' +
 	'disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted [&:read-only:not(select)]:bg-surface-2';
 
@@ -94,8 +94,8 @@ const LINE = 'h-9 py-0';
 
 /** A color input: the whole control is the swatch. */
 const COLOR =
-	'cursor-pointer p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg ' +
-	'[&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-lg [&::-moz-color-swatch]:border-0';
+	'cursor-pointer p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-control ' +
+	'[&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-control [&::-moz-color-swatch]:border-0';
 
 /** A file input: the button inside it takes the look of a quiet button, not the browser's. */
 const FILE =
@@ -118,7 +118,7 @@ const controlClass = (invalid) =>
  */
 const adornedClass = (invalid) =>
 	cx(
-		'flex h-9 w-full max-w-[35rem] items-center rounded-control border bg-surface text-sm shadow-card ss-motion',
+		'flex h-9 w-full max-w-[35rem] items-center rounded-control border bg-surface text-sm ss-motion',
 		'has-[input:focus-visible]:ring-[3px] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:bg-surface-2 has-[input:disabled]:text-muted has-[input:read-only]:bg-surface-2',
 		invalid
 			? 'border-danger has-[input:focus-visible]:border-danger has-[input:focus-visible]:ring-danger/20'
@@ -716,9 +716,9 @@ export function RadioGroup({
 								key={o.value}
 								className={cx(
 									'ss-motion relative flex items-start gap-3 rounded-card border p-3.5',
-									'has-[:checked]:border-primary has-[:checked]:bg-primary-soft/60 has-[:checked]:shadow-card',
+									'has-[:checked]:border-primary has-[:checked]:border-primary has-[:checked]:bg-surface has-[:checked]:ss-hard',
 									'has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-primary/20',
-									off ? 'border-line-soft opacity-60' : 'border-line hover:border-line-strong',
+									off ? 'border-line opacity-60' : 'border-line hover:border-line-strong',
 								)}>
 								{input}
 								<div className="min-w-0 space-y-0.5">
@@ -795,7 +795,7 @@ export function SegmentedControl({
 			onKeyDown={radioKeys(options, value, onChange)}>
 			<div
 				className={cx(
-					'max-w-full flex-wrap gap-0.5 rounded-control border border-line-soft bg-surface-2 p-0.5',
+					'max-w-full flex-wrap gap-0.5 rounded-control border border-line bg-surface-2 p-0.5',
 					block ? 'flex w-full' : 'inline-flex',
 				)}>
 				{options.map((o) => {
@@ -821,8 +821,8 @@ export function SegmentedControl({
 							/>
 							<span
 								className={cx(
-									'ss-motion flex h-7 items-center justify-center gap-1.5 rounded-md px-3 text-label font-medium whitespace-nowrap text-muted',
-									'hover:text-fg peer-checked:bg-surface peer-checked:text-fg peer-checked:shadow-card',
+									'ss-motion flex h-7 items-center justify-center gap-1.5 rounded-control px-3 text-label font-medium whitespace-nowrap text-muted',
+									'hover:text-fg peer-checked:bg-surface peer-checked:text-fg peer-checked:ss-hard',
 									'peer-focus-visible:outline-2 peer-focus-visible:outline-focus',
 								)}>
 								{o.icon ? <Icon name={o.icon} size={14} /> : null}
@@ -972,7 +972,7 @@ export function ChoicePicker({
 						return (
 							<span
 								key={choice}
-								className="inline-flex animate-ss-fade items-center gap-1 rounded-full bg-primary-soft py-0.5 pr-1 pl-2.5 text-xs leading-5 font-medium text-on-primary-soft">
+								className="inline-flex animate-ss-fade items-center gap-1 rounded-control border border-line bg-surface py-0.5 pr-1 pl-2.5 text-xs leading-5 font-medium text-fg ss-hard">
 								{label}
 								<button
 									type="button"
@@ -999,14 +999,14 @@ export function ChoicePicker({
 							addOwn();
 						}
 					}}
-					className="h-9 w-full border-b border-line-soft bg-transparent px-3 text-sm text-fg placeholder:text-muted/70 focus:outline-none"
+					className="h-9 w-full border-b border-line bg-transparent px-3 text-sm text-fg placeholder:text-muted/70 focus:outline-none"
 				/>
 				<div className="max-h-56 overflow-y-auto p-1">
 					{canAdd ? (
 						<button
 							type="button"
 							onClick={addOwn}
-							className="ss-motion flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-primary hover:bg-surface-2">
+							className="ss-motion flex w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left text-sm font-medium text-primary hover:bg-surface-2">
 							<Icon name="plus" size={14} />
 							{addOwnLabel(typed)}
 						</button>
@@ -1021,7 +1021,7 @@ export function ChoicePicker({
 								<label
 									key={o.value}
 									htmlFor={optionId}
-									className="ss-motion flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2">
+									className="ss-motion flex cursor-pointer items-center gap-2.5 rounded-control px-2 py-1.5 text-sm text-fg hover:bg-surface-2">
 									<CheckboxInput id={optionId} checked={on} disabled={o.disabled} onChange={() => toggle(o.value)} />
 									<span className="min-w-0 flex-1 truncate">{o.label}</span>
 									{o.label !== o.value ? <span className="text-xs text-muted tabular-nums">{o.value}</span> : null}

@@ -98,10 +98,7 @@ describe('the dashboard', () => {
 		expect(container.textContent).toContain('Welcome back, Acme');
 		const needs = [...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
 		// grace stays its own line; unfinished setup collapses to one "N steps left" item (checklist still lists each)
-		expect(needs).toEqual([
-			`${TEXTS.title} is in grace until Oct 4, 2026, 10:30 AM EDT`,
-			'3 setup steps left',
-		]);
+		expect(needs).toEqual([`${TEXTS.title} is in grace until Oct 4, 2026, 10:30 AM EDT`, '3 setup steps left']);
 		expect(byText(container, 'Contact support', 'a').getAttribute('href')).toBe('mailto:help@example.com');
 		expect(byText(container, 'See setup', 'a').getAttribute('href')).toBe('#setup-checklist');
 		expect(container.textContent).toContain('Connect Database (MongoDB)');

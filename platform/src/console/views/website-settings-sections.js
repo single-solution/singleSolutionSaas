@@ -196,7 +196,7 @@ function HoursEditor({ hours, onChange, error }) {
 	const B = T.business;
 	return (
 		<div className="space-y-6">
-			<div className="divide-y divide-line-soft border-y border-line-soft">
+			<div className="divide-y divide-line-soft border-y border-line">
 				{B.days.map((name, index) => {
 					const day = index + 1;
 					const rows = hours.weekly.map((window, at) => ({ window, at })).filter(({ window }) => window.day === day);
@@ -505,7 +505,7 @@ export function BrandSection(props) {
 	const B = T.brand;
 	const d = /** @type {WebsiteSettings['brand']} */ (form.draft);
 	const [rows, setRows] = useMapRows(d.theme.colors, (next) => form.change(['theme', 'colors'], next));
-	const accent = d.theme.colors.accent ?? '#2471e7';
+	const accent = d.theme.colors.accent ?? '#0f766e';
 	return (
 		<SectionForm form={form} canWrite={props.canWrite} stale={props.stale} onReload={props.onReload}>
 			<SettingsCard title={B.picturesTitle} description={B.picturesHelp}>
@@ -574,7 +574,7 @@ export function BrandSection(props) {
 						items={rows}
 						max={24}
 						onChange={setRows}
-						newItem={() => /** @type {[string, string]} */ ([`color${rows.length + 1}`, '#2471e7'])}
+						newItem={() => /** @type {[string, string]} */ ([`color${rows.length + 1}`, '#0f766e'])}
 						nameOf={([name], index) => name || String(index + 1)}
 						renderItem={([name, value], index, update) => (
 							<>
@@ -598,10 +598,10 @@ export function BrandSection(props) {
 			<SettingsCard title={B.previewTitle}>
 				<SettingList>
 					<div
-						className="flex flex-wrap items-center gap-4 border border-line-soft p-4"
+						className="flex flex-wrap items-center gap-4 border border-line p-4"
 						style={{
 							background: d.theme.mode === 'dark' ? '#0b1220' : '#ffffff',
-							color: d.theme.mode === 'dark' ? '#f4f6fa' : '#0a1c40',
+							color: d.theme.mode === 'dark' ? '#f4f6fa' : '#0b1220',
 							borderRadius: `${Math.min(24, Math.max(0, Number(d.theme.radius) || 0))}px`,
 							fontFamily: d.theme.fontFamily === 'inherit' ? 'inherit' : d.theme.fontFamily,
 						}}>
@@ -609,7 +609,7 @@ export function BrandSection(props) {
 						<span
 							className="px-4 py-2 text-sm font-medium"
 							style={{
-								background: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#2471e7',
+								background: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#0f766e',
 								color: '#ffffff',
 								borderRadius: `${Math.min(24, Math.max(0, Number(d.theme.radius) || 0))}px`,
 							}}>
@@ -1022,7 +1022,7 @@ export function PagesSection(props) {
 					{d.documents.length === 0 ? (
 						<EmptyState compact icon="list" title={P.noDocuments} />
 					) : (
-						<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+						<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 							{d.documents.map((document, index) => (
 								<Row
 									key={document.key || String(index)}
@@ -1127,7 +1127,7 @@ export function TeamSection(props) {
 					{d.recipients.length === 0 ? (
 						<EmptyState compact icon="users" title={M.noPeople} />
 					) : (
-						<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+						<div className="divide-y divide-line-soft rounded-card border border-line bg-surface">
 							{d.recipients.map((entry, index) => (
 								<Row
 									key={entry.email || entry.phone || String(index)}

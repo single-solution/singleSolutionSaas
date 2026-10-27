@@ -225,13 +225,19 @@ export const createIdentityService = (ctx, options = {}) => {
 		 * @param {{ kind: 'admin' | 'merchant', id: string, body: unknown, meta: Meta }} input `body`: any object holding
 		 *   `password` (and `code` / `recoveryCode`); other members are ignored
 		 */
-		confirmPerson: async ({ kind, id, body, meta }) => {
+		confirmPerson: async ({ kind, id, body, meta, otpOnly = false }) => {
 			const source =
 				typeof body === 'object' && body !== null && !Array.isArray(body)
 					? /** @type {Record<string, unknown>} */ (body)
 					: {};
+			if (otpOnly || (!source.password && (source.code !== undefined || source.recoveryCode !== undefined))) {
+				const parsed = inputs.otpConfirmation({ code: source.code, recoveryCode: source.recoveryCode });
+				if (!parsed.ok) throw problem('validation_failed', 'Enter your two-step code.', { errors: parsed.errors });
+				await accounts.confirmOtp(kind, { ...parsed.value, id }, meta);
+				return;
+			}
 			const parsed = inputs.confirmation({ password: source.password, code: source.code, recoveryCode: source.recoveryCode });
-			if (!parsed.ok) throw problem('validation_failed', 'Confirm with your password.', { errors: parsed.errors });
+			if (!parsed.ok) throw problem('validation_failed', 'Confirm with your two-step code.', { errors: parsed.errors });
 			await accounts.confirm(kind, { ...parsed.value, id }, meta);
 		},
 		/**
@@ -265,6 +271,45 @@ export const createIdentityService = (ctx, options = {}) => {
 				});
 			}
 			return out;
+		},
+		/**
+		 * Developer pack (PLAN §2, §10 A2): aggregated bundle of docs, tokens, endpoints for a website.
+		 * @param {{ merchantId: string, websiteId: string, actor: Actor, meta?: Meta }} input
+		 */
+		developerPack: async ({ merchantId, websiteId, actor, meta = {} }) => {
+			const website = await websites.load(websiteId, merchantId);
+			if (!website) throw problem('not_found', 'Website not found');
+			const on = /** @type {Array<{ productId: string, name?: string, featuresOn?: string[] }>} */ (
+				await ctx.service('commerce').productsForWebsite(merchantId, websiteId)
+			);
+			const listed = await tokens.list({ merchantId, websiteId, productIds: on.map((p) => p.productId) });
+			const catalog = ctx.service('catalog');
+			const docsHubUrl = ctx.config.docsHubUrl || `${ctx.config.portalUrl}/docs`;
+			const products = [];
+			for (const item of on) {
+				const catProduct = await catalog.getProduct(item.productId).catch(() => null);
+				if (!catProduct || catProduct.status !== 'active') continue;
+				const entry = listed.find((e) => e.productId === item.productId);
+				const revealed = await tokens
+					.reveal({ merchantId, websiteId, productId: item.productId, actor, meta: { ...meta, skipAudit: true } })
+					.catch(() => null);
+				products.push({
+					id: item.productId,
+					name: catProduct.name ?? item.name ?? item.productId,
+					docs: catProduct.docsUrl || `${docsHubUrl}/${item.productId}`,
+					openapi: catProduct.openapiUrl || `${docsHubUrl}/${item.productId}/openapi.json`,
+					widget: catProduct.widgetScriptUrl || null,
+					browserToken: entry?.browserToken || null,
+					serverToken: revealed?.serverToken || null,
+					featuresOn: item.featuresOn ?? [],
+				});
+			}
+			await audit(actor, 'pack.generated', { type: 'website', id: websiteId, merchantId, websiteId }, { meta });
+			return {
+				docsHubUrl,
+				domain: website.domain,
+				products,
+			};
 		},
 		// ports
 		sessionActor,

@@ -122,13 +122,15 @@ export const ROLE_PERMISSIONS = Object.freeze({
 	]),
 });
 
-/** What a merchant may do on its own records (PLAN 0.2, merchant column). */
+/** What a merchant may do on its own records (PLAN §7, §10 A3). */
 export const MERCHANT_PERMISSIONS = Object.freeze([
 	P.overviewRead,
 	P.activityRead,
 	P.merchantsRead,
 	P.websitesRead,
 	P.productsOnWebsitesRead,
+	P.productsOnWebsitesWrite,
+	P.productsRead,
 	P.tokensManage,
 	P.tokensReveal,
 	P.dashboardsOpen,

@@ -69,8 +69,8 @@ export const TOOLBAR_TEXTS = Object.freeze({
 });
 
 const CHIP =
-	'ss-motion ss-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-label font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
-const CHIP_ON = 'border-primary/30 bg-primary-soft text-on-primary-soft';
+	'ss-motion ss-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border px-3 text-label font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+const CHIP_ON = 'border-line bg-surface text-fg ss-hard';
 const CHIP_OFF = 'border-line bg-surface text-fg/80 hover:bg-surface-2 hover:text-fg';
 
 /**
@@ -150,7 +150,7 @@ function SearchBox({ search, words }) {
 					type="button"
 					aria-label={words.clearSearch}
 					onClick={() => clear('')}
-					className="ss-motion absolute inset-y-0 right-1.5 my-auto flex size-6 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
+					className="ss-motion absolute inset-y-0 right-1.5 my-auto flex size-6 items-center justify-center rounded-control text-muted hover:bg-surface-2 hover:text-fg">
 					<Icon name="close" size={13} />
 				</button>
 			) : null}
@@ -205,7 +205,7 @@ export function Toolbar({
 			<div
 				data-ss-bulk=""
 				{...(label ? { role: 'group', 'aria-label': label } : {})}
-				className={cx(BAR, 'animate-ss-enter bg-primary-soft text-on-primary-soft', className)}>
+				className={cx(BAR, 'animate-ss-enter border border-line bg-surface text-fg ss-hard', className)}>
 				<p role="status" className="min-w-0 truncate text-sm font-medium">
 					{bulk.count > 0 ? words.selected(bulk.count) : words.nothing}
 				</p>
@@ -314,8 +314,8 @@ export function Toolbar({
 								title={option.label}
 								onClick={() => view.onChange(option.value)}
 								className={cx(
-									'ss-motion ss-press flex size-7 items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-focus',
-									option.value === view.value ? 'bg-surface text-fg shadow-card' : 'text-muted hover:text-fg',
+									'ss-motion ss-press flex size-7 items-center justify-center rounded-control focus-visible:outline-2 focus-visible:outline-focus',
+									option.value === view.value ? 'bg-surface text-fg' : 'text-muted hover:text-fg',
 								)}>
 								{option.icon ? <Icon name={option.icon} size={14} /> : <span className="text-label">{option.label}</span>}
 							</button>
