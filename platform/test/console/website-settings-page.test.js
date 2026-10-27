@@ -18,6 +18,7 @@ import { hoursSummary } from '../../src/console/views/website-settings-sections.
 import { WebsiteView } from '../../src/console/views/websites.js';
 import { startMongo } from '../helpers.js';
 import { buttons, createWorld, dialog, press, pressDialog, quiet, settle, shows, until } from './merchant-harness.js';
+import { testRouter } from './router.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
 	const { testRouter } = await import('./router.js');
@@ -95,13 +96,10 @@ describe('Website settings (jsdom)', () => {
 			expect(shows('Notes needs: currency, country.')).toBe(true);
 			const nav = /** @type {HTMLElement} */ (document.querySelector('nav[aria-label="Website pages"]'));
 			const links = [...nav.querySelectorAll('a')].map((a) => a.textContent?.replace(/\s+/g, ' ').trim());
-			// home + Install / Setup / Usage / Changes, then settings sections (PLAN one-job redesign)
+			// home + Setup sheet, then settings sections (install, usage, changes retired in A1)
 			expect(links).toEqual([
 				'Overview',
-				'Install',
 				'Setup sheet',
-				'Usage details',
-				'Recent changes',
 				'Business',
 				'Brand and look',
 				'Region and formatNeeded by Notes',
@@ -163,11 +161,9 @@ describe('Website settings (jsdom)', () => {
 			expect(shows('Notes needs')).toBe(false);
 			expect(version(1)).toBe(true);
 			expect(buttons('Save changes')).toHaveLength(0);
-			// Recent changes names the section and the fields
+			// Recent changes peer page was retired in A1 and redirects to website home
 			await openPage(x, 'changes');
-			await until(() => shows('Region and format · version 1'));
-			expect(shows('currency')).toBe(true);
-			expect(shows('Shop & Co · Region and format · version 1')).toBe(true);
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/websites/${x.websiteId}`);
 			// the preview of the Format follows the currency
 			await openPage(x, 'settings/region');
 			expect(document.querySelector('[data-preview="money"]')?.textContent).toContain('USD');

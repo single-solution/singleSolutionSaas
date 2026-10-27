@@ -110,7 +110,7 @@ export function ConsoleShell({ me, websites, billing: frameBilling, children, br
 	useNavigationProgress(switching);
 	const [billing, setBilling] = useState(frameBilling);
 	useEffect(() => setBilling(frameBilling), [frameBilling]);
-	if (PUBLIC_PATHS.includes(pathname)) return children;
+	if (PUBLIC_PATHS.includes(pathname) || pathname === '/docs' || pathname.startsWith('/docs/')) return children;
 	const currentWebsiteId = /^\/websites\/([^/?#]+)/.exec(pathname)?.[1] ?? '';
 	const merchant = me?.merchant ?? null;
 	const signOut = async () => {

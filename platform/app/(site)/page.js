@@ -9,7 +9,8 @@ export async function generateMetadata() {
 	const name = branding?.name ? String(branding.name) : 'Single Solution';
 	return {
 		title: name,
-		description: 'Portal · six products · Pocket Operate. The commerce OS under Shopify Basic + apps pricing.',
+		description:
+			'Run your online shop from one place: website, shop tools, payments, chat, messages, and a phone app for staff. Plans follow your account.',
 		robots: { index: true, follow: true },
 	};
 }

@@ -132,11 +132,11 @@ describe('merchant console smoke', () => {
 			expect(selectedText).toContain('Notes');
 			expect(selectedText).toContain('Chatty');
 			expect(selectedText).toContain('No features on');
-			for (const word of ['Settings', 'Install', 'Daily cost', 'Open']) expect(selectedText).toContain(word);
+			for (const word of ['Settings', 'Share with developer', 'Add product', 'Daily cost', 'Open'])
+				expect(selectedText).toContain(word);
 			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}"`); // its row in the list
 			expect(selectedRaw).toContain('id="product-notes"');
 			expect(selectedRaw).not.toContain('role="tab"');
-			expect(selectedText).not.toContain('Add product');
 			expect(selectedText).not.toContain('Remove website');
 			// a part is its own address; one that does not exist says so
 			const brand = await loaders.loadWebsitePage(merchant.api, merchantId, String(site.websiteId), 'settings/brand');

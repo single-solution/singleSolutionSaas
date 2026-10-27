@@ -317,7 +317,7 @@ describe('rights: products on websites, switching features, credits, receipts an
 		return { h, owner, support, finance, merchant, other, as, report };
 	}, [
 		{
-			name: 'Add and remove products on websites (Finance: view; merchant: views own)',
+			name: 'Add and remove products on websites (Finance: view; merchant: adds and removes on own)',
 			columns: {
 				owner: async (x) =>
 					expect(
@@ -334,14 +334,22 @@ describe('rights: products on websites, switching features, credits, receipts an
 					expect((await x.as(x.finance, 'GET', `/v1/merchants/${M1}/websites/${W1}/products`)).status).toBe(200);
 				},
 				merchant: async (x) => {
+					// W2 had PRODUCT removed by support above; merchant adds it to own website
 					expect(
-						(await x.as(x.merchant, 'POST', `/v1/merchants/${M1}/websites/${W1}/products`, { productId: PRODUCT })).status,
-					).toBe(403);
-					expect((await x.as(x.merchant, 'DELETE', `/v1/merchants/${M1}/websites/${W1}/products/${PRODUCT}`)).status).toBe(
-						403,
+						(await x.as(x.merchant, 'POST', `/v1/merchants/${M1}/websites/${W2}/products`, { productId: PRODUCT })).status,
+					).toBe(201);
+					// and removes it from own website
+					expect((await x.as(x.merchant, 'DELETE', `/v1/merchants/${M1}/websites/${W2}/products/${PRODUCT}`)).status).toBe(
+						200,
 					);
 					expect((await x.as(x.merchant, 'GET', `/v1/merchants/${M1}/websites/${W1}/products`)).status).toBe(200);
 					expect((await x.as(x.other, 'GET', `/v1/merchants/${M1}/websites/${W1}/products`)).status).toBe(403);
+					expect(
+						(await x.as(x.other, 'POST', `/v1/merchants/${M1}/websites/${W1}/products`, { productId: PRODUCT })).status,
+					).toBe(403);
+					expect(
+						(await x.as(x.other, 'DELETE', `/v1/merchants/${M1}/websites/${W1}/products/${PRODUCT}`)).status,
+					).toBe(403);
 				},
 			},
 			anonymous: (x) => x.h.call('GET', `/v1/merchants/${M1}/websites/${W1}/products`),

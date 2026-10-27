@@ -29,15 +29,15 @@ describe('commerce routes and tenant isolation', () => {
 		const admin = await h.login({ kind: 'admin', subject: 'adm_owner' });
 		const support = await h.login({ kind: 'admin', subject: 'adm_support' });
 
-		// products on websites: Owner and Support add them; merchants only view (PLAN 0.2)
+		// products on websites: Owner, Support, and merchants on their own sites add them (PLAN A3)
 		const add = (
 			/** @type {Record<string, string>} */ who,
 			/** @type {string} */ merchant,
 			/** @type {string} */ website,
 			/** @type {unknown} */ body,
 		) => h.call('POST', `/v1/merchants/${merchant}/websites/${website}/products`, { headers: { ...who, ...idem() }, body });
-		expect((await add(owner1, M1, W1, { productId: PRODUCT })).status).toBe(403);
-		const created = await add(admin, M1, W1, { productId: PRODUCT });
+		expect((await add(owner2, M1, W1, { productId: PRODUCT })).status).toBe(403);
+		const created = await add(owner1, M1, W1, { productId: PRODUCT });
 		expect(created.status).toBe(201);
 		expect(created.json.product).toMatchObject({ productId: PRODUCT, name: 'Ecommerce', status: 'active', featuresOn: [] });
 		expect((await add(support, M2, W3, { productId: PRODUCT })).status).toBe(201);
@@ -76,11 +76,11 @@ describe('commerce routes and tenant isolation', () => {
 		expect((await h.call('GET', `/v1/merchants/${M2}/websites/${W3}/products`, { headers: owner2 })).json.items).toHaveLength(
 			1,
 		);
-		// removing: Owner and Support; merchants cannot
+		// removing: Owner, Support, and merchants on their own sites (PLAN A3)
 		const remove = (/** @type {Record<string, string>} */ who, /** @type {string} */ productId) =>
 			h.call('DELETE', `/v1/merchants/${M1}/websites/${W2}/products/${productId}`, { headers: who });
-		expect((await remove(owner1, PRODUCT2)).status).toBe(403);
-		expect((await remove(support, PRODUCT2)).json).toEqual({ websiteId: W2, productId: PRODUCT2, status: 'removed' });
+		expect((await remove(owner2, PRODUCT2)).status).toBe(403);
+		expect((await remove(owner1, PRODUCT2)).json).toEqual({ websiteId: W2, productId: PRODUCT2, status: 'removed' });
 		expect((await remove(support, PRODUCT2)).status).toBe(404);
 		expect((await h.call('GET', `/v1/merchants/${M1}/websites/${W2}/products`, { headers: owner1 })).json.items).toEqual([]);
 		expect((await h.portal.shared.audit.list({ merchantId: M1 })).map((a) => a.action)).toEqual(

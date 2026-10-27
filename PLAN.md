@@ -363,9 +363,9 @@ Admins: no password field on Open/critical dialogs. Merchants without 2FA: enabl
 
 | Done? | ID  | Work                                     | Accept when                          |
 | ----- | --- | ---------------------------------------- | ------------------------------------ |
-| ☐     | B1  | Public hub index (active catalog)        | No login; unplaced products readable |
-| ☐     | B2  | Guides/OpenAPI aggregated or linked      | Stable URLs for AI/dev               |
-| ☐     | B3  | Pack includes `docsHubUrl`; console Docs | Pack + UI point at hub               |
+| ☑     | B1  | Public hub index (active catalog)        | No login; unplaced products readable |
+| ☑     | B2  | Guides/OpenAPI aggregated or linked      | Stable URLs for AI/dev               |
+| ☑     | B3  | Pack includes `docsHubUrl`; console Docs | Pack + UI point at hub               |
 
 ### C — Protocol-true
 

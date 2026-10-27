@@ -23,10 +23,14 @@ const config = {
 	// One route handler (app/api/[...path]) serves every server path; the public paths stay as they are. Checked before
 	// the console's catch-all page, which owns every other path.
 	rewrites: async () => ({
-		beforeFiles: ['/v1/:path*', '/branding/logo', '/.well-known/jwks.json'].map((source) => ({
-			source,
-			destination: `/api${source}`,
-		})),
+		beforeFiles: [
+			{ source: '/docs/:productId/openapi.json', destination: '/api/v1/docs/:productId/openapi.json' },
+			{ source: '/docs/openapi.json', destination: '/api/v1/docs/openapi.json' },
+			...['/v1/:path*', '/branding/logo', '/.well-known/jwks.json'].map((source) => ({
+				source,
+				destination: `/api${source}`,
+			})),
+		],
 	}),
 	// `/` is the public marketing site ((site)/page.js). Signed-in merchants are sent to /overview from that page.
 	headers: async () => [
@@ -34,6 +38,7 @@ const config = {
 		{ source: '/api/:path*', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
 		{ source: '/v1/:path*', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
 		{ source: '/.well-known/:path*', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
+		{ source: '/docs/:path*.json', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
 	],
 };
 

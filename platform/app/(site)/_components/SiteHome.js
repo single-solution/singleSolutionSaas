@@ -1,57 +1,29 @@
 'use client';
 
 import Link from 'next/link.js';
-import { useEffect, useRef, useState } from 'react';
-
-const TIERS = [
-	{
-		t: 'Start',
-		price: '$19',
-		d: 'Shop kernel + core ecommerce. Onboard under Shopify Basic — local or international.',
-		items: ['Portal + website', 'Ecommerce essentials', 'Light credits'],
-	},
-	{
-		t: 'Run',
-		price: '$49',
-		d: 'Day-to-day operate — add chat, messaging, or a pay pack without an app invoice.',
-		items: ['Everything in Start', 'One operate pack', 'Staff seats'],
-	},
-	{
-		t: 'Full',
-		price: '$99',
-		d: 'Whole OS. Still priced under a Shopify-shaped Basic + apps basket.',
-		items: ['All six products', 'Pocket Operate', 'Honest usage credits'],
-	},
-];
+import { useEffect, useState } from 'react';
 
 const PACKS = {
-	local: 'jazzcash · easypaisa · whatsapp',
-	intl: 'stripe · paypal · email',
+	local: 'JazzCash · EasyPaisa · WhatsApp',
+	intl: 'Cards · PayPal · Email',
 };
 
 const pad = (n) => String(n).padStart(2, '0');
 
 /**
- * Public marketing home (Unite mockup) — Portal-hosted website.
+ * Public marketing home — Unite layout, plain language for merchants and builders, no competitor brands, no fixed prices.
  * @param {{ brandName?: string }} props
  */
 export function SiteHome({ brandName = 'Single Solution' }) {
 	const [scrolled, setScrolled] = useState(false);
-	const [tier, setTier] = useState(2);
-	const [swap, setSwap] = useState(false);
 	const [clock, setClock] = useState('00:00:00');
 	const [counts, setCounts] = useState({ products: 0, website: 0, tax: 0, desks: 0 });
 	const [orders, setOrders] = useState(128);
 	const [chats, setChats] = useState(14);
 	const [live, setLive] = useState({ orders: true, chats: true });
 	const [region, setRegion] = useState('local');
-	const [termLines, setTermLines] = useState([
-		{ g: true, text: 'ss doctor' },
-		{ dim: true, text: '6 products · portal ok · operate HOT' },
-	]);
+	const [welcomeDone, setWelcomeDone] = useState(false);
 	const [email, setEmail] = useState('');
-	const geoRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-	const panel = TIERS[tier];
 
 	useEffect(() => {
 		const onScroll = () => setScrolled(window.scrollY > 24);
@@ -109,24 +81,6 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 	}, [live]);
 
 	useEffect(() => {
-		const root = geoRef.current;
-		if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-		/** @param {PointerEvent} e */
-		const onMove = (e) => {
-			const r = root.getBoundingClientRect();
-			const x = (e.clientX - r.left) / r.width - 0.5;
-			const y = (e.clientY - r.top) / r.height - 0.5;
-			root.querySelectorAll('.geo i').forEach((node, i) => {
-				const el = /** @type {HTMLElement} */ (node);
-				const m = (i + 1) * 12;
-				el.style.transform = `translate(${x * m}px, ${y * m}px) rotate(${(i + 1) * 8}deg)`;
-			});
-		};
-		root.addEventListener('pointermove', onMove);
-		return () => root.removeEventListener('pointermove', onMove);
-	}, []);
-
-	useEffect(() => {
 		const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 		const nodes = document.querySelectorAll('.ss-site .reveal');
 		if (reduce) {
@@ -148,15 +102,6 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 		return () => io.disconnect();
 	}, []);
 
-	/** @param {number} i */
-	const pickTier = (i) => {
-		setSwap(true);
-		setTimeout(() => {
-			setTier(i);
-			setSwap(false);
-		}, 160);
-	};
-
 	return (
 		<>
 			<div className="wash" aria-hidden="true" />
@@ -169,13 +114,13 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 				<header className="nav glass">
 					<span className="brand">{brandName}</span>
 					<nav>
-						<a href="#basket">Basket</a>
-						<a href="#desks">Desks</a>
-						<a href="#stack">Stack</a>
-						<a href="#plan">Plan</a>
+						<a href="#why">Why us</a>
+						<a href="#how">How it works</a>
+						<a href="#tools">Tools</a>
+						<a href="#start">Get started</a>
 					</nav>
 					<Link className="cta" href="/login">
-						Start
+						Sign in
 					</Link>
 				</header>
 			</div>
@@ -184,123 +129,123 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 				<section className="hero">
 					<div className="hero-copy reveal">
 						<p className="live">
-							<span /> LIVE · PK · UAE · EU · US
+							<span /> For online sellers · Pakistan · UAE · Europe · US
 						</p>
 						<h1>
-							Shopify sells a store.
+							Everything you need to run an online shop —
 							<br />
-							<span className="accent">We sell the stack that runs it.</span>
+							<span className="accent">in one place.</span>
 						</h1>
 						<p className="lede">
-							Portal · six products · Pocket Operate. Land under Basic. Full under Basic + apps — local rails or
-							Stripe, same OS.
+							{brandName} gives you a website, the tools that sell (shop, pay, chat, messages), and a phone app for
+							today&apos;s orders. You add tools to your site once. Your developer connects them with one file. You
+							and your staff handle the day from the phone.
 						</p>
 						<div className="hero-actions">
-							<a className="btn" href="#plan">
-								See Start / Run / Full
+							<a className="btn" href="#why">
+								See how we differ
 							</a>
-							<a className="text-link" href="#basket">
-								Open the basket →
+							<a className="text-link" href="#how">
+								How it works →
 							</a>
 						</div>
 						<div className="metrics">
 							<div className="metric glass reveal" data-d={0}>
 								<b>{counts.products}</b>
-								<span>products</span>
+								<span>built-in tools</span>
 							</div>
 							<div className="metric glass reveal" data-d={1}>
 								<b>{counts.website}</b>
-								<span>website</span>
+								<span>website to manage</span>
 							</div>
 							<div className="metric glass reveal" data-d={2}>
 								<b>{counts.tax}</b>
-								<span>app_tax</span>
+								<span>extra app bills</span>
 							</div>
 							<div className="metric glass reveal" data-d={3}>
 								<b>{counts.desks}</b>
-								<span>desks</span>
+								<span>places to work</span>
 							</div>
 						</div>
 					</div>
 
-					<div className="hero-stage glass reveal" ref={geoRef} data-d={1}>
+					<div className="hero-stage glass reveal" data-d={1}>
 						<div className="stage-chrome">
-							<span className="mono">ss://operate · GRIDLOCK</span>
-							<span className="mono">{clock}</span>
+							<span>Today on your phone</span>
+							<span>{clock}</span>
 						</div>
 						<div className="stage-body">
 							<div className="needs">
-								<p className="label">// NEEDS_YOU</p>
-								<ul>
+								<p className="label">Tap to finish</p>
+								<ul id="needs">
 									<li className="in">
-										<b>IM-2201</b>
-										<span>COD confirm · ₨12,400</span>
-										<em>now</em>
+										<span className="task-kind order">Order</span>
+										<span>Confirm cash on delivery — ₨12,400</span>
+										<em>Now</em>
 									</li>
 									<li className="in">
-										<b>CHAT</b>
-										<span>3 waiting</span>
-										<em>2m</em>
+										<span className="task-kind chat">Chat</span>
+										<span>3 customers waiting for a reply</span>
+										<em>2 min</em>
 									</li>
 									<li className="in">
-										<b>PAY</b>
-										<span>proof review</span>
-										<em>5m</em>
+										<span className="task-kind pay">Pay</span>
+										<span>Check a payment screenshot</span>
+										<em>5 min</em>
 									</li>
 									<li className="in">
-										<b>STOCK</b>
-										<span>3 SKUs under 5</span>
-										<em>12m</em>
+										<span className="task-kind stock">Stock</span>
+										<span>3 products almost sold out</span>
+										<em>12 min</em>
 									</li>
 									<li className="in">
-										<b>WA</b>
-										<span>retry failed send</span>
-										<em>18m</em>
+										<span className="task-kind msg">Message</span>
+										<span>WhatsApp failed — send again</span>
+										<em>18 min</em>
 									</li>
 								</ul>
 							</div>
 							<div className="term">
-								<p className="label">// ONBOARD</p>
-								<div className="term-log">
-									{termLines.map((line, i) => (
-										<p key={i} className={line.dim ? 'dim' : undefined}>
-											{line.g ? <span className="g">$ </span> : null}
-											{line.text}
-										</p>
-									))}
-								</div>
-								<form
-									onSubmit={(e) => {
-										e.preventDefault();
-										const v = email.trim() || 'you@brand.com';
-										setTermLines((lines) => [
-											...lines,
-											{ g: true, text: `ss init --email ${v}` },
-											{ dim: true, text: 'minting developer pack… ok' },
-											{ dim: true, text: 'portal ready · operate HOT' },
-										]);
-										setEmail('');
-									}}>
-									<label>
-										merchant email
-										<input
-											name="email"
-											type="email"
-											placeholder="you@brand.com"
-											autoComplete="email"
-											value={email}
-											onChange={(e) => setEmail(e.target.value)}
-											required
-										/>
-									</label>
-									<button type="submit">run init →</button>
-								</form>
+								<p className="label">New here?</p>
+								{welcomeDone ? (
+									<div className="welcome-done" role="status">
+										<p className="welcome-title">You are set</p>
+										<ul>
+											<li>Account ready</li>
+											<li>Website ready to manage</li>
+											<li>Phone app ready for today&apos;s work</li>
+										</ul>
+										<Link className="btn dark" href="/login">
+											Open Portal
+										</Link>
+									</div>
+								) : (
+									<>
+										<p className="welcome-lead">Enter your work email to see how starting looks.</p>
+										<form
+											id="wizard"
+											onSubmit={(e) => {
+												e.preventDefault();
+												setWelcomeDone(true);
+												setEmail('');
+											}}>
+											<label>
+												Your work email
+												<input
+													name="email"
+													type="email"
+													placeholder="you@yourshop.com"
+													autoComplete="email"
+													value={email}
+													onChange={(e) => setEmail(e.target.value)}
+													required
+												/>
+											</label>
+											<button type="submit">Show me →</button>
+										</form>
+									</>
+								)}
 							</div>
-						</div>
-						<div className="geo" aria-hidden="true">
-							<i className="s1" />
-							<i className="s2" />
-							<i className="s3" />
 						</div>
 					</div>
 				</section>
@@ -308,27 +253,24 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 				<div className="marquee" aria-hidden="true">
 					<div className="track">
 						{[
-							'ACCOUNTS',
-							'ECOMMERCE',
-							'PAYMENTS',
-							'CHAT',
-							'NOTIFICATIONS',
-							'GROWTH',
-							'PORTAL',
-							'OPERATE',
-							'RIFT',
-							'GRIDLOCK',
-							'DEVELOPER_PACK',
+							'Orders',
+							'Chat',
+							'Payments',
+							'WhatsApp',
+							'Your website',
+							'Phone for staff',
+							'Team logins',
+							'Sales & stock',
 						]
 							.concat([
-								'ACCOUNTS',
-								'ECOMMERCE',
-								'PAYMENTS',
-								'CHAT',
-								'NOTIFICATIONS',
-								'GROWTH',
-								'PORTAL',
-								'OPERATE',
+								'Orders',
+								'Chat',
+								'Payments',
+								'WhatsApp',
+								'Your website',
+								'Phone for staff',
+								'Team logins',
+								'Sales & stock',
 							])
 							.map((t, i) => (
 								<span key={`${t}-${i}`}>{t}</span>
@@ -336,131 +278,170 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 					</div>
 				</div>
 
-				<section id="basket" className="block">
+				<section id="why" className="block">
 					<header className="block-head reveal">
-						<p className="eyebrow mono">01 // BASKET_MATH</p>
+						<p className="eyebrow">01 · Why this</p>
 						<h2>
-							Same sticker. <span className="accent">Different basket.</span>
+							A shop page is not enough. <span className="accent">You still need the rest.</span>
 						</h2>
-						<p>Compete on the wired stack — not on undercutting $30 forever.</p>
+						<p>
+							Most platforms give you a storefront. Chat, WhatsApp, local payments, and staff phone work usually
+							mean more apps, more logins, more bills. {brandName} builds those into one system on your website.
+						</p>
 					</header>
 					<div className="why-split reveal">
 						<article className="glass hard">
-							<span className="mono muted">SHOPIFY_$30</span>
-							<p>Kernel. Apps for chat, WhatsApp, local pay.</p>
+							<span className="muted">Store only</span>
+							<p>
+								You get a catalog and checkout. Chat, messages, local pay, and phone work? You buy those
+								separately and glue them together.
+							</p>
 						</article>
-						<div className="vs mono">VS</div>
+						<div className="vs">VS</div>
 						<article className="glass hard hot">
-							<span className="mono lime">SS_FULL</span>
-							<p>Six products wired. Full still under Basic+apps.</p>
+							<span className="lime">{brandName}</span>
+							<p>
+								Six tools on your website, one login to manage them, and a phone app for live orders and chats —
+								built to work together.
+							</p>
 						</article>
 					</div>
 					<div className="table glass hard reveal">
 						<div className="row head">
-							<span>CAPABILITY</span>
-							<span>BASIC</span>
-							<span>SS_FULL</span>
-							<span>+APPS</span>
+							<span>What you need</span>
+							<span>Store alone</span>
+							<span>{brandName}</span>
+							<span>Store + many apps</span>
 						</div>
 						<div className="row">
-							<span>Ecommerce</span>
-							<span className="ok">Kernel</span>
-							<span className="ok">Deep</span>
-							<span className="ok">Kernel+</span>
+							<span>Online shop</span>
+							<span className="ok">Yes</span>
+							<span className="ok">Yes</span>
+							<span className="ok">Yes</span>
 						</div>
 						<div className="row">
-							<span>Local + intl pay</span>
-							<span className="no">Gaps</span>
-							<span className="ok">Payments</span>
-							<span className="mid">Apps</span>
+							<span>Local &amp; card payments</span>
+							<span className="no">Often missing</span>
+							<span className="ok">Included</span>
+							<span className="mid">Extra apps</span>
 						</div>
 						<div className="row">
-							<span>Chat</span>
-							<span className="no">—</span>
-							<span className="ok">Wired</span>
-							<span className="mid">$+/mo</span>
+							<span>Customer chat</span>
+							<span className="no">No</span>
+							<span className="ok">Included</span>
+							<span className="mid">Extra app</span>
 						</div>
 						<div className="row">
-							<span>WhatsApp / SMS</span>
-							<span className="no">—</span>
-							<span className="ok">Notify</span>
-							<span className="mid">$+/mo</span>
+							<span>WhatsApp / SMS / email</span>
+							<span className="no">No</span>
+							<span className="ok">Included</span>
+							<span className="mid">Extra apps</span>
 						</div>
 						<div className="row">
-							<span>Control + phone</span>
-							<span className="no">—</span>
-							<span className="ok">Portal+Operate</span>
-							<span className="mid">Split</span>
+							<span>Phone app for staff</span>
+							<span className="no">No</span>
+							<span className="ok">Included</span>
+							<span className="mid">Usually separate</span>
 						</div>
 						<div className="row">
-							<span>Typical all-in</span>
-							<span className="mid">~$30+</span>
-							<span className="ok">~$99</span>
-							<span className="no">$100–200+</span>
+							<span>How you pay for it</span>
+							<span className="mid">Store + apps</span>
+							<span className="ok">One platform</span>
+							<span className="no">Many vendors</span>
 						</div>
 					</div>
 				</section>
 
-				<section id="desks" className="block band">
+				<section id="how" className="block band">
 					<header className="block-head reveal">
-						<p className="eyebrow mono">02 // THREE_DESKS</p>
-						<h2>Portal · Configure · Operate</h2>
-						<p>Marketing is the promise. These desks are how the day runs.</p>
+						<p className="eyebrow">02 · How it works</p>
+						<h2>Three places. Clear jobs.</h2>
+						<p>
+							Sign in → manage your website → turn tools on → share a file with your developer → run the day on
+							your phone.
+						</p>
 					</header>
 					<div className="desks">
 						<article className="glass hard reveal" data-d={0}>
-							<span className="mono">A · CONTROL</span>
+							<span className="desk-step">1 · Manage</span>
 							<h3>Portal</h3>
-							<p>Website, place products, mint the developer pack. No live queues.</p>
+							<p>
+								Your control screen. Add a website, turn tools on or off, invite staff, and download the file your
+								developer needs. No order queue here.
+							</p>
 						</article>
 						<article className="glass hard reveal" data-d={1}>
-							<span className="mono">B · SETUP</span>
+							<span className="desk-step">2 · Set up</span>
 							<h3>Configure</h3>
-							<p>Product dashboards — settings and texts, never the firehose.</p>
+							<p>
+								Each tool has its own settings screen — texts, options, branding. Change how it works, not the live
+								queue of customers.
+							</p>
 						</article>
 						<article className="glass hard hot reveal" data-d={2}>
-							<span className="mono">C · DAY</span>
-							<h3>Pocket Operate</h3>
-							<p>Needs you. Staff + owner. Act → done.</p>
+							<span className="desk-step">3 · Today</span>
+							<h3>Phone app (Operate)</h3>
+							<p>
+								Where you and staff work during the day: confirm orders, answer chat, check payments. Open a task,
+								finish it, move on.
+							</p>
 						</article>
 					</div>
 					<aside className="pack glass hard reveal">
 						<div className="pack-top">
-							<span className="mono">DEVELOPER_PACK</span>
-							<span className="mono">one JSON · RIFT</span>
+							<span>For your web developer</span>
+							<span>Simple hand-off</span>
 						</div>
-						<pre>
-							<code>{`{
-  "domain": "store.example",
-  "products": [{
-    "id": "ecommerce",
-    "docs": "…/docs",
-    "browserToken": "…",
-    "serverToken": "…"
-  }]
-}`}</code>
-						</pre>
-						<p>Builders get tokens + docs once. Merchants never paste secrets into six dashboards.</p>
+						<div className="share-card">
+							<div className="share-file">
+								<span className="share-icon">file</span>
+								<div>
+									<strong>shop-setup</strong>
+									<em>One download from the Portal</em>
+								</div>
+							</div>
+							<ol className="share-steps">
+								<li>
+									<strong>You download</strong>
+									<span>from the Portal</span>
+								</li>
+								<li>
+									<strong>You send it</strong>
+									<span>to your developer</span>
+								</li>
+								<li>
+									<strong>They connect</strong>
+									<span>your shop tools</span>
+								</li>
+							</ol>
+						</div>
+						<p>
+							You do not paste passwords into many screens. One file holds what your developer needs to connect the
+							shop. You keep running the business from the Portal and the phone app.
+						</p>
 					</aside>
 				</section>
 
-				<section id="stack" className="block">
+				<section id="tools" className="block">
 					<header className="block-head reveal">
-						<p className="eyebrow mono">03 // STACK</p>
-						<h2>Placed on the website — not installed from a store</h2>
-						<p>Six first-party products. Region packs for rails — not forks.</p>
+						<p className="eyebrow">03 · Tools</p>
+						<h2>Six tools you turn on for your website</h2>
+						<p>
+							They are ours — not a third-party app store. Pick local or international payment and message options;
+							same platform either way.
+						</p>
 					</header>
 					<div className="products">
 						{[
-							['01', 'Accounts', 'Roles · staff · phone'],
-							['02', 'Ecommerce', 'Catalog → returns'],
-							['03', 'Payments', 'Local + international'],
-							['04', 'Chat', 'Inbox on the phone'],
-							['05', 'Notifications', 'WA · SMS · email · push'],
-							['06', 'Growth', 'Pixels · SEO · consent'],
+							['01', 'Accounts', 'Staff logins, roles, and phone access'],
+							['02', 'Ecommerce', 'Catalog, cart, orders, and returns'],
+							['03', 'Payments', 'Local wallets and international cards'],
+							['04', 'Chat', 'Customer inbox on desktop and phone'],
+							['05', 'Notifications', 'WhatsApp, SMS, email, and push'],
+							['06', 'Growth', 'Tracking pixels, SEO helpers, consent'],
 						].map(([n, title, blurb], i) => (
 							<article key={n} className="glass hard reveal" data-d={i}>
-								<span className="mono">{n}</span>
+								<span className="tool-n">{n}</span>
 								<h3>{title}</h3>
 								<p>{blurb}</p>
 							</article>
@@ -468,96 +449,77 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 					</div>
 					<div className="streams">
 						<article className="glass hard reveal" data-d={0}>
-							<header className="mono">STREAM // ORDERS</header>
+							<header>Open orders</header>
 							<p className="num">{orders}</p>
-							<p className="meta">open · last 24h</p>
+							<p className="meta">last 24 hours</p>
 							<button type="button" onClick={() => setLive((L) => ({ ...L, orders: !L.orders }))}>
-								{live.orders ? 'toggle live' : 'paused'}
+								{live.orders ? 'Pause demo' : 'Resume demo'}
 							</button>
 						</article>
 						<article className="glass hard reveal" data-d={1}>
-							<header className="mono">STREAM // CHAT</header>
+							<header>Waiting chats</header>
 							<p className="num">{chats}</p>
-							<p className="meta">waiting · staff</p>
+							<p className="meta">for your staff</p>
 							<button type="button" onClick={() => setLive((L) => ({ ...L, chats: !L.chats }))}>
-								{live.chats ? 'toggle live' : 'paused'}
+								{live.chats ? 'Pause demo' : 'Resume demo'}
 							</button>
 						</article>
 						<article className="glass hard reveal" data-d={2}>
-							<header className="mono">REGION</header>
+							<header>Your region</header>
 							<div className="pills">
 								<button
 									type="button"
 									className={`pill${region === 'local' ? ' on' : ''}`}
 									onClick={() => setRegion('local')}>
-									local
+									Local
 								</button>
 								<button
 									type="button"
 									className={`pill${region === 'intl' ? ' on' : ''}`}
 									onClick={() => setRegion('intl')}>
-									intl
+									International
 								</button>
 							</div>
-							<p className="mono meta">{PACKS[region]}</p>
+							<p className="meta">{PACKS[region]}</p>
 						</article>
 					</div>
 				</section>
 
-				<section id="plan" className="block band">
+				<section id="start" className="block band">
 					<header className="block-head reveal">
-						<p className="eyebrow mono">04 // PLAN_RAIL · RIFT</p>
-						<h2>Land cheap. Full still under the real bill.</h2>
-						<p>Slider and rail are one instrument — same panel.</p>
+						<p className="eyebrow">04 · Get started</p>
+						<h2>Sign in when you are ready.</h2>
+						<p>
+							Pricing follows your account — there is no fixed public price list here. Once you have access, open
+							the Portal, add tools to your website, and use the phone app for the day.
+						</p>
 					</header>
 					<div className="plan glass hard reveal">
-						<div className="slider-wrap">
-							<input
-								type="range"
-								min={0}
-								max={2}
-								step={1}
-								value={tier}
-								aria-label="Pricing tier"
-								onChange={(e) => pickTier(Number(e.target.value))}
-							/>
-							<div className="tier-labels">
-								<span>Start $19</span>
-								<span>Run $49</span>
-								<span>Full $99</span>
-							</div>
-						</div>
 						<div className="rail" role="list">
 							{[
-								['START', 'land under Basic'],
-								['RUN', 'operate day-to-day'],
-								['FULL', 'whole OS'],
-							].map(([label, em], i) => (
-								<button
-									key={label}
-									type="button"
-									className={`stop${tier === i ? ' on' : ''}`}
-									onClick={() => pickTier(i)}>
+								['Portal', 'Website, tools, and team'],
+								['Tools', 'Turn on · set up · share'],
+								['Phone', 'Orders and chats today'],
+							].map(([label, em]) => (
+								<div key={label} className="stop on" role="listitem">
 									<span className="dot" />
 									<strong>{label}</strong>
 									<em>{em}</em>
-								</button>
+								</div>
 							))}
 						</div>
-						<div className={`plan-panel${swap ? ' swap' : ''}`}>
-							<div className="plan-price">
-								<span>{panel.t}</span>
-								<b>{panel.price}</b>
-								<small>/mo</small>
-							</div>
-							<p>{panel.d}</p>
-							<ul>
-								{panel.items.map((item) => (
-									<li key={item}>{item}</li>
-								))}
+						<div className="plan-panel">
+							<p id="pd">
+								One login for the shop owner. Six tools on the website. Live work stays in the phone app — not
+								spread across many vendor screens.
+							</p>
+							<ul id="pl">
+								<li>Portal — manage the website and tools</li>
+								<li>Configure — change settings and texts</li>
+								<li>Phone app — handle today&apos;s work</li>
 							</ul>
 							<Link className="btn dark" href="/login">
-								Continue with this plan
+								Sign in to the Portal
 							</Link>
 						</div>
 					</div>
@@ -567,7 +529,7 @@ export function SiteHome({ brandName = 'Single Solution' }) {
 			<footer className="reveal">
 				<div>
 					<strong>{brandName}</strong>
-					<span className="mono">PORTAL SITE · UNITE</span>
+					<span className="foot-tag">Website · Tools · Phone app</span>
 				</div>
 				<Link href="/login">Sign in →</Link>
 			</footer>

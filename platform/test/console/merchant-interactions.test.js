@@ -363,9 +363,9 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		cleanup();
 		render(<WebsiteView {...await loaders.loadWebsitePage(e.api, beta.merchantId, String(site.websiteId), '')} />);
 		expect(document.querySelector('h1')?.textContent).toBe('beta.example.com');
-		// home is product rows; Settings / Install are header actions (Setup sheet overflows to More)
+		// home is product rows; Settings / Share with developer are header actions (Setup sheet overflows to More)
 		expect(document.querySelector('#product-notes')).not.toBeNull();
-		for (const label of ['Settings', 'Install', 'Open Notes']) expect(buttons(label).length).toBeGreaterThan(0);
+		for (const label of ['Settings', 'Share with developer', 'Open Notes']) expect(buttons(label).length).toBeGreaterThan(0);
 		expect(shows('Recent changes')).toBe(false);
 		await press('More actions');
 		expect(menuItems()).toEqual(expect.arrayContaining(['Setup sheet', 'Visit website', 'Copy domain']));

@@ -203,8 +203,8 @@ describe('admin console smoke', () => {
 			const siteRaw = ssr(<AdminWebsiteView detail={siteDetail} admin={owner} />);
 			expect(text(siteRaw)).toContain('Notes');
 			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}"`);
-			// home is product rows only; Settings / Install are header actions (Setup sheet may sit in More)
-			for (const word of ['Add product', 'Settings', 'Install', 'Open']) expect(text(siteRaw)).toContain(word);
+			// home is product rows only; Settings / Share with developer are header actions (Setup sheet may sit in More)
+			for (const word of ['Add product', 'Settings', 'Share with developer', 'Open']) expect(text(siteRaw)).toContain(word);
 			expect(siteRaw).toContain('id="product-notes"');
 			expect(siteRaw).toContain('aria-label="Actions for Notes"');
 			expect(text(siteRaw)).not.toContain('Status and spend');
@@ -412,9 +412,8 @@ describe('admin console smoke', () => {
 			expect(ssr(<MerchantsView detail={supportDetail} admin={support} />)).toContain('Add website');
 			const supportSiteDetail = await admin.loadAdminWebsite(supportBrowser.api, merchantId, supportSite, '', support);
 			const supportHtml = ssr(<AdminWebsiteView detail={supportSiteDetail} admin={support} />);
-			for (const word of ['Add product', 'aria-label="Actions for Notes"', 'Settings', 'Install'])
+			for (const word of ['Add product', 'aria-label="Actions for Notes"', 'Settings', 'Share with developer'])
 				expect(supportHtml).toContain(word);
-			expect(supportHtml).toMatch(/Setup sheet|Install/);
 			expect(supportHtml).not.toContain('Add credits');
 			const supportProducts = await admin.loadProducts(supportBrowser.api);
 			const supportProductsHtml = text(ssr(<ProductsView {...supportProducts} admin={support} />));
@@ -442,7 +441,8 @@ describe('admin console smoke', () => {
 					admin={finance}
 				/>,
 			);
-			expect(financeUsage).toContain('Usage details');
+			// usage was retired in A1 and redirects to home with product rows
+			expect(financeUsage).toContain('Notes');
 			expect(ssr(<MerchantsView detail={financeDetail} admin={finance} />)).toContain('Add credits');
 			for (const word of ['Setup sheet', 'Settings', 'Recent changes', 'Add product', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);

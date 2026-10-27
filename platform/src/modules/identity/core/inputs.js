@@ -329,20 +329,39 @@ export const inputs = Object.freeze({
 	websiteRemove: /** @type {(b: unknown) => Parsed<{ confirm: string }>} */ ((b) => object(b, { confirm: text(253) })),
 	// a fresh confirmation: password and/or two-step OTP
 	confirmation: /** @type {(b: unknown) => Parsed<SecondFactor & { password?: string }>} */ (
-		(b) => object(b, { password: { optional: password }, code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
+		(b) => {
+			const parsed = object(b, {
+				password: { optional: password },
+				code: { optional: otp },
+				recoveryCode: { optional: recoveryCode },
+			});
+			if (!parsed.ok) return parsed;
+			const v = /** @type {Record<string, unknown>} */ (parsed.value);
+			if (!v.password && !v.code && !v.recoveryCode) {
+				return { ok: false, errors: [{ path: '/password', message: 'is required' }] };
+			}
+			return parsed;
+		}
 	),
 	// step-up confirmation: OTP only (A5)
 	otpConfirmation: /** @type {(b: unknown) => Parsed<SecondFactor>} */ (
 		(b) => object(b, { code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
 	),
 	tokenRegenerate: /** @type {(b: unknown) => Parsed<SecondFactor & { kind: 'browser' | 'server', password?: string }>} */ (
-		(b) =>
-			object(b, {
+		(b) => {
+			const parsed = object(b, {
 				kind: oneOf(/** @type {const} */ (['browser', 'server'])),
 				password: { optional: password },
 				code: { optional: otp },
 				recoveryCode: { optional: recoveryCode },
-			})
+			});
+			if (!parsed.ok) return parsed;
+			const v = /** @type {Record<string, unknown>} */ (parsed.value);
+			if (v.kind === 'server' && !v.password && !v.code && !v.recoveryCode) {
+				return { ok: false, errors: [{ path: '/password', message: 'is required' }] };
+			}
+			return parsed;
+		}
 	),
 	reason: /** @type {(b: unknown) => Parsed<{ reason: string }>} */ ((b) => object(b, { reason: text(500) })),
 	adminInvite: /** @type {(b: unknown) => Parsed<{ email: string, role: 'owner' | 'support' | 'finance', copy?: boolean }>} */ (

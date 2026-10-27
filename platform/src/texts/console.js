@@ -1677,3 +1677,46 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		row: (/** @type {string} */ section, /** @type {number} */ version) => `${section} · version ${version}`,
 	}),
 });
+
+/** Public Docs hub texts (PLAN §10 B1, B2). */
+export const DOCS_HUB = Object.freeze({
+	title: 'Docs',
+	hubTitle: 'Documentation Hub',
+	hubIntro:
+		'Public developer guides and OpenAPI 3.0 references for Single Solution products. Build storefronts with zero Portal login.',
+	quickstart: 'Quickstart for Developers and AI',
+	quickstartDevPackTitle: '1. Developer Pack',
+	quickstartDevPackDesc:
+		'Ask your merchant or site admin to click "Share with developer" on the website page to download website-bound browser & server tokens.',
+	quickstartWidgetsTitle: '2. Embed Widgets',
+	quickstartWidgetsDesc: 'Include the product widget script in your website HTML with data-token="<browserToken>".',
+	quickstartApisTitle: '3. Backend APIs',
+	quickstartApisDesc: 'Authenticate server-to-server calls to product APIs with Authorization: Bearer <serverToken>.',
+	quickstartOpenapiTitle: '4. Stable OpenAPI',
+	quickstartOpenapiDesc: 'Consume OpenAPI 3.0 specs directly for client generation, AI agent tooling, and API reference.',
+	activeProducts: 'Active Products',
+	activeProductsDesc:
+		'All active catalog products available on Single Solution. Documentation is public even if not placed on a website.',
+	readGuide: 'Read Guide',
+	openapiSpec: 'OpenAPI Spec',
+	catalogOpenapi: 'Catalog OpenAPI Index',
+	backToHub: 'Back to Docs Hub',
+	features: 'Features',
+	prerequisites: 'Prerequisites & Connections',
+	database: 'Database',
+	storage: 'Storage',
+	crossLinks: 'Cross-Product Links',
+	widgetIntegration: 'Widget Integration',
+	apiReference: 'API Reference',
+	widgetScriptUrl: 'Widget Script URL',
+	widgetScriptLoading: 'Loading',
+	noOperations: 'No operations documented yet.',
+	noFeatures: 'No features defined.',
+	signIn: 'Sign In',
+	marketing: 'Home',
+	required: 'Required',
+	optional: 'Optional',
+	none: 'None',
+	copySnippet: 'Copy Snippet',
+	copied: 'Copied!',
+});

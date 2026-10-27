@@ -446,7 +446,8 @@ export const createWorld = async ({ db }) => {
 		portal,
 		mail,
 		tokenOf,
-		lastOtp: (/** @type {string} */ [to]) => {
+		/** @param {string} [to] */
+		lastOtp: (to) => {
 			const m = [...mail].reverse().find((item) => (!to || item.to === to) && item.template === 'step_up_otp');
 			return m ? String(m.data?.otp ?? '') : null;
 		},

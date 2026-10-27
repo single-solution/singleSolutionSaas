@@ -32,6 +32,7 @@ export const PUBLIC_PATHS = Object.freeze([
 	'/set-password',
 	'/confirm-email',
 	'/shared-setup',
+	'/docs',
 ]);
 
 /** Merchant console page URLs. */
@@ -59,10 +60,17 @@ export const routes = Object.freeze({
 	accountPart: (/** @type {string} */ part) => (part === 'details' ? '/account' : `/account#${e(part)}`),
 	/** Public Docs hub */
 	docs: () => '/docs',
+	docsProduct: (/** @type {string} */ id) => `/docs/${e(id)}`,
+	docsProductOpenapi: (/** @type {string} */ id) => `/docs/${e(id)}/openapi.json`,
+	docsOpenapi: () => '/docs/openapi.json',
 });
 
 /** Portal API paths used by the consoles. */
 export const api = Object.freeze({
+	docs: () => '/v1/docs',
+	docsProduct: (/** @type {string} */ id) => `/v1/docs/${e(id)}`,
+	docsProductOpenapi: (/** @type {string} */ id) => `/v1/docs/${e(id)}/openapi.json`,
+	docsOpenapi: () => '/v1/docs/openapi.json',
 	me: () => '/v1/me',
 	stepUpOtp: () => '/v1/me/step-up-otp',
 	signOut: () => '/v1/auth/sign-out',

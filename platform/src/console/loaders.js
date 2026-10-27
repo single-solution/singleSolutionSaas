@@ -264,3 +264,24 @@ export const loadWebsitePage = async (api, merchantId, websiteId, part) => {
 		setup,
 	};
 };
+
+/**
+ * Public Docs hub loader (active catalog products, PLAN §10 B1).
+ * @param {ConsoleApi} api
+ */
+export const loadDocsHub = async (api) => {
+	const res = await api.get(paths.docs());
+	if (!res.ok) return { ok: /** @type {const} */ (false), status: res.status, problem: res.problem };
+	return { ok: /** @type {const} */ (true), items: itemsOf(res) };
+};
+
+/**
+ * Public Docs product detail loader (PLAN §10 B2).
+ * @param {ConsoleApi} api
+ * @param {string} productId
+ */
+export const loadDocsProduct = async (api, productId) => {
+	const res = await api.get(paths.docsProduct(productId));
+	if (!res.ok) return { ok: /** @type {const} */ (false), status: res.status, problem: res.problem };
+	return { ok: /** @type {const} */ (true), product: res.data?.product ?? null };
+};

@@ -16,6 +16,9 @@
  *   waiting notices).
  * @module
  */
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { validateManifest, validatePriceReport } from '@ss/contracts';
 import { checkUrl, createOutboundPolicy, isNetError, safeFetch as netFetch, textOf } from '@ss/net';
 import {
@@ -203,6 +206,115 @@ export const createCatalogService = (ctx, options = {}) => {
 	/** @param {string} productId */
 	const load = async (productId) =>
 		(await products.findOne({ _id: productId })) ?? fail('not_found', `No product ${productId} is connected.`);
+
+	/**
+	 * Try to load in-tree openapi.json for a product (fallback when upstream is unreachable or in-repo).
+	 * @param {string} productId
+	 * @returns {Promise<Record<string, any> | null>}
+	 */
+	const loadInTreeOpenapi = async (productId) => {
+		const candidates = [
+			resolve(process.cwd(), 'products', productId, 'openapi.json'),
+			resolve(process.cwd(), '..', 'products', productId, 'openapi.json'),
+		];
+		for (const candidate of candidates) {
+			try {
+				if (existsSync(/*turbopackIgnore: true*/ candidate))
+					return JSON.parse(await readFile(/*turbopackIgnore: true*/ candidate, 'utf8'));
+			} catch {
+				// ignore
+			}
+		}
+		return null;
+	};
+
+	/**
+	 * Try to load in-tree guide.json for a product.
+	 * @param {string} productId
+	 * @returns {Promise<Record<string, any> | null>}
+	 */
+	const loadInTreeGuide = async (productId) => {
+		const candidates = [
+			resolve(process.cwd(), 'products', productId, 'docs', 'guide.json'),
+			resolve(process.cwd(), '..', 'products', productId, 'docs', 'guide.json'),
+		];
+		for (const candidate of candidates) {
+			try {
+				if (existsSync(/*turbopackIgnore: true*/ candidate))
+					return JSON.parse(await readFile(/*turbopackIgnore: true*/ candidate, 'utf8'));
+			} catch {
+				// ignore
+			}
+		}
+		return null;
+	};
+
+	/**
+	 * Fetch product OpenAPI spec from baseUrl via safeFetch, or fall back to in-tree / manifest.
+	 * @param {Record<string, any>} doc
+	 * @returns {Promise<Record<string, any>>}
+	 */
+	const fetchProductOpenapi = async (doc) => {
+		const productId = String(doc._id);
+		try {
+			const answer = await safeFetch(
+				`${doc.baseUrl}/openapi.json`,
+				{ method: 'GET', maxBytes: 2 * 1024 * 1024, redirect: 'error' },
+				policy,
+			);
+			if (answer.status === 200) {
+				const parsed = JSON.parse(textOf(answer));
+				if (isObject(parsed)) return parsed;
+			}
+		} catch {
+			// upstream fetch failed or offline; fall through
+		}
+		const inTree = await loadInTreeOpenapi(productId);
+		if (inTree) return inTree;
+		const manifest = manifestOf(doc);
+		return {
+			openapi: '3.1.0',
+			info: {
+				title: `${manifest.name} API`,
+				version: manifest.version,
+				description: /** @type {any} */ (manifest).description ?? `${manifest.name} API reference`,
+			},
+			servers: [{ url: String(doc.baseUrl) }],
+			paths: {},
+		};
+	};
+
+	/**
+	 * Extract operations from an OpenAPI spec for route reference.
+	 * @param {Record<string, any>} openapi
+	 * @returns {Array<{ method: string, path: string, summary: string, auth: string, permission: string, feature: string, description: string }>}
+	 */
+	const extractOperations = (openapi) => {
+		const paths = isObject(openapi.paths) ? openapi.paths : {};
+		/** @type {Array<{ method: string, path: string, summary: string, auth: string, permission: string, feature: string, description: string }>} */
+		const ops = [];
+		for (const [pathStr, methods] of Object.entries(paths)) {
+			if (!isObject(methods)) continue;
+			for (const [method, op] of Object.entries(methods)) {
+				if (!isObject(op)) continue;
+				ops.push({
+					method: method.toUpperCase(),
+					path: pathStr,
+					summary: typeof op.summary === 'string' ? op.summary : '',
+					auth: typeof op['x-ss-auth'] === 'string' ? op['x-ss-auth'] : '',
+					permission: typeof op['x-ss-permission'] === 'string' ? op['x-ss-permission'] : '',
+					feature:
+						typeof op['x-ss-feature'] === 'string'
+							? op['x-ss-feature']
+							: Array.isArray(op['x-ss-feature'])
+								? op['x-ss-feature'].join(', ')
+								: 'always',
+					description: typeof op.description === 'string' ? op.description : '',
+				});
+			}
+		}
+		return ops;
+	};
 
 	/**
 	 * Canonical, SSRF-checked base URL (before any request).
@@ -587,6 +699,117 @@ export const createCatalogService = (ctx, options = {}) => {
 		productKeys: async (productId) => {
 			const doc = await products.findOne({ _id: productId });
 			return doc ? createKeyResolver({ jwks: createJwks([doc.publicJwk]) }) : null;
+		},
+		/**
+		 * Public docs hub index list of active products (PLAN §10 B1).
+		 */
+		docsList: async () => {
+			const docs = await products.find({ status: 'active' }).sort({ _id: 1 }).limit(MOST_PRODUCTS).toArray();
+			return Promise.all(
+				docs.map(async (doc) => {
+					const manifest = manifestOf(doc);
+					const guide = await loadInTreeGuide(String(doc._id));
+					const description =
+						/** @type {any} */ (manifest).description ||
+						(typeof guide?.intro === 'string' ? guide.intro : '') ||
+						`${manifest.name} product for Single Solution`;
+					return {
+						productId: String(doc._id),
+						name: manifest.name,
+						version: manifest.version,
+						description,
+						status: /** @type {'active'} */ (doc.status),
+						features: manifest.features ?? [],
+						needs: manifest.needs ?? { database: true, storage: 'none' },
+						links: { offers: manifest.links?.offers ?? [], needs: manifest.links?.needs ?? [] },
+						widgetScriptUrl: absolute(manifest.widgetScriptUrl, doc.baseUrl),
+						widgetScriptLoading: manifest.widgetScriptLoading ?? 'async',
+						docsUrl: `/docs/${doc._id}`,
+						openapiUrl: `/docs/${doc._id}/openapi.json`,
+					};
+				}),
+			);
+		},
+		/**
+		 * Public documentation details for an active product (PLAN §10 B2).
+		 * @param {string} productId
+		 */
+		docsProduct: async (productId) => {
+			const doc = await load(productId);
+			if (doc.status !== 'active') fail('not_found', `Product ${productId} is not active in the catalog.`);
+			const manifest = manifestOf(doc);
+			const [guide, openapi] = await Promise.all([loadInTreeGuide(productId), fetchProductOpenapi(doc)]);
+			const operations = extractOperations(openapi);
+			const description =
+				/** @type {any} */ (manifest).description ||
+				(typeof guide?.intro === 'string' ? guide.intro : '') ||
+				`${manifest.name} product for Single Solution`;
+			return {
+				product: {
+					productId: String(doc._id),
+					name: manifest.name,
+					version: manifest.version,
+					description,
+					status: doc.status,
+					baseUrl: String(doc.baseUrl),
+					features: manifest.features ?? [],
+					needs: manifest.needs ?? { database: true, storage: 'none' },
+					links: { offers: manifest.links?.offers ?? [], needs: manifest.links?.needs ?? [] },
+					widgetScriptUrl: absolute(manifest.widgetScriptUrl, doc.baseUrl),
+					widgetScriptLoading: manifest.widgetScriptLoading ?? 'async',
+					docsUrl: `/docs/${doc._id}`,
+					openapiUrl: `/docs/${doc._id}/openapi.json`,
+					guide: guide
+						? {
+								title: guide.title ?? manifest.name,
+								intro: guide.intro ?? '',
+								localhost: guide.localhost ?? '',
+								install: guide.install ?? '',
+								features: guide.features ?? {},
+								build: guide.build ?? {},
+							}
+						: null,
+					operations,
+				},
+			};
+		},
+		/**
+		 * Return the product's OpenAPI spec (PLAN §10 B2).
+		 * @param {string} productId
+		 */
+		productOpenapi: async (productId) => {
+			const doc = await load(productId);
+			if (doc.status !== 'active') fail('not_found', `Product ${productId} is not active in the catalog.`);
+			return fetchProductOpenapi(doc);
+		},
+		/**
+		 * Aggregated catalog OpenAPI index for all active products (PLAN §10 B2).
+		 */
+		catalogOpenapi: async () => {
+			const docs = await products.find({ status: 'active' }).sort({ _id: 1 }).limit(MOST_PRODUCTS).toArray();
+			const docsHubUrl = `${ctx.config.portalUrl}/docs`;
+			const activeList = docs.map((doc) => {
+				const manifest = manifestOf(doc);
+				return {
+					productId: String(doc._id),
+					name: manifest.name,
+					version: manifest.version,
+					description: /** @type {any} */ (manifest).description ?? `${manifest.name} product`,
+					docsUrl: `${docsHubUrl}/${doc._id}`,
+					openapiUrl: `${docsHubUrl}/${doc._id}/openapi.json`,
+				};
+			});
+			return {
+				openapi: '3.1.0',
+				info: {
+					title: 'Single Solution Catalog OpenAPI',
+					version: '1.0.0',
+					description: 'Aggregated OpenAPI 3.0 catalog for all active Single Solution products.',
+				},
+				servers: [{ url: ctx.config.portalUrl, description: 'Portal host' }],
+				'x-products': activeList,
+				paths: {},
+			};
 		},
 	};
 };

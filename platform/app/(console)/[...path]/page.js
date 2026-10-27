@@ -20,6 +20,8 @@ import Overview, { metadata as OverviewMeta } from '../_views/overview.js';
 import Websites, { metadata as WebsitesMeta } from '../_views/websites.js';
 import WebsitesWebsiteId, { metadata as WebsitesWebsiteIdMeta } from '../_views/websites-websiteId.js';
 import SharedSetup, { metadata as SharedSetupMeta } from '../_views/shared-setup.js';
+import Docs, { metadata as DocsMeta } from '../_views/docs.js';
+import DocsProduct, { metadata as DocsProductMeta } from '../_views/docs-product.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +47,8 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['websites', ':websiteId', ':part'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, 'screen'],
 	[['websites', ':websiteId', ':part', ':sub'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, 'screen'],
 	[['shared-setup'], SharedSetup, SharedSetupMeta, 'public'],
+	[['docs'], Docs, DocsMeta, 'public'],
+	[['docs', ':productId'], DocsProduct, DocsProductMeta, 'public'],
 ]);
 
 /**

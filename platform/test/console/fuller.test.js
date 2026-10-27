@@ -324,11 +324,9 @@ describe('fuller Portal screens (jsdom)', () => {
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(shop.b.api, merchantId, websiteId, '')} />);
 			expect(document.querySelector('#product-notes')).not.toBeNull();
 			cleanup();
-			// usage is its own address (not loaded on the product-rows home)
+			// usage redirects to the website home (PLAN §1, §10 A1)
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(shop.b.api, merchantId, websiteId, 'usage')} />);
-			await until(() =>
-				shop.b.calls.some((/** @type {any} */ c) => c.path.startsWith(`/v1/merchants/${merchantId}/usage?websiteId=`) && c.status === 200),
-			);
+			await until(() => pushed(`/websites/${websiteId}`));
 			cleanup();
 			withToasts(<CreditsView {...await loaders.loadCredits(shop.b.api, merchantId, {})} />);
 			await pressMenu('Period', 'Last month (UTC)');

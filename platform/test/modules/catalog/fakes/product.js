@@ -180,6 +180,22 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 				if (tamper.blueprint === 'other_id') return answer(200, { ...blueprintOf(websiteId), productId: 'someone-else' });
 				return answer(200, blueprintOf(websiteId));
 			}
+			if (req.method === 'GET' && req.url === '/openapi.json') {
+				return answer(200, {
+					openapi: '3.1.0',
+					info: { title: `${current.name} API`, version: current.version },
+					paths: {
+						'/v1/test': {
+							get: {
+								summary: 'Test operation',
+								'x-ss-auth': 'server',
+								'x-ss-permission': 'test.read',
+								'x-ss-feature': 'always',
+							},
+						},
+					},
+				});
+			}
 			answer(404);
 		});
 	});

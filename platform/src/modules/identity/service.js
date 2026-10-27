@@ -302,8 +302,8 @@ export const createIdentityService = (ctx, options = {}) => {
 				products.push({
 					id: item.productId,
 					name: catProduct.name ?? item.name ?? item.productId,
-					docs: catProduct.docsUrl || `${docsHubUrl}/${item.productId}`,
-					openapi: catProduct.openapiUrl || `${docsHubUrl}/${item.productId}/openapi.json`,
+					docs: `${docsHubUrl}/${item.productId}`,
+					openapi: `${docsHubUrl}/${item.productId}/openapi.json`,
 					widget: catProduct.widgetScriptUrl || null,
 					browserToken: entry?.browserToken || null,
 					serverToken: revealed?.serverToken || null,

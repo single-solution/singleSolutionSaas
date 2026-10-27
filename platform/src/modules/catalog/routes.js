@@ -69,6 +69,36 @@ export const catalogRoutes = (service, commerce, identity) => {
 		});
 
 	return [
+		// ---------------------------------------------------------------- Docs hub (public, PLAN §10 B1, B2)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/docs',
+			auth: 'public',
+			rateLimit: { limit: 120, windowMs: 60_000 },
+			handler: async () => ok({ items: await service.docsList() }),
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/docs/openapi.json',
+			auth: 'public',
+			rateLimit: { limit: 120, windowMs: 60_000 },
+			handler: async () => ok(await service.catalogOpenapi()),
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/docs/:productId',
+			auth: 'public',
+			rateLimit: { limit: 120, windowMs: 60_000 },
+			handler: async (c) => ok(await service.docsProduct(/** @type {string} */ (c.params.productId))),
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/docs/:productId/openapi.json',
+			auth: 'public',
+			rateLimit: { limit: 120, windowMs: 60_000 },
+			handler: async (c) => ok(await service.productOpenapi(/** @type {string} */ (c.params.productId))),
+		}),
+
 		// ---------------------------------------------------------------- catalog products (merchants and admins for Add product)
 		defineRoute({
 			method: 'GET',
@@ -77,8 +107,7 @@ export const catalogRoutes = (service, commerce, identity) => {
 			permission: P.productsRead,
 			handler: async (c) => {
 				const status = c.query.status ?? 'active';
-				if (status !== 'active' && status !== 'inactive')
-					return problem('bad_request', 'status must be active or inactive');
+				if (status !== 'active' && status !== 'inactive') return problem('bad_request', 'status must be active or inactive');
 				const items = await service.listProducts({ status });
 				return ok({
 					items: items.map((p) => ({
