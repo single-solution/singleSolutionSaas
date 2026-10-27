@@ -36,7 +36,7 @@ export const confirmationErrors = (problem) => {
  * form behind it can show the reason.
  * @param {{ open: boolean, title: string, help: string, confirmLabel: string, danger?: boolean, expected?: string,
  *   twoStepOn?: boolean, otpOnly?: boolean,
- *   send: (confirmation: { password?: string, code?: string, recoveryCode?: string }) => Promise<{ ok: true } | { ok: false, problem: Problem }>,
+ *   send: (confirmation: any) => Promise<{ ok: true } | { ok: false, problem: Problem } | any>,
  *   onClose: () => void, onDone: () => void }} props
  */
 export function ConfirmChange({

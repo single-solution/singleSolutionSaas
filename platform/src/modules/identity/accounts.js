@@ -178,6 +178,44 @@ export const createAccounts = (deps) => {
 		return { kind: /** @type {Kind} */ (kind), doc };
 	};
 
+	/**
+	 * Step-up confirmation with OTP (authenticator code or recovery code, or email OTP) (PLAN §8, §10 A5).
+	 * A stolen session without OTP proof is rejected.
+	 * @param {Kind} kind
+	 * @param {SecondFactor & { id: string }} input
+	 * @param {Meta} meta
+	 */
+	const confirmOtp = async (kind, { id, code, recoveryCode }, meta) => {
+		const doc = await loadLogin(kind, id);
+		const key = throttleKey(kind, doc.email);
+		await throttleGate(ctx, key, meta);
+		if (code === undefined && recoveryCode === undefined) {
+			throw problem('validation_failed', 'Enter a two-step code or a recovery code.', {
+				errors: [{ path: '/code', message: 'is required' }],
+			});
+		}
+		if (doc.totp) {
+			const passed = await checkSecondFactor(ctx, logins(kind), doc, {
+				...(code === undefined ? {} : { code }),
+				...(recoveryCode === undefined ? {} : { recoveryCode }),
+			});
+			if (!passed) return failAttempt(ctx, key, meta, BAD_CODE);
+			await ctx.loginThrottle.recordSuccess({ account: key });
+			return;
+		}
+		// Merchant/Admin without TOTP: check active step_up_otp token
+		const tokenDoc = await repo.peekTokenBySubject('step_up_otp', `${kind}:${doc._id}`);
+		if (tokenDoc && tokenDoc.data?.otp && code && tokenDoc.data.otp === code) {
+			await repo.consumeTokenBySubject('step_up_otp', `${kind}:${doc._id}`);
+			await ctx.loginThrottle.recordSuccess({ account: key });
+			return;
+		}
+		if (tokenDoc) {
+			return failAttempt(ctx, key, meta, BAD_CODE);
+		}
+		throw problem('two_step_required', 'Two-step verification is required for step-up.');
+	};
+
 	return Object.freeze({
 		setupLink,
 
@@ -500,7 +538,7 @@ export const createAccounts = (deps) => {
 				await proveLogin(kind, doc, password, { ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) }, meta);
 				return;
 			}
-			await accounts.confirmOtp(kind, { id, code, recoveryCode }, meta);
+			await confirmOtp(kind, { id, code, recoveryCode }, meta);
 		},
 
 		/**
@@ -510,44 +548,15 @@ export const createAccounts = (deps) => {
 		 * @param {SecondFactor & { id: string }} input
 		 * @param {Meta} meta
 		 */
-		confirmOtp: async (kind, { id, code, recoveryCode }, meta) => {
-			const doc = await loadLogin(kind, id);
-			const key = throttleKey(kind, doc.email);
-			await throttleGate(ctx, key, meta);
-			if (code === undefined && recoveryCode === undefined) {
-				throw problem('validation_failed', 'Enter a two-step code or a recovery code.', {
-					errors: [{ path: '/code', message: 'is required' }],
-				});
-			}
-			if (doc.totp) {
-				const passed = await checkSecondFactor(ctx, logins(kind), doc, {
-					...(code === undefined ? {} : { code }),
-					...(recoveryCode === undefined ? {} : { recoveryCode }),
-				});
-				if (!passed) return failAttempt(ctx, key, meta, BAD_CODE);
-				await ctx.loginThrottle.recordSuccess({ account: key });
-				return;
-			}
-			// Merchant/Admin without TOTP: check active step_up_otp token
-			const tokenDoc = await repo.peekTokenBySubject('step_up_otp', `${kind}:${doc._id}`);
-			if (tokenDoc && tokenDoc.data?.otp && code && tokenDoc.data.otp === code) {
-				await repo.consumeTokenBySubject('step_up_otp', `${kind}:${doc._id}`);
-				await ctx.loginThrottle.recordSuccess({ account: key });
-				return;
-			}
-			if (tokenDoc) {
-				return failAttempt(ctx, key, meta, BAD_CODE);
-			}
-			throw problem('two_step_required', 'Two-step verification is required for step-up.');
-		},
+		confirmOtp,
 
 		/**
 		 * Send a single-use step-up OTP email for an account without TOTP (PLAN §8 A5).
 		 * @param {Kind} kind
 		 * @param {string} id
-		 * @param {Meta} meta
+		 * @param {Meta} [meta]
 		 */
-		sendStepUpOtp: async (kind, id, meta) => {
+		sendStepUpOtp: async (kind, id, meta = {}) => {
 			const doc = await loadLogin(kind, id);
 			const otp = String(Math.floor(100000 + Math.random() * 900000));
 			const tokenPlaintext = newToken(ctx.randomBytes);
@@ -562,6 +571,7 @@ export const createAccounts = (deps) => {
 				template: 'step_up_otp',
 				data: { otp, brand: ctx.config.settings.branding.name },
 			});
+			await audit(actorOf(kind, doc), 'login.step_up_otp_sent', targetOf(kind, doc), { meta });
 			return { sent: true };
 		},
 

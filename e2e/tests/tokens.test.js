@@ -153,4 +153,45 @@ describe('tokens of a product on a website', () => {
 		// the browser token is untouched
 		expect((await sys.tokens(m.merchantId, websiteId)).browser).toBe(before.browser);
 	});
+
+	it('developer pack (A2 + A5): OTP step-up returns complete pack; stolen cookie without OTP denied', async () => {
+		const packPath = `/v1/merchants/${m.merchantId}/websites/${websiteId}/pack`;
+
+		// 1. Session alone (stolen cookie) without OTP proof is refused
+		const noOtp = await m.client.post(packPath, {});
+		expect(noOtp.status).toBeGreaterThanOrEqual(400);
+
+		// 2. Wrong OTP is refused
+		const wrongOtp = await m.client.post(packPath, { code: '000000' });
+		expect(wrongOtp.status).toBeGreaterThanOrEqual(400);
+
+		// 3. Request step-up OTP -> sent to merchant's email
+		const requestOtp = await m.client.post('/v1/me/step-up-otp', {});
+		expect(requestOtp.status).toBe(200);
+		const otp = sys.lastOtp(m.email);
+		expect(otp).toBeTruthy();
+
+		// 4. Submit valid OTP -> receives developer pack JSON matching PLAN §2 shape
+		const packRes = await m.client.post(packPath, { code: otp });
+		expect(packRes.status).toBe(200);
+		expect(packRes.json).toMatchObject({
+			docsHubUrl: expect.stringContaining('/docs'),
+			domain: DOMAIN,
+			products: expect.arrayContaining([
+				expect.objectContaining({
+					id: 'notes',
+					name: 'Notes',
+					browserToken: expect.any(String),
+					serverToken: expect.any(String),
+				}),
+			]),
+		});
+
+		// 5. Download query returns attachment headers with fresh OTP
+		await m.client.post('/v1/me/step-up-otp', {});
+		const freshOtp = sys.lastOtp(m.email);
+		const downloadRes = await m.client.post(`${packPath}?download=1`, { code: freshOtp });
+		expect(downloadRes.status).toBe(200);
+		expect(downloadRes.headers.get('content-disposition')).toBe(`attachment; filename="developer-pack-${DOMAIN}.json"`);
+	});
 });

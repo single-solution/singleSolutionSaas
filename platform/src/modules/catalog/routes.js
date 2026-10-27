@@ -85,7 +85,7 @@ export const catalogRoutes = (service, commerce, identity) => {
 						productId: p.productId,
 						name: p.name,
 						status: p.status,
-						features: p.features,
+						features: /** @type {any} */ (p).features,
 					})),
 				});
 			},

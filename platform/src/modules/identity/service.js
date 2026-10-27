@@ -222,7 +222,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		 * A fresh confirmation of the signed-in person before a change that must not happen from a stolen session: their
 		 * current password, and a two-step or recovery code while two-step is on. 422 for a body that is not one; 401/403
 		 * and throttling as signing in.
-		 * @param {{ kind: 'admin' | 'merchant', id: string, body: unknown, meta: Meta }} input `body`: any object holding
+		 * @param {{ kind: 'admin' | 'merchant', id: string, body: unknown, meta: Meta, otpOnly?: boolean }} input `body`: any object holding
 		 *   `password` (and `code` / `recoveryCode`); other members are ignored
 		 */
 		confirmPerson: async ({ kind, id, body, meta, otpOnly = false }) => {
@@ -277,21 +277,27 @@ export const createIdentityService = (ctx, options = {}) => {
 		 * @param {{ merchantId: string, websiteId: string, actor: Actor, meta?: Meta }} input
 		 */
 		developerPack: async ({ merchantId, websiteId, actor, meta = {} }) => {
-			const website = await websites.load(websiteId, merchantId);
+			const website = await websites.loadWebsite(websiteId, merchantId);
 			if (!website) throw problem('not_found', 'Website not found');
 			const on = /** @type {Array<{ productId: string, name?: string, featuresOn?: string[] }>} */ (
 				await ctx.service('commerce').productsForWebsite(merchantId, websiteId)
 			);
 			const listed = await tokens.list({ merchantId, websiteId, productIds: on.map((p) => p.productId) });
 			const catalog = ctx.service('catalog');
-			const docsHubUrl = ctx.config.docsHubUrl || `${ctx.config.portalUrl}/docs`;
+			const docsHubUrl = /** @type {any} */ (ctx.config).docsHubUrl || `${ctx.config.portalUrl}/docs`;
 			const products = [];
 			for (const item of on) {
 				const catProduct = await catalog.getProduct(item.productId).catch(() => null);
 				if (!catProduct || catProduct.status !== 'active') continue;
 				const entry = listed.find((e) => e.productId === item.productId);
 				const revealed = await tokens
-					.reveal({ merchantId, websiteId, productId: item.productId, actor, meta: { ...meta, skipAudit: true } })
+					.reveal({
+						merchantId,
+						websiteId,
+						productId: item.productId,
+						actor,
+						meta: /** @type {any} */ ({ ...meta, skipAudit: true }),
+					})
 					.catch(() => null);
 				products.push({
 					id: item.productId,
@@ -304,7 +310,7 @@ export const createIdentityService = (ctx, options = {}) => {
 					featuresOn: item.featuresOn ?? [],
 				});
 			}
-			await audit(actor, 'pack.generated', { type: 'website', id: websiteId, merchantId, websiteId }, { meta });
+			await deps.audit(actor, 'pack.generated', { type: 'website', id: websiteId, merchantId, websiteId }, { meta });
 			return {
 				docsHubUrl,
 				domain: website.domain,

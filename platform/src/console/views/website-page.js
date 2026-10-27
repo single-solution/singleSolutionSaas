@@ -7,7 +7,7 @@
  * person may do follows `can`; the Portal checks every right again.
  * @module
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
 	ActionMenu,
 	Button,
@@ -48,24 +48,6 @@ import { AddProductDrawer, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from 
 
 /** No changes yet: one array, so a page without Recent changes does not reset its state on every render. */
 const NO_CHANGES = /** @type {any[]} */ ([]);
-
-/**
- * Recent changes of the website settings as a timeline: who changed which section, what changed and when.
- * @param {{ changes: Array<{ at: string, version: number, section: string, changed: string[], who: { name: string | null } | null }> }} props
- */
-function ChangesTimeline({ changes }) {
-	return (
-		<Timeline
-			empty={T.changes.empty}
-			items={changes.map((change) => ({
-				key: `${change.version}-${change.at}`,
-				who: change.who?.name || WEBSITE.bySystem,
-				what: `${T.changes.row(/** @type {Record<string, string>} */ (T.sections)[change.section] ?? change.section, change.version)} · ${T.changes.fields(change.changed)}`,
-				at: change.at,
-			}))}
-		/>
-	);
-}
 
 /**
  * @typedef {object} WebsitePageProps
@@ -187,11 +169,13 @@ export function WebsitePageView({
 	const own = kind === 'settings' ? 'settings' : kind === 'setup' ? 'setup' : null;
 	const onSetup = own === 'setup' && setupState.sheet !== null;
 
+	const redirected = useRef('');
 	useEffect(() => {
-		if (parsed?.kind === 'redirect') {
+		if (parsed?.kind === 'redirect' && redirected.current !== part) {
+			redirected.current = part;
 			nav.go(hrefOf(parsed.to));
 		}
-	}, [parsed, hrefOf, nav]);
+	}, [parsed?.kind, parsed && 'to' in parsed ? parsed.to : '', part, hrefOf, nav]);
 
 	// what stands in place of the body when the address is not a page of this website or the person may not see it
 	/** @type {string | null} */
@@ -252,15 +236,17 @@ export function WebsitePageView({
 				body: confirmation,
 			});
 			if (!result.ok) return result;
-			const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `developer-pack-${website.domain}.json`;
-			document.body.appendChild(a);
-			a.click();
-			a.remove();
-			URL.revokeObjectURL(url);
+			if (typeof URL.createObjectURL === 'function') {
+				const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `developer-pack-${website.domain}.json`;
+				document.body.appendChild(a);
+				a.click();
+				a.remove();
+				URL.revokeObjectURL(url);
+			}
 			toast.show({ title: WEBSITE.developerPackDownloaded });
 			setSharingPack(false);
 			return { ok: /** @type {const} */ (true) };
@@ -343,11 +329,6 @@ export function WebsitePageView({
 						icon: /** @type {const} */ ('arrowDown'),
 						onClick: () => setSharingPack(true),
 					},
-					{
-						label: WEBSITE.setupSheet,
-						icon: /** @type {const} */ ('layers'),
-						onClick: () => nav.go(hrefOf('setup')),
-					},
 				]
 			: []),
 		...(hasSettings
@@ -359,10 +340,19 @@ export function WebsitePageView({
 					},
 				]
 			: []),
+		...(can.tokens
+			? [
+					{
+						label: WEBSITE.setupSheet,
+						icon: /** @type {const} */ ('layers'),
+						onClick: () => nav.go(hrefOf('setup')),
+					},
+				]
+			: []),
 		{
 			label: WEBSITE.docs,
 			icon: /** @type {const} */ ('external'),
-			onClick: () => void window.open(routes.docs, '_blank', 'noopener,noreferrer'),
+			onClick: () => void window.open(routes.docs(), '_blank', 'noopener,noreferrer'),
 		},
 	];
 	/** @type {import('@ss/ui').PageActions} */

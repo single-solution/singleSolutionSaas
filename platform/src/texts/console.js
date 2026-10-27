@@ -296,7 +296,7 @@ export const WEBSITE = Object.freeze({
 	shareWithDeveloper: 'Share with developer',
 	developerPack: 'Developer pack',
 	developerPackHelp: 'Enter your two-step code to download the developer pack. A stolen session cannot read tokens alone.',
-	downloadPack: 'Download pack',
+	downloadPack: 'Download developer pack',
 	developerPackDownloaded: 'Developer pack downloaded.',
 	installCeremony: 'Install',
 	installCeremonyHelp: 'Get the widget script and tokens once. Reveal and regenerate still ask for your two-step code.',

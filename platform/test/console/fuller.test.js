@@ -327,7 +327,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			// usage is its own address (not loaded on the product-rows home)
 			withToasts(<WebsiteView {...await loaders.loadWebsitePage(shop.b.api, merchantId, websiteId, 'usage')} />);
 			await until(() =>
-				shop.b.calls.some((c) => c.path.startsWith(`/v1/merchants/${merchantId}/usage?websiteId=`) && c.status === 200),
+				shop.b.calls.some((/** @type {any} */ c) => c.path.startsWith(`/v1/merchants/${merchantId}/usage?websiteId=`) && c.status === 200),
 			);
 			cleanup();
 			withToasts(<CreditsView {...await loaders.loadCredits(shop.b.api, merchantId, {})} />);

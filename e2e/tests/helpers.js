@@ -662,6 +662,12 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		waitingNotices,
 		activity,
 		startOtherProduct,
+		mailer,
+		/** Read the last step-up OTP sent to an email. @param {string} [to] */
+		lastOtp: (to) => {
+			const m = [...mailer.sent].reverse().find((item) => (!to || item.to === to) && item.template === 'step_up_otp');
+			return m ? String(m.data?.otp ?? '') : null;
+		},
 		/** Make the product unreachable (it answers 503 to everything) or reachable again. @param {boolean} value */
 		setReachable: (value) => {
 			reachable = value;

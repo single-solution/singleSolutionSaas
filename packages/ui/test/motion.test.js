@@ -222,10 +222,11 @@ describe('navigation feedback', () => {
 		const marker = /** @type {HTMLElement} */ (nav.firstElementChild);
 		expect(marker.style.opacity).toBe('1');
 		const b = /** @type {HTMLElement} */ (nav.querySelector('a[href="/b"]'));
-		expect(b.className).not.toContain('text-on-primary-soft');
+		expect(b.className).toContain('text-muted');
 		click(b);
 		expect(onNavigate).toHaveBeenCalledWith('/b');
-		expect(b.className).toContain('text-on-primary-soft');
+		expect(b.className).not.toContain('text-muted');
+		expect(b.className).toContain('text-fg');
 		rerender(
 			<AppShell sections={sections('/b')} linkAs={RouterLink} themeToggle={false}>
 				<p>page</p>
@@ -237,7 +238,7 @@ describe('navigation feedback', () => {
 		act(() => {
 			a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
 		});
-		expect(a.className).not.toContain('text-on-primary-soft');
+		expect(a.className).toContain('text-muted');
 		rerender(
 			<AppShell sections={sections('/none')} linkAs={RouterLink} themeToggle={false}>
 				<p>page</p>

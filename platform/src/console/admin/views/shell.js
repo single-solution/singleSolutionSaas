@@ -143,7 +143,7 @@ export function AdminShell({ admin, twoStepRequired = false, attention = 0, bran
 					sidebarFooter={({ rail }) => (
 						<div className="space-y-0.5">
 							<a
-								href={routes.docs}
+								href={routes.docs()}
 								title={WEBSITE.docs}
 								target="_blank"
 								rel="noopener noreferrer"

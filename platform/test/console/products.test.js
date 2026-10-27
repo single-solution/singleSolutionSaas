@@ -97,27 +97,27 @@ describe('admin Products (jsdom)', () => {
 			fillDialog('Product URL', delta.url);
 			fillDialog('Connect secret', 'not the secret');
 			await pressDialog('Connect');
-			await ownerBrowser.waitCall('POST', '/v1/admin/products', (st) => st === 422);
+			await ownerBrowser.waitCall('POST', '/v1/admin/products', (/** @type {any} */ st) => st === 422);
 			fillDialog('Connect secret', 'w'.repeat(40));
 			await pressDialog('Connect');
-			await ownerBrowser.waitCall('POST', '/v1/admin/products', (st) => st === 401);
+			await ownerBrowser.waitCall('POST', '/v1/admin/products', (/** @type {any} */ st) => st === 401);
 			expect(dialog().querySelector('[role="alert"]')).not.toBeNull();
 			// an unreachable address
 			fillDialog('Product URL', 'http://127.0.0.1:1');
 			fillDialog('Connect secret', delta.secret);
 			await pressDialog('Connect');
-			await until(() => ownerBrowser.calls.some((c) => c.path === '/v1/admin/products' && c.status === 502));
+			await until(() => ownerBrowser.calls.some((/** @type {any} */ c) => c.path === '/v1/admin/products' && c.status === 502));
 			// an id already connected: use Reconnect
 			fillDialog('Product URL', notes.url);
 			fillDialog('Connect secret', notes.secret);
 			await pressDialog('Connect');
-			await until(() => ownerBrowser.calls.some((c) => c.path === '/v1/admin/products' && c.status === 409));
+			await until(() => ownerBrowser.calls.some((/** @type {any} */ c) => c.path === '/v1/admin/products' && c.status === 409));
 			await until(() => shows('This product is already connected. Open it and use Reconnect.'));
 			// a new product: connected inactive, then its page opens
 			fillDialog('Product URL', delta.url);
 			fillDialog('Connect secret', delta.secret);
 			await pressDialog('Connect');
-			const created = await ownerBrowser.waitCall('POST', '/v1/admin/products', (st) => st === 201);
+			const created = await ownerBrowser.waitCall('POST', '/v1/admin/products', (/** @type {any} */ st) => st === 201);
 			expect(created.body.product).toMatchObject({ productId: 'delta', name: 'Delta', status: 'inactive' });
 			await until(() => shows('Delta connected. It stays inactive until you set it active.'));
 			cleanup();
@@ -163,18 +163,18 @@ describe('admin Products (jsdom)', () => {
 			await press('Open as admin');
 			fillDialog('Your password', ownerBrowser.password);
 			await pressDialog('Open configure');
-			const launched = await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/launch', (st) => st === 200);
+			const launched = await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/launch', (/** @type {any} */ st) => st === 200);
 			expect(open).toHaveBeenCalledWith(launched.body.url, '_blank', 'noopener,noreferrer');
 			expect(claimsOf(launched.body.url)).toMatchObject({ kind: 'admin', admin: { role: 'owner', websiteId: null } });
 
 			// Set inactive, then active again
 			await press('Set inactive');
-			await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/status', (st) => st === 200);
+			await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/status', (/** @type {any} */ st) => st === 200);
 			await until(() => shows('The product is inactive'));
 			expect(buttons('Set active')).toHaveLength(1);
 			await press('Set active');
 			await until(
-				() => ownerBrowser.calls.filter((c) => c.path === '/v1/admin/products/notes/status' && c.status === 200).length === 2,
+				() => ownerBrowser.calls.filter((/** @type {any} */ c) => c.path === '/v1/admin/products/notes/status' && c.status === 200).length === 2,
 			);
 			await until(() => shows('The product is active'));
 
@@ -189,10 +189,10 @@ describe('admin Products (jsdom)', () => {
 			expect(shows('Enter the connect secret.')).toBe(true);
 			fillDialog('Connect secret', 'w'.repeat(40));
 			await pressDialog('Reconnect');
-			await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/reconnect', (st) => st === 401);
+			await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/reconnect', (/** @type {any} */ st) => st === 401);
 			fillDialog('Connect secret', notes.secret);
 			await pressDialog('Reconnect');
-			await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/reconnect', (st) => st === 200);
+			await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/reconnect', (/** @type {any} */ st) => st === 200);
 			await until(() => shows('Reconnected.'));
 			expect(shows('Reconnected')).toBe(true);
 

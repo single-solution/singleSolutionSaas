@@ -258,7 +258,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn =
 		toast.show(ok ? { title: WEBSITE.copied } : { tone: 'danger', title: WEBSITE.copyFailed });
 	};
 	/** Send the confirmation with the action; the dialog stays open, with the reason under its field, when refused. */
-	const confirm = async (/** @type {{ password: string, code: string }} */ { password, code }) => {
+	const confirm = async (/** @type {{ password?: string, code: string }} */ { password, code }) => {
 		const action = asking;
 		if (!action) return;
 		setBusy(true);

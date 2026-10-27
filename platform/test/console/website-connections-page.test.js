@@ -136,7 +136,7 @@ describe('Data and files (jsdom)', () => {
 			expect(stored.ok && /** @type {any} */ (stored).data.database.set).toBe(true);
 			expect(JSON.stringify(/** @type {any} */ (stored).data)).not.toContain('Sup3rSecret');
 			// the Portal e-mailed the merchant, without the value
-			expect(x.w.mail.some((mail) => mail.template === 'connection_changed')).toBe(true);
+			expect(x.w.mail.some((/** @type {any} */ mail) => mail.template === 'connection_changed')).toBe(true);
 			expect(JSON.stringify(x.w.mail)).not.toContain('Sup3rSecret');
 		} finally {
 			restore();

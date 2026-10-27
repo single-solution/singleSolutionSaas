@@ -187,7 +187,7 @@ describe('Setup page (jsdom)', () => {
 			await until(() => shows('The JSON is in your clipboard.'));
 			expect(JSON.parse(String(/** @type {any} */ (writeText.mock.calls[0])?.[0])).schema).toBe('ss.blueprint/1');
 			await press('Refresh');
-			await b.waitCall('GET', `/v1/merchants/${merchantId}/websites/${websiteId}/setup?fresh=1`, (s) => s === 200);
+			await b.waitCall('GET', `/v1/merchants/${merchantId}/websites/${websiteId}/setup?fresh=1`, (/** @type {any} */ s) => s === 200);
 			await until(() => shows('Setup gathered again.'));
 
 			// share links: refused days, then a link without values, shown once and listed
@@ -202,7 +202,7 @@ describe('Setup page (jsdom)', () => {
 				/** @type {HTMLElement} */ (dialog().querySelector('[role="switch"]')).click();
 			});
 			await pressDialog('Create link');
-			const made = await b.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (s) => s === 201);
+			const made = await b.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (/** @type {any} */ s) => s === 201);
 			expect(made.body.link).toMatchObject({ values: false, install: true });
 			await until(() => dialog().textContent?.includes('Share link created'));
 			expect(dialog().textContent).toContain(made.body.url);
@@ -245,7 +245,7 @@ describe('Setup page (jsdom)', () => {
 			);
 			await press('Create share link');
 			await pressDialog('Create link');
-			await ownerBrowser.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (s) => s === 201);
+			await ownerBrowser.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (/** @type {any} */ s) => s === 201);
 			await until(() => dialog().textContent?.includes('Share link created'));
 			await closeDialog();
 			await until(() => shows('Made by an admin · Shows everything'));
@@ -261,7 +261,7 @@ describe('Setup page (jsdom)', () => {
 			const financeSetup = await admin.loadAdminWebsite(finance.b.api, merchantId, websiteId, 'setup', finance.admin);
 			withToasts(<AdminWebsiteView detail={financeSetup} admin={finance.admin} />);
 			expect(shows('This page does not exist.')).toBe(true);
-			expect(finance.b.calls.some((c) => c.path.includes('/setup'))).toBe(false);
+			expect(finance.b.calls.some((/** @type {any} */ c) => c.path.includes('/setup'))).toBe(false);
 		} finally {
 			restore();
 			await w.close();
@@ -363,7 +363,7 @@ describe('Setup page (jsdom)', () => {
 			const saved = await b.waitCall(
 				'PUT',
 				`/v1/merchants/${merchantId}/websites/${websiteId}/setup/profile`,
-				(s) => s === 200,
+				(/** @type {any} */ s) => s === 200,
 			);
 			expect(saved.body.website.profile).toEqual({
 				sells: ['physical'],
@@ -426,11 +426,11 @@ describe('Setup page (jsdom)', () => {
 			const switched = await ownerBrowser.waitCall(
 				'POST',
 				`/v1/merchants/${merchantId}/websites/${websiteId}/setup/features`,
-				(s) => s === 200,
+				(/** @type {any} */ s) => s === 200,
 			);
 			expect(switched.body.added).toEqual(['inbox']);
 			await until(() => shows('Switched on: Notes inbox.'));
-			expect(notes.switchCalls.map((call) => call.body.features)).toEqual([['inbox']]);
+			expect(notes.switchCalls.map((/** @type {any} */ call) => call.body.features)).toEqual([['inbox']]);
 			// the product refuses: said in a toast
 			notes.tamper.switchOn = 'refuse';
 			await pressMenu('Actions for Notes inbox', 'Switch on');

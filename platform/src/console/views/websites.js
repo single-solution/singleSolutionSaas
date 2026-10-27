@@ -317,7 +317,7 @@ const troubleOf = (cards) => {
  * (`fromList`) the first website is open straight away on wide screens, and a phone shows the list alone. A search and
  * status chips narrow the list.
  * @param {{ rows: Array<{ website: any, cards: ProductCard[] }>, websiteId: string, fromList?: boolean, part?: string,
- *   settings?: any, setup?: any, merchantId: string, twoStepOn?: boolean }} props
+ *   settings?: any, setup?: any, addable?: any, merchantId: string, twoStepOn?: boolean }} props
  */
 function WebsitesScreen({
 	rows,

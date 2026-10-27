@@ -249,7 +249,17 @@ export const browserOf = (portal, password = 'correct horse battery') => {
 		await settle(3);
 		return /** @type {(typeof calls)[number]} */ (found);
 	};
-	return { jar, calls, password, fetch: fetchImpl, api, waitCall, use: () => vi.stubGlobal('fetch', fetchImpl) };
+	return {
+		jar,
+		calls,
+		password,
+		fetch: fetchImpl,
+		api,
+		waitCall,
+		use: () => vi.stubGlobal('fetch', fetchImpl),
+		world: /** @type {any} */ (null),
+		totpSecret: /** @type {string | null} */ (null),
+	};
 };
 
 /** The Portal modules with outbound calls allowed to loopback hosts (fake products run on 127.0.0.1). */
@@ -309,7 +319,7 @@ export const createWorld = async ({ db }) => {
 	/** @type {Array<Awaited<ReturnType<typeof startFakeProduct>>>} */
 	const products = [];
 	/** @type {any} */
-	let world;
+	const world = {};
 
 	// the first admin (an Owner, created from the sign-in page) seeds the world
 	const ownerBrowser = browserOf(portal, 'owner password 123!');
@@ -432,11 +442,11 @@ export const createWorld = async ({ db }) => {
 		return secret;
 	};
 
-	world = {
+	Object.assign(world, {
 		portal,
 		mail,
 		tokenOf,
-		lastOtp: (to) => {
+		lastOtp: (/** @type {string} */ [to]) => {
 			const m = [...mail].reverse().find((item) => (!to || item.to === to) && item.template === 'step_up_otp');
 			return m ? String(m.data?.otp ?? '') : null;
 		},
@@ -453,7 +463,7 @@ export const createWorld = async ({ db }) => {
 		close: async () => {
 			for (const product of products.splice(0)) await product.close();
 		},
-	};
+	});
 	ownerBrowser.world = world;
 	return world;
 };

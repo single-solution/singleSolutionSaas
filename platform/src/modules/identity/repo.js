@@ -127,6 +127,10 @@ export const createRepo = (ctx) => {
 			const doc = await tokens.findOne({ _id: hashToken(secret, purpose, value), purpose });
 			return doc && doc.expireAt.getTime() > ctx.now() ? doc : null;
 		},
+		/**
+		 * @param {TokenPurpose} purpose
+		 * @param {string} subject
+		 */
 		peekTokenBySubject: async (purpose, subject) => {
 			const doc = await tokens.findOne({ purpose, subject });
 			return doc && doc.expireAt.getTime() > ctx.now() ? doc : null;
@@ -143,6 +147,10 @@ export const createRepo = (ctx) => {
 			const { deletedCount } = await tokens.deleteOne({ _id: id, purpose });
 			return deletedCount === 1 ? doc : null;
 		},
+		/**
+		 * @param {TokenPurpose} purpose
+		 * @param {string} subject
+		 */
 		consumeTokenBySubject: async (purpose, subject) => {
 			const doc = await tokens.findOne({ purpose, subject });
 			if (!doc || doc.expireAt.getTime() <= ctx.now()) return null;

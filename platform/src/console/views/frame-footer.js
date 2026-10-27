@@ -26,7 +26,7 @@ export function FrameFooter({ rail, balance = null, help = null }) {
 	return (
 		<div className="space-y-0.5">
 			<a
-				href={routes.docs}
+				href={routes.docs()}
 				title={WEBSITE.docs}
 				target="_blank"
 				rel="noopener noreferrer"

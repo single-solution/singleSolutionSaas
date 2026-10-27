@@ -145,7 +145,7 @@ describe('Website settings (jsdom)', () => {
 			await type(field('Store currency'), 'usd');
 			await until(() => buttons('Save changes').length === 1);
 			await press('Save changes');
-			await x.b.waitCall('PUT', `${x.settingsUrl}/region`, (status) => status === 200);
+			await x.b.waitCall('PUT', `${x.settingsUrl}/region`, (/** @type {any} */ status) => status === 200);
 			await until(() => shows('Saved. Your products pick it up within moments.'));
 			// the Portal holds it, tidied, and the readiness line is gone
 			const kept = await x.b.api.get(x.settingsUrl);
@@ -184,7 +184,7 @@ describe('Website settings (jsdom)', () => {
 			await openPage(x, 'settings/region');
 			await type(field('Time zone'), 'Mars/Base');
 			await press('Save changes');
-			await x.b.waitCall('PUT', `${x.settingsUrl}/region`, (status) => status === 422);
+			await x.b.waitCall('PUT', `${x.settingsUrl}/region`, (/** @type {any} */ status) => status === 422);
 			await until(() => shows('Must be an IANA time zone name'));
 			const kept = await x.b.api.get(x.settingsUrl);
 			expect(kept.ok && kept.data.settings.version).toBe(0);
@@ -222,7 +222,7 @@ describe('Website settings (jsdom)', () => {
 			await pressDialog('Done');
 			await until(() => shows('Mon 09:00–17:00'));
 			await press('Save changes');
-			await x.b.waitCall('PUT', `${x.settingsUrl}/business`, (status) => status === 200);
+			await x.b.waitCall('PUT', `${x.settingsUrl}/business`, (/** @type {any} */ status) => status === 200);
 			const kept = await x.b.api.get(x.settingsUrl);
 			expect(kept.ok && kept.data.settings.business).toMatchObject({
 				name: 'Example Shop',
@@ -253,7 +253,7 @@ describe('Website settings (jsdom)', () => {
 			await type(field('Font'), 'Georgia');
 			await type(field('Corner radius'), '8');
 			await press('Save changes');
-			await x.b.waitCall('PUT', `${x.settingsUrl}/brand`, (status) => status === 200);
+			await x.b.waitCall('PUT', `${x.settingsUrl}/brand`, (/** @type {any} */ status) => status === 200);
 			// domains, pages and legal: a sign-in page, another host name and a privacy policy in a drawer
 			await openPage(x, 'settings/pages');
 			await type(field('Sign-in page'), '/sign-in');
@@ -263,7 +263,7 @@ describe('Website settings (jsdom)', () => {
 			await pressDialog('Done');
 			await until(() => shows('Privacy policy'));
 			await press('Save changes');
-			await x.b.waitCall('PUT', `${x.settingsUrl}/pages`, (status) => status === 200);
+			await x.b.waitCall('PUT', `${x.settingsUrl}/pages`, (/** @type {any} */ status) => status === 200);
 			// team and alerts: a person in a drawer, listed in a table
 			await openPage(x, 'settings/team');
 			expect(shows('No one yet.')).toBe(true);
@@ -273,7 +273,7 @@ describe('Website settings (jsdom)', () => {
 			await pressDialog('Done');
 			await until(() => shows('sam@shop.test'));
 			await press('Save changes');
-			await x.b.waitCall('PUT', `${x.settingsUrl}/team`, (status) => status === 200);
+			await x.b.waitCall('PUT', `${x.settingsUrl}/team`, (/** @type {any} */ status) => status === 200);
 			const kept = await x.b.api.get(x.settingsUrl);
 			expect(kept.ok && kept.data.settings).toMatchObject({
 				version: 3,
@@ -302,7 +302,7 @@ describe('Website settings (jsdom)', () => {
 			expect(owner.ok).toBe(true);
 			await type(field('Business name'), 'Example Shop');
 			await press('Save changes');
-			await x.b.waitCall('PUT', `${x.settingsUrl}/business`, (status) => status === 409);
+			await x.b.waitCall('PUT', `${x.settingsUrl}/business`, (/** @type {any} */ status) => status === 409);
 			await until(() => shows('These settings were saved by someone else meanwhile.'));
 			await press('Reload');
 			await until(() => version(1));

@@ -19,7 +19,7 @@ const SCREEN_FOLDERS = [
 ];
 
 /** Folders that are never screens. */
-const SKIPPED = new Set(['test', 'tests', '__tests__', 'node_modules', '.next', 'coverage']);
+const SKIPPED = new Set(['test', 'tests', '__tests__', 'node_modules', '.next', 'coverage', '(site)']);
 
 /** Kit parts a screen does not use any more, found by their import from `@ss/ui` (or `@ss/ui/dashboard`, …). */
 const BANNED_IMPORTS = ['DataTable', 'Table', 'Disclosure', 'PillTabs'];
