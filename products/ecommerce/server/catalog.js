@@ -41,7 +41,8 @@ export const createCatalog = (product, service) => {
 		 * @param {Site} s
 		 */
 		widgetSettings: async (s) => {
-			const { productUrl, categoryUrl, pageSize, lowStockShown } = await s.values('catalog');
+			const catalog = await s.values('catalog');
+			const { productUrl, categoryUrl, pageSize, lowStockShown } = catalog;
 			// the units packages are typed in are the website's, set once in the Portal (Region and format)
 			const { units } = (await s.website()).region;
 			const types = await s.list('item_types');
@@ -52,12 +53,25 @@ export const createCatalog = (product, service) => {
 					pageSize,
 					lowStockShown,
 					types,
+					// demoted peer toggles (UI `has()` reads these when the peer is not in featuresOn)
+					enableVariants: catalog.enableVariants !== false,
+					enableSizeCharts: catalog.enableSizeCharts === true,
+					enableMultiLocation: catalog.enableMultiLocation === true,
+					enableGradesSerials: catalog.enableGradesSerials === true,
+					enableMeasuredSales: catalog.enableMeasuredSales === true,
+					enableWishlist: catalog.enableWishlist === true,
+					enableCompare: catalog.enableCompare === true,
+					enableAlerts: catalog.enableAlerts === true,
+					enableCsv: catalog.enableCsv !== false,
+					enableBulkActions: catalog.enableBulkActions !== false,
+					enableEvents: catalog.enableEvents === true,
 					// the units staff type and read package weights and sizes in (E13)
 					weightUnit: units.weight || DEFAULT_WEIGHT_UNIT,
 					sizeUnit: units.size || DEFAULT_SIZE_UNIT,
 					// the merchant's unit states (E38)
 					unitStates: s.has('grades_serials') ? await s.list('unit_states') : [],
 				},
+				features: s.on,
 			};
 		},
 	};

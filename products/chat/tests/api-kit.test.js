@@ -21,7 +21,7 @@ const start = async (on) => {
 
 describe('statuses, tokens and notices', () => {
 	it('obeys every status; tokens from other origins and server tokens with an Origin are refused', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		const v = sys.visitor();
 		expect((await v('GET', '/v1/chat')).status).toBe(200);
 		const elsewhere = await sys.call('GET', '/v1/chat', { token: sys.browser, origin: 'https://elsewhere.example.org' });
@@ -67,7 +67,7 @@ describe('statuses, tokens and notices', () => {
 	});
 
 	it('website.deleted removes the lists with the rest of the website’s product data', async () => {
-		const sys = await start(['visitor_chat', 'proactive_pages']);
+		const sys = await start(['visitor_chat']);
 		await sys.list('page_rules', [{ path: '/', delay: 3, message: 'Hi' }]);
 		await sys.portal.sendNotice('chat', { type: 'website.deleted', websiteId: sys.websiteId });
 		expect(await sys.product.lists.get(sys.websiteId, 'page_rules')).toEqual([]);
@@ -76,7 +76,7 @@ describe('statuses, tokens and notices', () => {
 
 describe('widgets and docs', () => {
 	it('starts the bot’s avatar from the website’s icon and the allowed languages from the website’s languages, until the merchant sets their own', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies', 'language_lock']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		const empty = emptyWebsiteSettings(sys.websiteId);
 		await sys.setWebsite({
 			brand: { ...empty.brand, files: { ...empty.brand.files, icon: 'https://cdn.example.com/icon.png' } },
@@ -99,13 +99,7 @@ describe('widgets and docs', () => {
 	it('answers the widget settings with lists and no secrets', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
-			'signed_in_chat',
-			'leads_flows',
-			'proactive_pages',
-			'custom_fields',
-			'attachments',
-		]);
+			'leads_flows']);
 		await sys.setting('visitor_chat', 'avatarUrl', 'http://not-https.example.com/a.png');
 		await sys.list('page_types', [
 			{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}?' },
@@ -256,7 +250,7 @@ describe('dashboard', () => {
 	});
 
 	it('tests the backup AI provider when it is saved', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies', 'ai_backup']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		const owner = await sys.adminSession();
 		const path = `/v1/dashboard/websites/${sys.websiteId}/connections/ai_backup`;
 		const shape = await sys.dashboard(owner, 'PUT', path, { value: { provider: 'openai', apiKey: 'short', model: 'x' } });
@@ -296,7 +290,7 @@ describe('dashboard', () => {
 
 describe('data rights', () => {
 	it('exports and deletes one person’s conversations, messages, attachments and leads', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'leads_flows', 'inbox']);
+		const sys = await start(['visitor_chat', 'leads_flows', 'inbox']);
 		await sys.paste('accounts');
 		const guest = sys.visitor();
 		await guest('POST', '/v1/chat/messages', { text: 'guest hello' });
@@ -340,9 +334,9 @@ describe('data rights', () => {
 	});
 
 	it('deletes the staff alerts still waiting to be sent about the person’s conversations (K-17)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
-		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		await sys.setting('inbox', 'recipients', ['boss@shop.example.com']);
 		// Notifications does not take them: they are saved to be tried again
 		sys.responders.set('https://notifications.example.dev', () => ({ status: 503, body: {} }));
 		const ann = sys.visitor();

@@ -92,10 +92,11 @@ export const createInbox = (product, service, reply) => {
 	/**
 	 * A feature an action needs besides the route's own.
 	 * @param {Site} s
-	 * @param {string} feature
+	 * @param {string | string[]} feature
 	 */
 	const needs = (s, feature) => {
-		if (!s.on.includes(feature)) throw problem('feature_off', `This needs the ${feature} feature.`);
+		const list = [feature].flat();
+		if (!list.some((f) => s.on.includes(f))) throw problem('feature_off', `This needs the ${list[0]} feature.`);
 	};
 
 	/**
@@ -111,9 +112,10 @@ export const createInbox = (product, service, reply) => {
 		if (STATUSES.includes(ctx.query.status)) filter.status = ctx.query.status;
 		if (ctx.query.waiting === '1') filter.waiting = true;
 		if (ctx.query.visitor === 'guest' || ctx.query.visitor === 'user') filter['visitor.kind'] = ctx.query.visitor;
-		if (s.on.includes('assignment') && ctx.query.assigned === 'unassigned') filter.assignedTo = null;
-		if (s.on.includes('assignment') && ctx.query.assigned === 'me') filter.assignedTo = actorOf(ctx).id;
-		if (s.on.includes('assignment') && typeof ctx.query.assignee === 'string' && USER_ID.test(ctx.query.assignee))
+		const hasAssignment = s.on.includes('assignment');
+		if (hasAssignment && ctx.query.assigned === 'unassigned') filter.assignedTo = null;
+		if (hasAssignment && ctx.query.assigned === 'me') filter.assignedTo = actorOf(ctx).id;
+		if (hasAssignment && typeof ctx.query.assignee === 'string' && USER_ID.test(ctx.query.assignee))
 			filter.assignedTo = ctx.query.assignee;
 		if (ctx.query.unread === '1') filter.unreadStaff = { $gt: 0 };
 		// the merchant's tags, topics and priorities (C7)
@@ -179,7 +181,7 @@ export const createInbox = (product, service, reply) => {
 	const get = async (ctx) => {
 		const { s, c } = await found(ctx);
 		const paging = pagingOf(ctx.query, { latest: 100, newer: 200 });
-		const internal = s.on.includes('internal_notes');
+		const internal = s.on.includes('internal_notes') || s.on.includes('inbox');
 		const messages = await s.store.messages.list(c.id, { ...paging, internal });
 		const first = messages[0];
 		return {
@@ -203,20 +205,22 @@ export const createInbox = (product, service, reply) => {
 		/** @type {import('../core/conversation.js').Attachment | null} */
 		let attachment = null;
 		if (body.attachment !== undefined && body.attachment !== null) {
-			needs(s, 'attachments');
+			const attachmentsOn = s.on.includes('attachments') || s.on.includes('inbox') || s.on.includes('visitor_chat');
+			if (!attachmentsOn) throw problem('feature_off', 'Attachments are off.');
 			const a = bodyOf(body.attachment);
 			if (typeof a.key !== 'string' || !a.key.startsWith('chat/staff/')) throw invalid(['Upload the file first.']);
-			attachment = checkUpload(a, await s.values('attachments'), 'staff');
+			const settings = s.on.includes('attachments') ? await s.values('attachments') : {};
+			attachment = checkUpload(a, settings, 'staff');
 		}
 		const typed = messageText(body.text, { allowEmpty: attachment !== null });
 		if (typed === null) throw invalid(['Write a reply (up to 4000 characters).']);
 		const text = await reply.linksOf(s, typed);
 		// the first member of staff who replies takes an unassigned chat (C11)
+		const autoAssign = s.on.includes('assignment')
+			? (await s.values('assignment')).autoAssign
+			: (await s.values('inbox')).autoAssign;
 		const takes =
-			s.on.includes('assignment') &&
-			c.assignedTo === null &&
-			actor.kind !== SERVER.kind &&
-			(await s.values('assignment')).autoAssign === 'first_replier';
+			s.on.includes('assignment') && c.assignedTo === null && actor.kind !== SERVER.kind && autoAssign === 'first_replier';
 		if (takes) await s.store.staff.checkIn(/** @type {any} */ (actor));
 		const assign = takes && (await hasRoom(s, actor.id)) ? { assignedTo: actor.id } : {};
 		const { message, conversation } = await service.append(
@@ -253,7 +257,9 @@ export const createInbox = (product, service, reply) => {
 	};
 
 	/** Notes are one note per conversation (C11). @param {Site} s */
-	const singleNotes = async (s) => (await s.values('internal_notes')).mode === 'single';
+	const singleNotes = async (s) =>
+		(s.on.includes('internal_notes') ? (await s.values('internal_notes')).mode : (await s.values('inbox')).notesMode) ===
+		'single';
 
 	/**
 	 * `PUT …/note` `{ text }`: the single note (notes mode `single`, C11); '' clears it.
@@ -344,9 +350,13 @@ export const createInbox = (product, service, reply) => {
 	 * @param {string} staffId
 	 */
 	const hasRoom = async (s, staffId) => {
-		if (!s.on.includes('presence_queue')) return true;
+		const hasPresence = s.on.includes('presence_queue') || s.on.includes('inbox');
+		if (!hasPresence) return true;
 		const member = await s.store.staff.get(staffId);
-		const max = member?.maxChats ?? Number((await s.values('presence_queue')).maxChats);
+		const maxSetting = s.on.includes('presence_queue')
+			? (await s.values('presence_queue')).maxChats
+			: (await s.values('inbox')).maxChats;
+		const max = member?.maxChats ?? Number(maxSetting ?? 0);
 		if (!max) return true;
 		return ((await s.store.conversations.openByStaff()).get(staffId) ?? 0) < max;
 	};
@@ -364,7 +374,15 @@ export const createInbox = (product, service, reply) => {
 			set.status = body.status;
 			if (body.status === 'resolved') {
 				set.waiting = false;
-				const ratings = s.on.includes('ratings') ? await s.values('ratings') : null;
+				const look = await s.values('visitor_chat');
+				const ratings = s.on.includes('ratings')
+					? await s.values('ratings')
+					: look.ratingsEnabled
+						? {
+								askWhen: look.ratingAskWhen ?? 'on_resolve',
+								afterStaff: look.ratingAskWhen === 'after_staff',
+							}
+						: null;
 				if (
 					ratings &&
 					!c.rating &&
@@ -512,7 +530,8 @@ export const createInbox = (product, service, reply) => {
 	/** @param {any} ctx */
 	const upload = async (ctx) => {
 		const s = await service.site(ctx);
-		return presign(product, s, 'chat/staff', ctx.body, await s.values('attachments'), 'staff');
+		const settings = s.on.includes('attachments') ? await s.values('attachments') : {};
+		return presign(product, s, 'chat/staff', ctx.body, settings, 'staff');
 	};
 
 	/**
@@ -535,19 +554,24 @@ export const createInbox = (product, service, reply) => {
 	 */
 	const staff = async (ctx) => {
 		const s = await service.site(ctx);
-		const presence = s.on.includes('presence_queue');
+		const presence = s.on.includes('presence_queue') || s.on.includes('inbox');
 		const open = await s.store.conversations.openByStaff();
-		const defaultMax = presence ? Number((await s.values('presence_queue')).maxChats) || null : null;
+		const defaultMax = presence
+			? Number(
+					s.on.includes('presence_queue') ? (await s.values('presence_queue')).maxChats : (await s.values('inbox')).maxChats,
+				) || null
+			: null;
 		const actor = actorOf(ctx);
 		const me = actor.kind === SERVER.kind ? null : actor.id;
 		const seen = await s.store.staff.list();
 		const known = new Set(seen.map((m) => m.id));
 		/** @type {import('../adapters/store.js').StaffRecord[]} */
-		const accounts = s.on.includes('assignment')
-			? (await service.staffOfAccounts(s.websiteId))
-					.filter((user) => !known.has(user.id))
-					.map((user) => ({ id: user.id, name: user.name, ...(user.email ? { email: user.email } : {}) }))
-			: [];
+		const accounts =
+			s.on.includes('assignment') || s.on.includes('inbox')
+				? (await service.staffOfAccounts(s.websiteId))
+						.filter((user) => !known.has(user.id))
+						.map((user) => ({ id: user.id, name: user.name, ...(user.email ? { email: user.email } : {}) }))
+				: [];
 		const members = [...seen, ...accounts].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 		const items = members.map((m) => {
 			const checkedIn = m.checkedInAt ? new Date(m.checkedInAt).getTime() : 0;

@@ -44,7 +44,7 @@ const server = (sys, method, path, { body, headers = {} } = {}) =>
 
 describe('list settings from the merchant’s server (K1)', () => {
 	it('reads and saves Chat’s lists with { value }, checked as in the dashboard', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies', 'webhook_tools', 'proactive_pages']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'webhook_tools']);
 		expect((await server(sys, 'GET', '/v1/lists/tools')).json).toEqual({ value: [] });
 		const tool = {
 			name: 'stock_check',
@@ -83,13 +83,8 @@ describe('the acting member of staff (K2)', () => {
 	it('a server reply with SS-Actor headers carries that person; without them, Team', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
 			'inbox',
-			'handoff',
-			'assignment',
-			'presence_queue',
-			'internal_notes',
-		]);
+			'handoff']);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'Hello' });
 		const id = sent.json.chat.conversation.id;
@@ -158,7 +153,7 @@ describe('the acting member of staff (K2)', () => {
 
 describe('visitor calls from the merchant’s server (K3)', () => {
 	it('act for one visitor with SS-Guest and SS-Visitor-IP; AI limits per network count by that address', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.connect('ai', AI_KEY);
 		// the network of 198.51.100.7 has one AI reply left of its day's AI_REPLIES_PER_NETWORK_PER_DAY
 		for (let i = 1; i < AI_REPLIES_PER_NETWORK_PER_DAY; i += 1)
@@ -193,7 +188,7 @@ describe('visitor calls from the merchant’s server (K3)', () => {
 
 describe('conversation counts (K4)', () => {
 	it('count and counts take the list’s filters and equal its lengths; the ticket twins too', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'handoff', 'assignment']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff']);
 		await sys.paste('accounts');
 		const ann = sys.visitor();
 		await ann('POST', '/v1/chat/messages', { text: 'Where is my package?' });
@@ -242,7 +237,7 @@ describe('conversation counts (K4)', () => {
 		expect((await sys.admin(ticket, 'GET', '/v1/admin/conversations/counts?by=guest')).json.total).toBe(3);
 		const reports = await sys.ticket(['reports.read']);
 		expect((await sys.admin(reports, 'GET', '/v1/admin/conversations/count')).status).toBe(403);
-		await sys.switchOn(['visitor_chat', 'guest_chat']);
+		await sys.switchOn(['visitor_chat']);
 		expect((await server(sys, 'GET', '/v1/conversations/count')).json.type).toMatch(/feature_off$/);
 	});
 });
@@ -251,13 +246,9 @@ describe('activity labels (K9)', () => {
 	it('labels entries with a name or title and a short detail, never contents', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
 			'ai_replies',
 			'inbox',
-			'saved_replies',
-			'knowledge_base',
-			'knowledge_pages',
-		]);
+			'knowledge_base']);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'My secret question' });
 		const id = sent.json.chat.conversation.id;
@@ -292,7 +283,7 @@ describe('activity labels (K9)', () => {
 
 describe('Format and business time zone (K7, K8)', () => {
 	it('reach the widget config and the text the server makes', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'handoff', 'transcripts']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff']);
 		await sys.paste('notifications');
 		// the Format and the time zone are the Portal's (Website settings): a server cannot save them there
 		const refused = await server(sys, 'PUT', '/v1/format', { body: { locale: 'en-GB' }, headers: ZOE });

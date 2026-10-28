@@ -14,47 +14,15 @@ import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
-import aiBackup from '../schemas/ai_backup.settings.json' with { type: 'json' };
-import aiCaps from '../schemas/ai_caps.settings.json' with { type: 'json' };
-import aiCostAlerts from '../schemas/ai_cost_alerts.settings.json' with { type: 'json' };
-import aiInstructions from '../schemas/ai_instructions.settings.json' with { type: 'json' };
 import aiReplies from '../schemas/ai_replies.settings.json' with { type: 'json' };
-import aiSummary from '../schemas/ai_summary.settings.json' with { type: 'json' };
-import assignment from '../schemas/assignment.settings.json' with { type: 'json' };
-import attachments from '../schemas/attachments.settings.json' with { type: 'json' };
 import bookSlot from '../schemas/book_slot.settings.json' with { type: 'json' };
-import contextPanel from '../schemas/context_panel.settings.json' with { type: 'json' };
-import customFields from '../schemas/custom_fields.settings.json' with { type: 'json' };
-import fallbackAnswers from '../schemas/fallback_answers.settings.json' with { type: 'json' };
-import guestChat from '../schemas/guest_chat.settings.json' with { type: 'json' };
 import handoff from '../schemas/handoff.settings.json' with { type: 'json' };
 import inbox from '../schemas/inbox.settings.json' with { type: 'json' };
-import internalNotes from '../schemas/internal_notes.settings.json' with { type: 'json' };
 import knowledgeBase from '../schemas/knowledge_base.settings.json' with { type: 'json' };
-import knowledgeEditor from '../schemas/knowledge_editor.settings.json' with { type: 'json' };
-import knowledgePages from '../schemas/knowledge_pages.settings.json' with { type: 'json' };
-import languageLock from '../schemas/language_lock.settings.json' with { type: 'json' };
 import leadsFlows from '../schemas/leads_flows.settings.json' with { type: 'json' };
 import moderation from '../schemas/moderation.settings.json' with { type: 'json' };
-import presenceQueue from '../schemas/presence_queue.settings.json' with { type: 'json' };
-import productCards from '../schemas/product_cards.settings.json' with { type: 'json' };
-import proactiveExit from '../schemas/proactive_exit.settings.json' with { type: 'json' };
-import proactiveIdle from '../schemas/proactive_idle.settings.json' with { type: 'json' };
-import proactivePages from '../schemas/proactive_pages.settings.json' with { type: 'json' };
-import ratings from '../schemas/ratings.settings.json' with { type: 'json' };
 import reports from '../schemas/reports.settings.json' with { type: 'json' };
-import savedReplies from '../schemas/saved_replies.settings.json' with { type: 'json' };
-import shopDeals from '../schemas/shop_deals.settings.json' with { type: 'json' };
-import shopMyOrders from '../schemas/shop_my_orders.settings.json' with { type: 'json' };
-import shopContext from '../schemas/shop_context.settings.json' with { type: 'json' };
-import shopSearch from '../schemas/shop_search.settings.json' with { type: 'json' };
-import shopTop from '../schemas/shop_top.settings.json' with { type: 'json' };
-import signedInChat from '../schemas/signed_in_chat.settings.json' with { type: 'json' };
-import staffAlerts from '../schemas/staff_alerts.settings.json' with { type: 'json' };
-import trackShipment from '../schemas/track_shipment.settings.json' with { type: 'json' };
-import transcripts from '../schemas/transcripts.settings.json' with { type: 'json' };
-import typingReceipts from '../schemas/typing_receipts.settings.json' with { type: 'json' };
-import visitorAlerts from '../schemas/visitor_alerts.settings.json' with { type: 'json' };
+import shopAssistant from '../schemas/shop_assistant.settings.json' with { type: 'json' };
 import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'json' };
 import webhookTools from '../schemas/webhook_tools.settings.json' with { type: 'json' };
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
@@ -67,46 +35,14 @@ import { INDEXES } from './store.js';
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
 	visitor_chat: visitorChat,
-	guest_chat: guestChat,
-	signed_in_chat: signedInChat,
 	ai_replies: aiReplies,
-	ai_backup: aiBackup,
-	ai_instructions: aiInstructions,
-	fallback_answers: fallbackAnswers,
-	ai_caps: aiCaps,
-	ai_cost_alerts: aiCostAlerts,
-	language_lock: languageLock,
 	knowledge_base: knowledgeBase,
-	knowledge_pages: knowledgePages,
-	knowledge_editor: knowledgeEditor,
 	webhook_tools: webhookTools,
 	book_slot: bookSlot,
-	shop_search: shopSearch,
-	shop_deals: shopDeals,
-	shop_top: shopTop,
-	shop_my_orders: shopMyOrders,
-	track_shipment: trackShipment,
-	product_cards: productCards,
-	shop_context: shopContext,
-	proactive_idle: proactiveIdle,
-	proactive_pages: proactivePages,
-	proactive_exit: proactiveExit,
+	shop_assistant: shopAssistant,
 	leads_flows: leadsFlows,
-	custom_fields: customFields,
-	attachments,
-	typing_receipts: typingReceipts,
-	ratings,
-	transcripts,
 	inbox,
 	handoff,
-	assignment,
-	presence_queue: presenceQueue,
-	internal_notes: internalNotes,
-	saved_replies: savedReplies,
-	context_panel: contextPanel,
-	ai_summary: aiSummary,
-	staff_alerts: staffAlerts,
-	visitor_alerts: visitorAlerts,
 	moderation,
 	reports,
 	import: importSettings,
@@ -235,7 +171,7 @@ const whoAnswers = (on) => {
  */
 const setupPart = async (lists, { websiteId, on }) => {
 	const names = /** @type {import('./lists.js').ListName[]} */ (Object.keys(LISTS)).filter((name) =>
-		on.includes(LISTS[name].feature),
+		[LISTS[name].feature].flat().some((f) => on.includes(f)),
 	);
 	const worded = await Promise.all(
 		names.map(async (name) => {
@@ -287,7 +223,7 @@ export const createProductInstance = (options) => {
 		// (parity P1)
 		messages,
 		connections: {
-			storage: { label: 'Storage (S3-compatible)', kind: 'storage', neededBy: ['attachments'] },
+			storage: { label: 'Storage (S3-compatible)', kind: 'storage', neededBy: ['visitor_chat'] },
 			// the website's AI key is the Portal's (Website settings › Data and files): managed here, delivered when the manifest
 			// says `needs.ai`; the backup provider is Chat's own, of the same shape
 			ai: {
@@ -301,7 +237,7 @@ export const createProductInstance = (options) => {
 			ai_backup: {
 				label: 'Backup AI provider',
 				kind: 'secret',
-				neededBy: ['ai_backup'],
+				neededBy: ['ai_replies'],
 				secretField: 'apiKey',
 				test: ai.test,
 			},

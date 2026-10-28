@@ -33,7 +33,7 @@ import { AI_PROVIDERS } from '@ss/contracts';
 import { WEBSITE_SETTINGS as T } from '../../texts/console.js';
 import { apiConfirm } from '../client.js';
 import { api } from '../paths.js';
-import { ConfirmChange, confirmationErrors } from './confirm-change.js';
+import { ConfirmOtp, confirmationErrors } from './confirm-change.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -173,13 +173,12 @@ function ConnectionCard({
 					) : null}
 				</div>
 			) : null}
-			<ConfirmChange
+			<ConfirmOtp
 				open={asking !== null}
 				title={asking === 'remove' ? T.data.confirmRemove(title) : T.data.confirmSave(title)}
 				help={T.data.confirmHelp}
 				confirmLabel={asking === 'remove' ? T.data.remove : T.data.save}
 				danger={asking === 'remove'}
-				twoStepOn={twoStepOn}
 				send={send}
 				onClose={() => setAsking(null)}
 				onDone={() => {
@@ -497,7 +496,7 @@ export function LinksSection({ view, manage, canWrite, twoStepOn = false, onChan
 					))}
 				</div>
 			)}
-			<ConfirmChange
+			<ConfirmOtp
 				open={asking !== null}
 				title={
 					asking
@@ -523,7 +522,6 @@ export function LinksSection({ view, manage, canWrite, twoStepOn = false, onChan
 							: T.links.switchOn
 				}
 				danger={asking?.action === 'off'}
-				twoStepOn={twoStepOn}
 				send={send}
 				onClose={() => setAsking(null)}
 				onDone={() => {

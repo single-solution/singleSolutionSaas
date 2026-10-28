@@ -110,6 +110,20 @@ function NotificationsSettings(props) {
 						},
 					],
 				},
+				sending_policy: {
+					items: [
+						{
+							id: 'fallback',
+							label: TEXTS.settings.lists.fallback.title,
+							content: <FallbackChainsCard websiteId={websiteId} off={false} />,
+						},
+						{
+							id: 'quiet',
+							label: TEXTS.settings.lists.quiet.title,
+							content: <QuietHoursCard websiteId={websiteId} off={false} />,
+						},
+					],
+				},
 				fallback: <FallbackChainsCard websiteId={websiteId} off={false} />,
 				quiet_hours: <QuietHoursCard websiteId={websiteId} off={false} />,
 				webhooks: <WebhookUrls websiteId={websiteId} />,

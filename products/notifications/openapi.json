@@ -353,7 +353,13 @@
 			"get": {
 				"summary": "The delivery log, newest first (delivery log widget)",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "send_api",
+				"x-ss-feature": [
+					"send_api",
+					"email",
+					"sms",
+					"whatsapp",
+					"push"
+				],
 				"x-ss-permission": "log.read",
 				"security": [
 					{
@@ -542,7 +548,13 @@
 			"get": {
 				"summary": "Count the delivery log (delivery log widget)",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "send_api",
+				"x-ss-feature": [
+					"send_api",
+					"email",
+					"sms",
+					"whatsapp",
+					"push"
+				],
 				"x-ss-permission": "log.read",
 				"security": [
 					{
@@ -610,7 +622,13 @@
 				"summary": "Count the delivery log by status, channel, template or source (delivery log widget)",
 				"description": "by=template counts a one-off message from your staff under none.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "send_api",
+				"x-ss-feature": [
+					"send_api",
+					"email",
+					"sms",
+					"whatsapp",
+					"push"
+				],
 				"x-ss-permission": "log.read",
 				"security": [
 					{
@@ -692,7 +710,7 @@
 				"summary": "Turn on staff push in this browser (staff notifications widget)",
 				"description": "Saves the browser's subscription for the ticket's user; send to them with to: { staffId: <the user id in the ticket> }. 422 validation_failed when the subscription is not an https endpoint with a 65-byte p256dh key and a 16-byte auth secret.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "staff_push",
+				"x-ss-feature": "push",
 				"x-ss-permission": "push.subscribe",
 				"security": [
 					{
@@ -747,7 +765,12 @@
 				"summary": "The templates of every channel (template editor widget)",
 				"description": "At most 1000, by key, channel and language.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "send_api",
+				"x-ss-feature": [
+					"email",
+					"sms",
+					"whatsapp",
+					"push"
+				],
 				"x-ss-permission": "templates.edit",
 				"security": [
 					{
@@ -782,7 +805,12 @@
 				"summary": "Save a template (template editor widget)",
 				"description": "422 validation_failed for a field, or when the website already has 1000 templates. The change is in the activity log by the ticket's member of staff.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "send_api",
+				"x-ss-feature": [
+					"email",
+					"sms",
+					"whatsapp",
+					"push"
+				],
 				"x-ss-permission": "templates.edit",
 				"security": [
 					{
@@ -829,7 +857,12 @@
 				"summary": "Delete a template (template editor widget)",
 				"description": "language is default for the default version. 404 not_found when there is no such template.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "send_api",
+				"x-ss-feature": [
+					"email",
+					"sms",
+					"whatsapp",
+					"push"
+				],
 				"x-ss-permission": "templates.edit",
 				"security": [
 					{
@@ -2094,7 +2127,7 @@
 				"summary": "Send a browser push to a visitor from a template",
 				"description": "The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when no browser is subscribed for the subscriber id. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). 422 template_not_found when the key has no push template and no default; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "browser_push",
+				"x-ss-feature": "push",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -2348,7 +2381,7 @@
 				"summary": "Send a browser push to a member of your staff from a template",
 				"description": "Goes to every browser where they turned staff notifications on. The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when none of their browsers is subscribed. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). 422 template_not_found when the key has no staff_push template and no default; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "staff_push",
+				"x-ss-feature": "push",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -2720,7 +2753,7 @@
 				"summary": "Turn on browser push for a visitor",
 				"description": "The push-permission widget calls it with the browser token; send to the answer's id with to: { subscriberId }. 422 validation_failed when the subscription is not an https endpoint with a 65-byte p256dh key and a 16-byte auth secret.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "browser_push",
+				"x-ss-feature": "push",
 				"security": [
 					{
 						"browserToken": []
@@ -2784,7 +2817,7 @@
 				"summary": "Turn off browser push for a visitor",
 				"description": "Removes the subscription when the subscriber id and its endpoint match (the browser proves it holds it); 204 also when there is none.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "browser_push",
+				"x-ss-feature": "push",
 				"security": [
 					{
 						"browserToken": []
@@ -3097,8 +3130,7 @@
 					"email",
 					"sms",
 					"whatsapp",
-					"browser_push",
-					"staff_push"
+					"push"
 				],
 				"x-ss-permission": "templates.edit",
 				"x-ss-access": "staff",
@@ -3143,8 +3175,7 @@
 					"email",
 					"sms",
 					"whatsapp",
-					"browser_push",
-					"staff_push"
+					"push"
 				],
 				"x-ss-permission": "templates.edit",
 				"x-ss-access": "staff",
@@ -3201,8 +3232,7 @@
 					"email",
 					"sms",
 					"whatsapp",
-					"browser_push",
-					"staff_push"
+					"push"
 				],
 				"x-ss-permission": "templates.edit",
 				"x-ss-access": "staff",

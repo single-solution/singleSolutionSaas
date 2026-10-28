@@ -24,7 +24,7 @@ const start = async (on) => {
 
 describe('guests and AI replies', () => {
 	it('a guest sends a message and gets an AI reply right after', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'typing_receipts']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.connect('ai', AI_KEY);
 		const v = sys.visitor();
 		const empty = await v('GET', '/v1/chat');
@@ -54,8 +54,8 @@ describe('guests and AI replies', () => {
 	});
 
 	it('applies the guest limit and offers what comes next', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'leads_flows']);
-		await sys.setting('guest_chat', 'messageLimit', 1);
+		const sys = await start(['visitor_chat', 'leads_flows']);
+		await sys.setting('visitor_chat', 'messageLimit', 1);
 		const v = sys.visitor();
 		expect((await v('POST', '/v1/chat/messages', { text: 'one' })).status).toBe(201);
 		const second = await v('POST', '/v1/chat/messages', { text: 'two' });
@@ -69,8 +69,8 @@ describe('guests and AI replies', () => {
 	});
 
 	it('lifts the guest limit while the Customer role’s sign-in is paused at Accounts (C17)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat']);
-		await sys.setting('guest_chat', 'messageLimit', 1);
+		const sys = await start(['visitor_chat']);
+		await sys.setting('visitor_chat', 'messageLimit', 1);
 		await sys.paste('accounts');
 		/** @type {{ status: number, body: unknown }} */
 		let roles = {
@@ -119,8 +119,9 @@ describe('guests and AI replies', () => {
 		expect(reads()).toHaveLength(5);
 	});
 
-	it('without guest chat a visitor must sign in; a bad message is refused', async () => {
-		const sys = await start(['visitor_chat', 'signed_in_chat']);
+	it('with guests off a visitor must sign in; a bad message is refused', async () => {
+		const sys = await start(['visitor_chat']);
+		await sys.setting('visitor_chat', 'allowGuests', false);
 		const v = sys.visitor();
 		const refused = await v('POST', '/v1/chat/messages', { text: 'hi' });
 		expect(refused.status).toBe(403);
@@ -130,7 +131,7 @@ describe('guests and AI replies', () => {
 	});
 
 	it('a signed-in Accounts visitor chats as themselves; the guest chat moves to the account', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat']);
+		const sys = await start(['visitor_chat']);
 		const guest = sys.visitor();
 		await guest('POST', '/v1/chat/messages', { text: 'as a guest' });
 		const signIn = await sys.accounts.signIn({
@@ -153,7 +154,7 @@ describe('guests and AI replies', () => {
 	});
 
 	it('moderation masks blocked terms, hides personal data and can refuse a message', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'moderation', 'inbox']);
+		const sys = await start(['visitor_chat', 'moderation', 'inbox']);
 		await sys.setting('moderation', 'blockedTerms', ['darn']);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'darn, mail me at a@b.co' });
@@ -179,19 +180,13 @@ describe('handoff, office hours and failures', () => {
 	it('a phrase hands off: waiting, the AI stops, the guest is asked for contact, staff are alerted', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
 			'ai_replies',
 			'inbox',
-			'handoff',
-			'staff_alerts',
-			'assignment',
-			'presence_queue',
-			'ai_summary',
-		]);
+			'handoff']);
 		await sys.connect('ai', AI_KEY);
 		await sys.paste('notifications');
 		await sys.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
-		await sys.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/inbox?conversation={conversationId}');
+		await sys.setting('inbox', 'adminUrl', 'https://admin.shop.example.com/inbox?conversation={conversationId}');
 		const v = sys.visitor();
 		sys.ai({ text: 'Visitor wants a person.' });
 		const sent = await v('POST', '/v1/chat/messages', { text: 'I want to talk to someone please' });
@@ -215,7 +210,7 @@ describe('handoff, office hours and failures', () => {
 	});
 
 	it('outside office hours the visitor is told when staff are back', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff']);
 		await sys.list(
 			'office_hours',
 			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
@@ -230,7 +225,7 @@ describe('handoff, office hours and failures', () => {
 	});
 
 	it('a dated exception (a holiday) moves when staff are back; the lists are in the server API too (C9)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff']);
 		// never saved: no hours, no exceptions (always open)
 		expect((await sys.serverCall('GET', '/v1/lists/office_hours')).json).toEqual({ value: [] });
 		await sys.list(
@@ -252,7 +247,7 @@ describe('handoff, office hours and failures', () => {
 	});
 
 	it('outside office hours a guest who left no contact is offered the lead form, not only after a handoff', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff', 'leads_flows']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff', 'leads_flows']);
 		await sys.list(
 			'office_hours',
 			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
@@ -277,15 +272,15 @@ describe('handoff, office hours and failures', () => {
 		expect((await v('GET', '/v1/chat')).json.leadOffered).toBe(false);
 		// a signed-in visitor, or a website without lead capture: never
 		await sys.paste('accounts');
-		await sys.switchOn(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'handoff', 'leads_flows']);
+		await sys.switchOn(['visitor_chat', 'inbox', 'handoff', 'leads_flows']);
 		const signIn = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_ann', name: 'Ann' });
 		expect((await sys.visitor({ signIn })('GET', '/v1/chat')).json.leadOffered).toBe(false);
-		await sys.switchOn(['visitor_chat', 'guest_chat', 'inbox', 'handoff']);
+		await sys.switchOn(['visitor_chat', 'inbox', 'handoff']);
 		expect((await sys.visitor()('GET', '/v1/chat')).json.leadOffered).toBe(false);
 	});
 
 	it('when the AI fails: the backup answers; then the message and a handoff', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'ai_backup', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff']);
 		await sys.connect('ai', AI_KEY);
 		await sys.connect('ai_backup', { ...AI_KEY, apiKey: 'sk-backup-0123456789' });
 		const v = sys.visitor();
@@ -304,11 +299,11 @@ describe('handoff, office hours and failures', () => {
 	});
 
 	it('token caps stop the AI; the cost alert goes out once a month', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'ai_caps', 'ai_cost_alerts', 'inbox', 'staff_alerts']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox']);
 		await sys.connect('ai', AI_KEY);
 		await sys.paste('notifications');
 		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
-		await sys.setting('ai_caps', 'monthlyTokens', 200);
+		await sys.setting('ai_replies', 'monthlyTokens', 200);
 		await sys.setting('ai_replies', 'onFailure', 'message');
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'one' });
@@ -326,9 +321,9 @@ describe('handoff, office hours and failures', () => {
 	});
 
 	it('limits AI replies per visitor per day (AI_REPLIES_PER_VISITOR_PER_DAY)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.connect('ai', AI_KEY);
-		await sys.setting('guest_chat', 'messageLimit', 0);
+		await sys.setting('visitor_chat', 'messageLimit', 0);
 		const v = sys.visitor();
 		for (let i = 1; i <= AI_REPLIES_PER_VISITOR_PER_DAY; i += 1) await v('POST', '/v1/chat/messages', { text: `message ${i}` });
 		expect(sys.aiCalls()).toHaveLength(AI_REPLIES_PER_VISITOR_PER_DAY);

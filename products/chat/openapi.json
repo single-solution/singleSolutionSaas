@@ -1280,7 +1280,7 @@
 				"summary": "Save the conversation's single note",
 				"description": "Notes in the mode one note per chat. 409 conflict in the timeline mode (use POST …/notes); 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "internal_notes",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"security": [
 					{
@@ -1346,7 +1346,7 @@
 				"summary": "Add an internal note",
 				"description": "Notes as a timeline (the default mode): a note between the messages that only your staff see. 409 conflict in the mode one note per chat (use PUT …/note); 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "internal_notes",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"security": [
 					{
@@ -1413,7 +1413,7 @@
 				"summary": "Ask the visitor for a rating",
 				"description": "The visitor's chat shows the rating question (ratingRequested).",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "ratings",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.reply",
 				"security": [
 					{
@@ -1491,7 +1491,7 @@
 				"summary": "Write the AI summary now",
 				"description": "Kept on the conversation; it counts toward the AI token caps. 503 ai_unavailable (no AI key, a cap reached, or the AI failed).",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "ai_summary",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.read",
 				"security": [
 					{
@@ -1548,7 +1548,7 @@
 				"summary": "Email a copy of the conversation",
 				"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "transcripts",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.reply",
 				"security": [
 					{
@@ -1682,7 +1682,7 @@
 				"summary": "Knowledge collections",
 				"description": "The collections the entries use, by name, with how many entries each has (C21).",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_editor",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -1718,7 +1718,7 @@
 			"get": {
 				"summary": "Knowledge base entries, last changed first",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_editor",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -1795,7 +1795,7 @@
 				"summary": "Add an FAQ entry or article",
 				"description": "Indexed for the AI at once. Up to 2,000 entries. 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_editor",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -1842,7 +1842,7 @@
 				"summary": "Delete an entry",
 				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_editor",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -1879,7 +1879,7 @@
 				"summary": "Change an entry",
 				"description": "404 not_found; 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_editor",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -1934,7 +1934,7 @@
 			"get": {
 				"summary": "Website pages as knowledge, newest first",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -1982,7 +1982,7 @@
 				"summary": "Add a website page",
 				"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its reason. Up to 200 pages. 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -2040,7 +2040,7 @@
 				"summary": "Delete a page",
 				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -2079,7 +2079,7 @@
 				"summary": "Fetch a page again",
 				"description": "Pages are fetched only when added and with this call, never on a schedule. 404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"security": [
 					{
@@ -2282,7 +2282,7 @@
 			"get": {
 				"summary": "Saved replies, by title",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "saved_replies",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.read",
 				"security": [
 					{
@@ -2330,7 +2330,7 @@
 				"summary": "Save a reply",
 				"description": "Up to 200 saved replies. 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "saved_replies",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"security": [
 					{
@@ -2386,7 +2386,7 @@
 				"summary": "Delete a saved reply",
 				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "saved_replies",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"security": [
 					{
@@ -2423,7 +2423,7 @@
 				"summary": "Change a saved reply",
 				"description": "404 not_found; 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "saved_replies",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"security": [
 					{
@@ -2537,7 +2537,7 @@
 				"summary": "Set your presence",
 				"description": "The ticket's user is Online, Away or Offline (Offline anyway when their inbox has not checked in for 5 minutes). 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "presence_queue",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.read",
 				"security": [
 					{
@@ -2611,7 +2611,7 @@
 				"summary": "Set a staff member's max chats",
 				"description": "Their own limit of open chats (null: the setting's). 404 not_found; 422 validation_failed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "presence_queue",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"security": [
 					{
@@ -2718,7 +2718,7 @@
 				"summary": "Upload a staff file",
 				"description": "A presigned PUT into your storage for one of the staff types setting (Word, Excel and text files are downloads only) up to the staff size setting (at most 100 MB). 503 storage_not_connected; 422 validation_failed (type or size).",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "attachments",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.reply",
 				"security": [
 					{
@@ -2995,7 +2995,7 @@
 				"summary": "Save the visitor's contact details",
 				"description": "On the visitor's conversation (made when there is none; a visitor without a key starts a new guest, answered in guestKey), and as a lead with Lead capture on. Phones are kept as E.164 (a number without its country code takes your business.json country's code). 422 validation_failed: a value that is not valid, or neither email nor phone.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "guest_chat",
+				"x-ss-feature": "visitor_chat",
 				"security": [
 					{
 						"browserToken": []
@@ -3725,7 +3725,7 @@
 				"summary": "Rate the chat",
 				"description": "A new rating replaces the earlier one. 404 not_found when the visitor has no chat yet; 422 validation_failed.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "ratings",
+				"x-ss-feature": "visitor_chat",
 				"security": [
 					{
 						"browserToken": []
@@ -3877,7 +3877,7 @@
 				"summary": "Email the visitor a copy of the chat",
 				"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "transcripts",
+				"x-ss-feature": "visitor_chat",
 				"security": [
 					{
 						"browserToken": []
@@ -4049,7 +4049,7 @@
 				"summary": "Upload a visitor file",
 				"description": "With the setting Visitors may attach (everyone, or signed-in visitors only): a presigned PUT into your storage for one of your upload types (the list upload_types) up to that type's own cap (at most 100 MB). A visitor without a key starts a new guest, answered in guestKey. 403 forbidden; 503 storage_not_connected; 422 validation_failed (type or size).",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "attachments",
+				"x-ss-feature": "visitor_chat",
 				"security": [
 					{
 						"browserToken": []
@@ -5425,7 +5425,7 @@
 				"summary": "Save the conversation's single note",
 				"description": "Notes in the mode one note per chat. 409 conflict in the timeline mode (use POST …/notes); 422 validation_failed.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "internal_notes",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"x-ss-access": "staff",
 				"security": [
@@ -5495,7 +5495,7 @@
 				"summary": "Add an internal note",
 				"description": "Notes as a timeline (the default mode): a note between the messages that only your staff see. 409 conflict in the mode one note per chat (use PUT …/note); 422 validation_failed.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "internal_notes",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
 				"x-ss-access": "staff",
 				"security": [
@@ -5566,7 +5566,7 @@
 				"summary": "Ask the visitor for a rating",
 				"description": "The visitor's chat shows the rating question (ratingRequested).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "ratings",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.reply",
 				"x-ss-access": "staff",
 				"security": [
@@ -5652,7 +5652,7 @@
 				"summary": "Write the AI summary now",
 				"description": "Kept on the conversation; it counts toward the AI token caps. 503 ai_unavailable (no AI key, a cap reached, or the AI failed).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "ai_summary",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.read",
 				"x-ss-access": "staff",
 				"security": [
@@ -5713,7 +5713,7 @@
 				"summary": "Email a copy of the conversation",
 				"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "transcripts",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.reply",
 				"x-ss-access": "staff",
 				"security": [
@@ -7124,7 +7124,7 @@
 			"get": {
 				"summary": "Website pages as knowledge, newest first",
 				"x-ss-auth": "server",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -7177,7 +7177,7 @@
 				"summary": "Add a website page",
 				"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its reason. Up to 200 pages. 422 validation_failed.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -7240,7 +7240,7 @@
 				"summary": "Delete a page",
 				"description": "404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -7283,7 +7283,7 @@
 				"summary": "Fetch a page again",
 				"description": "Pages are fetched only when added and with this call, never on a schedule. 404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "knowledge_pages",
+				"x-ss-feature": "knowledge_base",
 				"x-ss-permission": "knowledge.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -8435,7 +8435,7 @@
 				"summary": "Upload a staff file",
 				"description": "A presigned PUT into your storage for one of the staff types setting (Word, Excel and text files are downloads only) up to the staff size setting (at most 100 MB). 503 storage_not_connected; 422 validation_failed (type or size).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "attachments",
+				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.reply",
 				"x-ss-access": "staff",
 				"security": [

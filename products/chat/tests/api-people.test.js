@@ -25,7 +25,7 @@ const authors = (json) => json.messages.map((/** @type {any} */ m) => [m.author,
 
 describe('handoff options (C4)', () => {
 	it('the AI answers the message that asked for a person first, with no notice; then reassures later', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff']);
 		await sys.connect('ai', AI_KEY);
 		await sys.setting('handoff', 'answerFirst', true);
 		await sys.setting('handoff', 'showNotice', false);
@@ -61,7 +61,7 @@ describe('handoff options (C4)', () => {
 	});
 
 	it('without answerFirst the chat goes to a person at once with the notice', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff']);
 		await sys.connect('ai', AI_KEY);
 		// the notice is a widget text (C16), and the system message carries the bot's name of the widget texts
 		await sys.text('chat.handoffNotice', 'Hold on, a person is coming.');
@@ -77,7 +77,7 @@ describe('handoff options (C4)', () => {
 
 describe('staff alerts and reply alerts (C5, C6)', () => {
 	it('alerts emails and phones (SMS, or WhatsApp), Accounts staff who can reply, on every message when asked', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts', 'assignment']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		await sys.paste('accounts');
 		sys.accounts.setUsers([
@@ -85,9 +85,9 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 			{ id: 'usr_b', phone: '+12025550143', permissions: ['chat:inbox.reply'] },
 			{ id: 'usr_c', email: 'blocked@shop.example.com', blocked: true, permissions: ['*'] },
 		]);
-		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com', '+44 20 7946 0958']);
-		await sys.setting('staff_alerts', 'staffPermission', 'inbox.reply');
-		await sys.setting('staff_alerts', 'frequency', 'every_message');
+		await sys.setting('inbox', 'recipients', ['boss@shop.example.com', '+44 20 7946 0958']);
+		await sys.setting('inbox', 'staffPermission', 'inbox.reply');
+		await sys.setting('inbox', 'frequency', 'every_message');
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'one' });
 		await v('POST', '/v1/chat/messages', { text: 'two' });
@@ -101,8 +101,8 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 			['email', { email: 'agent@shop.example.com' }],
 			['sms', { phone: '+12025550143' }],
 		]);
-		await sys.setting('staff_alerts', 'phoneChannel', 'whatsapp');
-		await sys.setting('staff_alerts', 'frequency', 'first_unanswered');
+		await sys.setting('inbox', 'phoneChannel', 'whatsapp');
+		await sys.setting('inbox', 'frequency', 'first_unanswered');
 		const other = sys.visitor();
 		await other('POST', '/v1/chat/messages', { text: 'three' });
 		await other('POST', '/v1/chat/messages', { text: 'four' });
@@ -115,7 +115,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('a staff reply alerts a visitor who left, once until they check again', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		const v = await verifiedVisitor(sys, { phone: '+447700900123' });
 		const sent = await v('POST', '/v1/chat/messages', {
@@ -151,7 +151,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('a reply from the merchant’s server alerts with the staff name of the widget texts (C24)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts', 'transcripts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		await sys.text('chat.staff', 'Équipe');
 		const v = await verifiedVisitor(sys, { email: 'ann@example.com' });
@@ -166,7 +166,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('with How often every_reply each staff reply alerts a visitor who is away (C16)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		await sys.setting('visitor_alerts', 'frequency', 'every_reply');
 		const v = await verifiedVisitor(sys, { email: 'ann@example.com' });
@@ -197,7 +197,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('a reply alert goes only to an address Accounts verified, with a link on the website’s own address (SR-6-3)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		const ticket = await sys.ticket();
 		/**
@@ -265,7 +265,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	const both = { email: 'ann@example.com', phone: '+447700900123' };
 
 	it('a reply alert goes by the channels in the order set: the first the visitor has an address for', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		// the default (none chosen): the channels Notifications takes, email, then SMS, then WhatsApp (C23)
 		expect(await alertOf(sys, both)).toEqual([['email', { email: 'ann@example.com' }]]);
@@ -281,7 +281,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('by default the alert goes by the channels switched on in Notifications (C23)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		const off = () => ({
 			status: 403,
@@ -298,7 +298,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('a channel Notifications does not take passes the alert to the next one', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		await sys.setting('visitor_alerts', 'channels', ['whatsapp', 'email']);
 		const whatsapp = 'https://notifications.example.dev/v1/messages/whatsapp';
@@ -325,7 +325,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 
 describe('guests and sign-ins (C7)', () => {
 	it('an imported guest cookie works; a guest chat merges by time into the account’s own; claims by phone', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('accounts');
 		// a store's own guest cookie, imported as a hash (PLAN 0.8.10 Migration)
 		const cookie = 'storeGuest-1234567890abcdef';
@@ -374,8 +374,8 @@ describe('guests and sign-ins (C7)', () => {
 
 describe('older messages, typing, Seen and the paused notice (C8, C9)', () => {
 	it('pages back by sequence for visitors, staff and the server; hides typing and Seen when set', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'typing_receipts']);
-		await sys.setting('guest_chat', 'messageLimit', 0);
+		const sys = await start(['visitor_chat', 'inbox']);
+		await sys.setting('visitor_chat', 'messageLimit', 0);
 		const v = sys.visitor();
 		let id = '';
 		for (let i = 1; i <= 7; i += 1) id = (await v('POST', '/v1/chat/messages', { text: `m${i}` })).json.chat.conversation.id;
@@ -410,13 +410,8 @@ describe('inbox options (C11)', () => {
 	it('hides guests until escalated; pausing by reply rights keeps who and why; one note; the first replier', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
-			'signed_in_chat',
 			'inbox',
-			'handoff',
-			'assignment',
-			'internal_notes',
-		]);
+			'handoff']);
 		await sys.paste('accounts');
 		const guest = sys.visitor();
 		const g = (await guest('POST', '/v1/chat/messages', { text: 'guest here' })).json.chat.conversation.id;
@@ -489,7 +484,7 @@ describe('inbox options (C11)', () => {
 
 describe('staff attachments (C12)', () => {
 	it('staff send images and PDFs up to 10 MB (fixed); Word and text files are refused; visitors keep their own types', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'attachments']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.connect('storage', STORAGE_KEY);
 		const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 		const ticket = await sys.ticket();

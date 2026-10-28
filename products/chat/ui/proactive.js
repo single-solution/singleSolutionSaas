@@ -142,7 +142,11 @@ export const startProactive = ({ win, schedule, cancel, now, features, settings,
 	const later = (task, ms) => timers.push(schedule(task, ms));
 
 	const { idleMinutes, oncePer, hideOnMobile } = settings.proactive;
-	if (features.includes('proactive_idle') && idleMinutes > 0 && !(hideOnMobile && isPhone(win))) {
+	const idleOn =
+		(features.includes('proactive_idle') || features.includes('visitor_chat')) &&
+		idleMinutes > 0 &&
+		!(hideOnMobile && isPhone(win));
+	if (idleOn) {
 		const idleMs = idleMinutes * 60_000;
 		let last = now();
 		const touch = () => {
@@ -161,15 +165,20 @@ export const startProactive = ({ win, schedule, cancel, now, features, settings,
 		later(fire, idleMs);
 	}
 
-	const rule = features.includes('proactive_pages')
-		? settings.proactive.pageRules.find((each) => pathMatches(each.path, path))
-		: undefined;
+	const pageRulesOn = features.includes('proactive_pages') || features.includes('visitor_chat');
+	const rule =
+		pageRulesOn && settings.proactive.pageRules
+			? settings.proactive.pageRules.find((each) => pathMatches(each.path, path))
+			: undefined;
 	if (rule) later(() => void offer('page', rule.message), Math.max(0, rule.delay) * 1000);
 
 	const flow = features.includes('leads_flows') ? pageFlow(settings.flows, path) : null;
 	if (flow && flow.start.delay > 0) later(() => startFlow(flow), flow.start.delay * 1000);
 
-	if (features.includes('proactive_exit') && isDesktop(win)) {
+	const exitOn =
+		(features.includes('proactive_exit') || (features.includes('visitor_chat') && Boolean(settings.proactive.exitIntent))) &&
+		isDesktop(win);
+	if (exitOn) {
 		/** @param {MouseEvent} event */
 		const leave = (event) => {
 			if (!event.relatedTarget && event.clientY <= 0) offer('exit', t('chat.exit'));

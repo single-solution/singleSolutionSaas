@@ -159,18 +159,14 @@ describe('a product dashboard Overview', () => {
 			needs: [product],
 			steps: [{ key: 'own', label: 'Add a note form', done: false }],
 		});
-		expect(needTitles(container)).toEqual([
-			'Mail key failed its last test',
-			'SMS key failed its last test',
-			'No note form yet',
-			'6 setup steps left',
-		]);
+		// PLAN F5: Needs you shows one primary next step; the rest stay on the setup checklist
+		expect(needTitles(container)).toEqual(['Mail key failed its last test']);
 		expect(text).toContain('Mail key failed its last test, and 3 more things need you.');
 		expect(text).toContain('Each item says what happens if it waits.');
 		// a failed test says why; only the switched-on features that need it are named
 		expect(text).toContain('The key was refused. Needed by inbox: charged, but not working until it passes.');
-		// pending setup is summarized with a jump to the checklist
-		expect(byText(container, 'See setup', 'a').getAttribute('href')).toBe('#setup-checklist');
+		// setup checklist stays on the page (F5 keeps secondary needs off the Needs card)
+		expect(container.querySelector('#setup-checklist')).not.toBeNull();
 		// nothing saved in the Portal yet: a link to its Website settings (a merchant's own page) in the checklist
 		expect(byText(container, 'Open in the Portal', 'a').getAttribute('href')).toBe(
 			'https://portal.example.com/websites/web_1/settings',
@@ -283,7 +279,6 @@ describe('a product dashboard Overview', () => {
 		});
 		const { container, text, open } = show(data);
 		expect(text).toContain('1 setup step left.');
-		expect(text).toContain('None yet');
 		expect(text).toContain('1 of 2 done');
 		expect(text).toContain('Nothing shows on shop.example.com, and nothing is charged, until a feature is on.');
 		expect(byText(container, 'Switch on a feature', 'span').closest('li')?.querySelectorAll('button')).toHaveLength(1);

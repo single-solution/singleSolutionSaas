@@ -479,6 +479,17 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	};
 
 	/**
+	 * Request and read a step-up OTP code for a client session (A5).
+	 * @param {ReturnType<typeof api.session>} client
+	 * @param {string} email
+	 */
+	const stepUp = async (client, email) => {
+		await client.post('/v1/me/step-up-otp', {});
+		const m = [...mailer.sent].reverse().find((item) => item.to === email && item.template === 'step_up_otp');
+		return { code: String(m?.data?.otp ?? '') };
+	};
+
+	/**
 	 * The website's two tokens of a product: browser from the Install and tokens list, server revealed (Owner).
 	 * @param {string} merchantId @param {string} websiteId @param {string} [productId]
 	 */
@@ -487,32 +498,36 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		const base = `/v1/merchants/${merchantId}/websites/${websiteId}/tokens`;
 		const list = await by.get(base);
 		const item = list.json.items.find((/** @type {{ productId: string }} */ i) => i.productId === productId);
-		// (showing a server token is confirmed with the person's password)
-		const revealed = await by.post(`${base}/${productId}/reveal`, { password: PASSWORD });
+		// (showing a server token is confirmed with the person's OTP)
+		const otp = await stepUp(by, 'owner@portal.test');
+		const revealed = await by.post(`${base}/${productId}/reveal`, otp);
 		return { browser: String(item.browserToken), server: String(revealed.json.serverToken) };
 	};
 
 	/**
-	 * A dashboard session of an admin (Open as admin); password step-up required (stolen session blast radius).
+	 * A dashboard session of an admin (Open as admin); OTP step-up required (stolen session blast radius).
 	 * @param {ReturnType<typeof api.session>} by
 	 * @param {string | null} websiteId
 	 * @param {string} [productId]
+	 * @param {string} [email]
 	 */
-	const adminSession = async (by, websiteId, productId = productManifest.id) => {
-		const launch = await by.post(`/v1/admin/products/${productId}/launch`, { websiteId, password: PASSWORD });
+	const adminSession = async (by, websiteId, productId = productManifest.id, email = 'owner@portal.test') => {
+		const otp = await stepUp(by, email);
+		const launch = await by.post(`/v1/admin/products/${productId}/launch`, { websiteId, ...otp });
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;
 	};
 
 	/**
-	 * A merchant's dashboard session for one website (Open on the product card); password step-up required.
-	 * @param {{ client: ReturnType<typeof api.session>, merchantId: string }} who
+	 * A merchant's dashboard session for one website (Open on the product card); OTP step-up required.
+	 * @param {{ client: ReturnType<typeof api.session>, merchantId: string, email: string }} who
 	 * @param {string} websiteId
 	 */
 	const merchantSession = async (who, websiteId) => {
+		const otp = await stepUp(who.client, who.email);
 		const launch = await who.client.post(
 			`/v1/merchants/${who.merchantId}/websites/${websiteId}/products/${productManifest.id}/launch`,
-			{ password: PASSWORD },
+			otp,
 		);
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;
@@ -567,12 +582,12 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 			const target = new URL(/** @type {string} */ (uri));
 			target.pathname = '/';
 			const record = await portalDb.collection('identity_websites').findOne({ _id: /** @type {any} */ (websiteId) });
-			const res = await (
-				await owner()
-			).put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/database`, {
+			const by = await owner();
+			const otp = await stepUp(by, 'owner@portal.test');
+			const res = await by.put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/database`, {
 				value: target.toString(),
 				names,
-				password: PASSWORD,
+				...otp,
 			});
 			if (res.status !== 200) throw new Error(`database ${res.status} ${JSON.stringify(res.json)}`);
 			databaseNames.set(websiteId, names);
@@ -584,29 +599,35 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	};
 
 	/**
-	 * Enter the website's one storage in the Portal, as an Owner does (Website settings › Data and files, the password
-	 * again). Every product of the website that needs storage gets it, in a folder of its own.
+	 * Enter the website's one storage in the Portal, as an Owner does (Website settings › Data and files, with OTP).
+	 * Every product of the website that needs storage gets it, in a folder of its own.
 	 * @param {string} websiteId @param {Record<string, unknown>} value `{ bucket, region, accessKeyId, secretAccessKey, … }`
 	 */
 	const connectStorage = async (websiteId, value) => {
 		const record = await portalDb.collection('identity_websites').findOne({ _id: /** @type {any} */ (websiteId) });
-		const res = await (
-			await owner()
-		).put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/storage`, { value, password: PASSWORD });
+		const by = await owner();
+		const otp = await stepUp(by, 'owner@portal.test');
+		const res = await by.put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/storage`, {
+			value,
+			...otp,
+		});
 		if (res.status !== 200) throw new Error(`storage ${res.status} ${JSON.stringify(res.json)}`);
 		await settle();
 	};
 
 	/**
-	 * Enter the website's AI provider key in the Portal, as an Owner does (Website settings › Data and files, the password
-	 * again). Every product of the website whose manifest says `needs.ai` (Chat) gets it; no product keeps it by itself.
+	 * Enter the website's AI provider key in the Portal, as an Owner does (Website settings › Data and files, with OTP).
+	 * Every product of the website whose manifest says `needs.ai` (Chat) gets it; no product keeps it by itself.
 	 * @param {string} websiteId @param {Record<string, unknown>} value `{ provider, apiKey, model, baseUrl? }`
 	 */
 	const connectAi = async (websiteId, value) => {
 		const record = await portalDb.collection('identity_websites').findOne({ _id: /** @type {any} */ (websiteId) });
-		const res = await (
-			await owner()
-		).put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/ai`, { value, password: PASSWORD });
+		const by = await owner();
+		const otp = await stepUp(by, 'owner@portal.test');
+		const res = await by.put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/ai`, {
+			value,
+			...otp,
+		});
 		if (res.status !== 200) throw new Error(`ai ${res.status} ${JSON.stringify(res.json)}`);
 		await settle();
 	};
@@ -658,6 +679,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		connectDatabase,
 		connectStorage,
 		connectAi,
+		stepUp,
 		addCredits,
 		waitingNotices,
 		activity,

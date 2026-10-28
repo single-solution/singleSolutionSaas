@@ -354,6 +354,18 @@ describe('the payment API and Stripe', () => {
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('This payment was refunded');
 	});
 
+	it('refunds when payment_api is on without refunds feature (Workstream E refunds demote)', async () => {
+		await env.switchOn(ALL.filter((key) => key !== 'refunds'));
+		stripeAnswers();
+		const payment = await createPayment({ gateway: 'stripe', amount: 100000 });
+		await page(`/pay/${env.websiteId}/${payment.id}`);
+		await stripePaid(payment.id, 100000);
+		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, { amount: 100000 });
+		expect(refund.status).toBe(201);
+		expect(refund.json).toMatchObject({ status: 'refunded', refunded: 100000 });
+		await env.switchOn(ALL);
+	});
+
 	it('reserves a refund before the gateway is called: two at once reach it once, a refused one leaves nothing behind (SR-3-3)', async () => {
 		stripeAnswers();
 		const payment = await createPayment({ gateway: 'stripe' });

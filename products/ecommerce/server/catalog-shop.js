@@ -404,7 +404,7 @@ export const createCatalogShop = (product, service, common) => {
 			brand,
 			new Map(categories.map((c) => [c.id, c])),
 			new Map(charts.map((c) => [c.id, c])),
-			String((await s.values('size_charts')).defaultChartId ?? '') || null,
+			String((await s.values('size_charts'))?.defaultChartId || (await s.values('catalog'))?.defaultChartId || '') || null,
 		);
 		return chart ? chartView(chart) : null;
 	};

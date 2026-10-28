@@ -20,6 +20,7 @@ import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
+import push from '../schemas/push.settings.json' with { type: 'json' };
 import browserPush from '../schemas/browser_push.settings.json' with { type: 'json' };
 import delayedSend from '../schemas/delayed_send.settings.json' with { type: 'json' };
 import deliveryLog from '../schemas/delivery_log.shared.json' with { type: 'json' };
@@ -28,6 +29,7 @@ import fallback from '../schemas/fallback.settings.json' with { type: 'json' };
 import multiLanguage from '../schemas/multi_language.settings.json' with { type: 'json' };
 import quietHours from '../schemas/quiet_hours.settings.json' with { type: 'json' };
 import sendApi from '../schemas/send_api.settings.json' with { type: 'json' };
+import sendingPolicy from '../schemas/sending_policy.shared.json' with { type: 'json' };
 import sendLimits from '../schemas/send_limits.settings.json' with { type: 'json' };
 import sms from '../schemas/sms.settings.json' with { type: 'json' };
 import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' };
@@ -47,14 +49,8 @@ const SETTINGS = {
 	whatsapp,
 	email,
 	sms,
-	browser_push: browserPush,
-	staff_push: staffPush,
+	push,
 	webhooks,
-	fallback,
-	quiet_hours: quietHours,
-	send_limits: sendLimits,
-	delayed_send: delayedSend,
-	multi_language: multiLanguage,
 	send_api: sendApi,
 };
 
@@ -66,8 +62,13 @@ const SETTINGS = {
 const SHARED_SETTINGS = {
 	delivery_log: {
 		name: 'Delivery log',
-		features: ['whatsapp', 'email', 'sms', 'browser_push', 'staff_push', 'webhooks'],
+		features: ['whatsapp', 'email', 'sms', 'push', 'browser_push', 'staff_push', 'webhooks', 'send_api'],
 		settings: deliveryLog,
+	},
+	sending_policy: {
+		name: 'Sending policy',
+		features: ['whatsapp', 'email', 'sms', 'push', 'browser_push', 'staff_push', 'send_api'],
+		settings: sendingPolicy,
 	},
 };
 
@@ -82,7 +83,7 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 export { strings };
 
 /** The features that send to the website's customers, named in its Setup sheet (staff push reaches its staff only). */
-const CUSTOMER_CHANNELS = Object.freeze(['whatsapp', 'email', 'sms', 'browser_push']);
+const CUSTOMER_CHANNELS = Object.freeze(['whatsapp', 'email', 'sms', 'push', 'browser_push']);
 
 /** The fallback key a misconfigured product builds its sealer with (it answers 503 everywhere anyway). */
 const UNCONFIGURED_KEY = 'unconfigured-notifications-encryption-key-000';
@@ -185,7 +186,12 @@ export const createProductInstance = (options) => {
 	 */
 	const setupPart = async ({ websiteId, on }) => {
 		const channels = manifest.features
-			.filter((feature) => CUSTOMER_CHANNELS.includes(feature.key) && on.includes(feature.key))
+			.filter(
+				(feature) =>
+					CUSTOMER_CHANNELS.includes(feature.key) &&
+					on.includes(feature.key) &&
+					(feature.key !== 'browser_push' || !on.includes('push')),
+			)
 			.map((feature) => feature.name);
 		const summaries = [
 			{
@@ -226,7 +232,7 @@ export const createProductInstance = (options) => {
 			push_keys: {
 				label: 'Push keys (VAPID)',
 				kind: 'secret',
-				neededBy: ['browser_push', 'staff_push'],
+				neededBy: ['push', 'browser_push', 'staff_push'],
 				secretField: 'privateKey',
 				test: async (value) => {
 					const keys = pushKeysOf(value);

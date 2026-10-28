@@ -201,9 +201,11 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 			...(info?.productName ? { productName: info.productName } : {}),
 		};
 	};
+	const hasLegacyWho = on('guest_chat') || on('signed_in_chat');
+	const allowGuests = () => (hasLegacyWho ? on('guest_chat') : s.allowGuests !== false);
+	const allowSignedIn = () => (hasLegacyWho ? on('signed_in_chat') : s.allowSignedIn !== false);
 	const isGuest = () => chat.visitor.kind !== 'user' && !visitor.signedIn();
-	const nextStep = () =>
-		on('signed_in_chat') && webAddress(s.signInUrl, here()) ? 'sign_in' : on('leads_flows') ? 'lead' : 'none';
+	const nextStep = () => (allowSignedIn() && webAddress(s.signInUrl, here()) ? 'sign_in' : on('leads_flows') ? 'lead' : 'none');
 
 	/** @param {number} count */
 	const setUnread = (count) => {
@@ -484,11 +486,11 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		});
 	const needsContact = () =>
 		chat.conversation?.contactNeeded === true ||
-		(on('guest_chat') && s.guests.contactCapture === 'before_first' && isGuest() && !chat.conversation && !pendingContact);
+		(allowGuests() && s.guests.contactCapture === 'before_first' && isGuest() && !chat.conversation && !pendingContact);
 	// the API asks for a rating (on resolve, after a staff reply or on request, as the Ratings setting says)
 	const wantsRating = () => {
 		const c = chat.conversation;
-		return on('ratings') && !!c && !c.rating && !rated && c.ratingRequested === true;
+		return (on('ratings') || s.ratings?.enabled === true) && !!c && !c.rating && !rated && c.ratingRequested === true;
 	};
 	/** @returns {[string, (() => HTMLElement) | null]} */
 	const partOf = () => {
@@ -512,10 +514,10 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		setHidden(panel, !isOpen);
 		launcher.setAttribute('aria-expanded', String(isOpen));
 		welcome.textContent =
-			!isGuest() || !on('guest_chat') || s.guests.messageLimit <= 0
+			!isGuest() || !allowGuests() || s.guests.messageLimit <= 0
 				? t('chat.welcomeSignedIn')
 				: formatText(t('chat.welcomeGuest'), { limit: s.guests.messageLimit });
-		setHidden(typing, !(on('typing_receipts') && (typingPace || c?.aiPending === true)));
+		setHidden(typing, !((on('typing_receipts') || s.typing?.showTyping !== false) && (typingPace || c?.aiPending === true)));
 
 		/** @type {string[]} */
 		const lines = [];
@@ -540,18 +542,22 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		setHidden(talk, !(on('handoff') && s.handoff.showButton && live && !c.waiting));
 		setHidden(older, !earlier);
 		// a transcript goes only to the verified email of a sign-in (SR-6-2): a guest has none to send to
-		setHidden(copy, !(on('transcripts') && c && !stopped && chat.visitor.kind === 'user'));
+		setHidden(copy, !((on('transcripts') || s.transcripts !== false) && c && !stopped && chat.visitor.kind === 'user'));
 		setHidden(end, !live);
 		setHidden(composer, stopped || Boolean(limit) || (needsContact() && !c));
 		const visitors = s.attachments.visitors;
 		setHidden(
 			attach,
-			!(on('attachments') && s.attachments.storage && (visitors === 'everyone' || (visitors === 'signed_in' && !isGuest()))),
+			!(
+				(on('attachments') || (on('visitor_chat') && visitors !== 'off')) &&
+				s.attachments.storage &&
+				(visitors === 'everyone' || (visitors === 'signed_in' && !isGuest()))
+			),
 		);
 
 		for (const each of log.querySelectorAll('.seen')) each.remove();
 		const seenSeq = c?.staffSeenSeq;
-		if (on('typing_receipts') && typeof seenSeq === 'number') {
+		if ((on('typing_receipts') || s.typing?.showSeen !== false) && typeof seenSeq === 'number') {
 			const last = [...shown.values()]
 				.filter((each) => each.message.author === 'visitor' && each.message.seq <= seenSeq)
 				.at(-1);

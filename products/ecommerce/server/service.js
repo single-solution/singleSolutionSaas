@@ -12,6 +12,7 @@ import { zonedParts } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { KEEP_MS, createOutbox } from '../adapters/outbox.js';
+import { DEMOTE, DEMOTE_PARENTS, expandFeaturesOn, sliceValues } from '../core/demoted.js';
 import { DEFAULT_CURRENCY } from '../core/limits.js';
 import { unitOf } from '../core/money.js';
 import { createPaymentMethods } from './payment-methods.js';
@@ -235,9 +236,27 @@ export const createService = (product) => {
 	const site = async (ctx) => {
 		const websiteId = /** @type {string} */ (ctx.websiteId);
 		const merchantId = ctx.merchantId ?? null;
-		const on = await product.featuresOn(websiteId);
+		const baseOn = await product.featuresOn(websiteId);
 		/** @type {Map<string, Promise<Record<string, any>>>} */
 		const values = new Map();
+		/** Parent settings bags used to expand demoted peers (loaded once per site). */
+		/** @type {Promise<Record<string, Record<string, any>>> | null} */
+		let parents = null;
+		const parentsOf = () => {
+			parents ??= (async () => {
+				/** @type {Record<string, Record<string, any>>} */
+				const out = {};
+				await Promise.all(
+					DEMOTE_PARENTS.filter((key) => baseOn.includes(key)).map(async (key) => {
+						out[key] = await product.settings.values(websiteId, key);
+					}),
+				);
+				return out;
+			})();
+			return parents;
+		};
+		const parentBags = await parentsOf();
+		const on = expandFeaturesOn(baseOn, parentBags);
 		/** @type {Promise<WebsiteData> | null} */
 		let data = null;
 		/** @type {Map<string, Promise<any[]>>} */
@@ -258,7 +277,13 @@ export const createService = (product) => {
 			values: (feature) => {
 				let found = values.get(feature);
 				if (!found) {
-					found = product.settings.values(websiteId, feature);
+					const demoted = DEMOTE[feature];
+					found = demoted
+						? (async () => {
+								const bag = parentBags[demoted.parent] ?? (await product.settings.values(websiteId, demoted.parent));
+								return /** @type {Record<string, any>} */ (sliceValues(bag, feature));
+							})()
+						: product.settings.values(websiteId, feature);
 					values.set(feature, found);
 				}
 				return found;

@@ -654,12 +654,15 @@ export function ProductOverview({
 
 	const items = urgentFirst([...first, ...needs, ...last]);
 	const top = items[0];
+	// PLAN F5: one clear next step up front; the rest stay on the setup checklist
+	const primary = top ? [top] : [];
 	const sentence = !top
 		? fillText(T.allSet, { domain })
 		: fillText(items.length === 1 ? T.only : items.length === 2 ? T.oneMore : T.more, {
 				first: top.title,
 				count: items.length - 1,
 			});
+	const setupQuiet = remaining === 0;
 
 	return (
 		<Page
@@ -677,26 +680,28 @@ export function ProductOverview({
 			<div className="@container">
 				<div className="grid items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
 					<div className="min-w-0 space-y-5">
-						<Card title={N.title} {...(items.length > 0 ? { subtitle: N.intro } : {})}>
-							<NeedsList items={items} none={N.none} />
+						<Card title={N.title} {...(primary.length > 0 ? { subtitle: N.intro } : {})}>
+							<NeedsList items={primary} none={N.none} />
 						</Card>
-						<StatGrid label={T.numbers}>
-							<Stat
-								label={T.today}
-								value={formatCredits(data.todayMillicredits, { locale })}
-								hint={T.todayHint}
-								icon="coins"
-								kind="credit"
-							/>
-							<Stat
-								label={T.features}
-								value={on.length}
-								hint={on.length > 0 ? namesOf(on, 3) : T.noFeatures}
-								icon="zap"
-								kind="feature"
-							/>
-							{numbers}
-						</StatGrid>
+						{setupQuiet ? (
+							<StatGrid label={T.numbers}>
+								<Stat
+									label={T.today}
+									value={formatCredits(data.todayMillicredits, { locale })}
+									hint={T.todayHint}
+									icon="coins"
+									kind="credit"
+								/>
+								<Stat
+									label={T.features}
+									value={on.length}
+									hint={on.length > 0 ? namesOf(on, 3) : T.noFeatures}
+									icon="zap"
+									kind="feature"
+								/>
+								{numbers}
+							</StatGrid>
+						) : null}
 					</div>
 					<div className="min-w-0 space-y-5">
 						<SetupChecklist
@@ -706,7 +711,7 @@ export function ProductOverview({
 							steps={checklist}
 							labels={{ done: S.done, todo: S.todo, review: S.review, optional: S.optional }}
 						/>
-						<RecentChanges items={data.recentChanges} limit={4} />
+						<RecentChanges items={data.recentChanges} limit={3} />
 					</div>
 				</div>
 			</div>

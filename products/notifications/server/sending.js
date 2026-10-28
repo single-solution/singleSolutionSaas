@@ -28,7 +28,7 @@ import { normalizeEmail } from '@ss/contracts/email';
 import { isNetError } from '@ss/net';
 import { problem } from '@ss/app-kit';
 import { signWebhook } from '@ss/protocol';
-import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, addressFor } from '../core/channels.js';
+import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, addressFor, isChannelActive } from '../core/channels.js';
 import { fallbackChainOf } from '../core/choices.js';
 import {
 	DEFAULT_LANGUAGE,
@@ -214,9 +214,10 @@ export const createSending = (product) => {
 		s,
 		{ key, fallbackKey, channel, address, values, language, secretValues, defaults, longValues, topic },
 	) => {
+		const multiLanguageActive = s.on.includes('multi_language') || s.on.includes('sending_policy');
 		/** @param {string} templateKey */
 		const ownOf = async (templateKey) =>
-			pickVersion(await s.store.templates.versions(templateKey, channel), language, s.on.includes('multi_language'));
+			pickVersion(await s.store.templates.versions(templateKey, channel), language, multiLanguageActive);
 		// the product's default words: in the recipient's language when the product has them (exact, then its base
 		// language), else its US-English words (fixed-choices N11)
 		const declared = defaults[channel];
@@ -367,8 +368,15 @@ export const createSending = (product) => {
 	 */
 	const deliver = async (s, message) => {
 		const { channel } = message;
-		if (!s.on.includes(CHANNEL_FEATURES[channel]))
+		if (!isChannelActive(channel, s.on))
 			return { ...failed('feature_off', { values: { feature: CHANNEL_FEATURES[channel] } }), provider: 'none' };
+		if (s.on.includes('push')) {
+			const pushSettings = /** @type {any} */ (await product.settings.values(s.websiteId, 'push'));
+			if (channel === 'push' && pushSettings?.visitors === false && !s.on.includes('browser_push'))
+				return { ...failed('feature_off', { values: { feature: 'push' } }), provider: 'none' };
+			if (channel === 'staff_push' && pushSettings?.staff === false && !s.on.includes('staff_push'))
+				return { ...failed('feature_off', { values: { feature: 'push' } }), provider: 'none' };
+		}
 		const value = await product.connections.value(s.websiteId, CHANNEL_CONNECTIONS[channel]);
 		if (typeof value !== 'object' || value === null)
 			return { ...failed('not_connected', { values: { connection: CHANNEL_CONNECTIONS[channel] } }), provider: 'none' };
@@ -490,11 +498,11 @@ export const createSending = (product) => {
 	 * @returns {Promise<(ReturnType<typeof keep> & { channel: Channel, address: string, fallbackChain: Channel[] }) | null>}
 	 */
 	const fallbackOf = async (s, message) => {
-		if (!s.on.includes('fallback')) return null;
+		if (!s.on.includes('fallback') && !s.on.includes('sending_policy')) return null;
 		const chain = message.fallbackChain;
 		for (const [at, target] of chain.entries()) {
 			const left = chain.slice(at + 1);
-			if (!s.on.includes(CHANNEL_FEATURES[target])) continue;
+			if (!isChannelActive(target, s.on)) continue;
 			const address = addressFor(target, message.to);
 			if (!address) continue;
 			if (!message.required && (await optedOut(s, address, message.topic))) continue;
@@ -745,7 +753,11 @@ export const createSending = (product) => {
 		}
 		const t = now();
 		const required = made.required || input.required;
-		const limits = s.on.includes('send_limits') ? await product.settings.values(s.websiteId, 'send_limits') : null;
+		const limits = s.on.includes('send_limits')
+			? await product.settings.values(s.websiteId, 'send_limits')
+			: s.on.includes('sending_policy')
+				? await product.settings.values(s.websiteId, 'sending_policy')
+				: null;
 		/** @type {Omit<MessageRecord, 'id' | 'createdAt'>} */
 		const base = {
 			template: input.template,
@@ -826,7 +838,7 @@ export const createSending = (product) => {
 		}
 		// Accounts' messages (sign-in codes and links) go at once: a delayed send never holds them either
 		let dueAt = input.template !== null && isAccountKey(input.template) ? t : (input.sendAt ?? t);
-		if (!made.urgent && s.on.includes('quiet_hours')) {
+		if (!made.urgent && (s.on.includes('quiet_hours') || s.on.includes('sending_policy'))) {
 			const windows = await product.lists.quietHours(s.websiteId);
 			const timeZone = input.to.timeZone ?? (await product.business(s.websiteId)).timeZone ?? 'UTC';
 			dueAt = quietUntil(dueAt, windows, timeZone, input.channel);

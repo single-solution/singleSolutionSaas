@@ -154,6 +154,17 @@ export const bootPortal = async ({ db, clock = createClock(T0), settings, allowH
 	/** Activity entries (newest first) of an action. @param {string} action */
 	const activity = (action) => db.collection('platform_audit').find({ action }).sort({ at: -1, _id: -1 }).toArray();
 
+	/**
+	 * Request and read a step-up OTP code for a client session (A5).
+	 * @param {ReturnType<typeof api.session>} client
+	 * @param {string} email
+	 */
+	const stepUpOtp = async (client, email) => {
+		await client.post('/v1/me/step-up-otp', {});
+		const msg = [...mailer.sent].reverse().find((m) => m.to === email && m.template === 'step_up_otp');
+		return msg?.data?.otp ?? '';
+	};
+
 	return {
 		portal,
 		db,
@@ -169,6 +180,12 @@ export const bootPortal = async ({ db, clock = createClock(T0), settings, allowH
 		productCall,
 		verify,
 		activity,
+		stepUpOtp,
+		/**
+		 * @param {ReturnType<typeof api.session>} client
+		 * @param {string} email
+		 */
+		confirmOtp: async (client, email) => ({ code: await stepUpOtp(client, email) }),
 		close: async () => {
 			for (const product of products.splice(0)) await product.close();
 		},

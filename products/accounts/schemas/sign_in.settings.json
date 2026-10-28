@@ -1,0 +1,83 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"methods": {
+			"type": "array",
+			"title": "Enabled sign-in methods",
+			"description": "The sign-in methods visitors can use.",
+			"items": {
+				"type": "string",
+				"enum": ["phone_code", "phone_password", "email_password", "email_code", "google", "apple", "facebook"]
+			},
+			"default": ["email_password"],
+			"x-ui": {
+				"group": "Methods",
+				"order": 1
+			}
+		},
+		"signUp": {
+			"type": "boolean",
+			"title": "Visitors can sign up",
+			"description": "Off: only you give people passwords (Add user, setup links, invites) and sign-up is closed.",
+			"default": true,
+			"x-ui": {
+				"group": "Basics",
+				"order": 2
+			}
+		},
+		"newUserName": {
+			"type": "string",
+			"title": "Name of new users",
+			"description": "The name a new user gets when they give none, for example Customer {last4} ({last4}: the last 4 digits of the number). Empty: no name.",
+			"default": "",
+			"maxLength": 120,
+			"x-ui": {
+				"group": "Basics",
+				"order": 3
+			}
+		},
+		"selfReset": {
+			"type": "string",
+			"title": "Forgot password",
+			"description": "Code: a code by SMS or WhatsApp (the channel in Phone numbers and codes) to choose a new password. Off: the Forgot password link opens the page below.",
+			"default": "code",
+			"enum": ["code", "off"],
+			"x-ui": {
+				"group": "Basics",
+				"order": 4
+			}
+		},
+		"forgotUrl": {
+			"type": "string",
+			"title": "Forgot password page",
+			"description": "With Forgot password set to Off: where the link goes, for example a WhatsApp chat with your business. Empty: no link.",
+			"default": "",
+			"maxLength": 2048,
+			"x-ui": {
+				"group": "Basics",
+				"order": 5
+			}
+		},
+		"minLength": {
+			"type": "integer",
+			"title": "Minimum password length",
+			"default": 8,
+			"minimum": 6,
+			"maximum": 128,
+			"x-ui": {
+				"group": "Password rules",
+				"order": 6
+			}
+		},
+		"letterAndDigit": {
+			"type": "boolean",
+			"title": "Needs a letter and a digit",
+			"default": false,
+			"x-ui": {
+				"group": "Password rules",
+				"order": 7
+			}
+		}
+	}
+}

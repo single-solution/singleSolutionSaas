@@ -66,40 +66,83 @@ export const SHOP_UNAVAILABLE =
 export const SHOP_ENDPOINTS = Object.freeze([
 	{
 		tool: SHOP_TOOLS.search,
-		feature: 'shop_search',
+		feature: 'shop_assistant',
+		setting: 'enableSearch',
+		legacy: 'shop_search',
 		signIn: false,
 		request:
 			'GET /v1/chat/products?q=<text>&category=<name>&grade=<grade>&minPrice=<minor units>&maxPrice=<minor units>&inStock=1&limit=<1–12>',
 	},
-	{ tool: SHOP_TOOLS.details, feature: 'shop_search', signIn: false, request: 'GET /v1/chat/products/<productId>' },
+	{
+		tool: SHOP_TOOLS.details,
+		feature: 'shop_assistant',
+		setting: 'enableSearch',
+		legacy: 'shop_search',
+		signIn: false,
+		request: 'GET /v1/chat/products/<productId>',
+	},
 	{
 		tool: SHOP_TOOLS.quote,
-		feature: 'shop_deals',
+		feature: 'shop_assistant',
+		setting: 'enableDeals',
+		legacy: 'shop_deals',
 		signIn: false,
 		request:
 			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<pieces, or an amount of its unit such as 2.5>&paymentMethod=<payment method key>&country=<country>&region=<region>&city=<city>&postalCode=<postal code>',
 	},
-	{ tool: SHOP_TOOLS.deals, feature: 'shop_deals', signIn: false, request: 'GET /v1/chat/deals?limit=<1–20>' },
-	{ tool: SHOP_TOOLS.top, feature: 'shop_top', signIn: false, request: 'GET /v1/chat/products/top?kind=top|new&limit=<1–12>' },
+	{
+		tool: SHOP_TOOLS.deals,
+		feature: 'shop_assistant',
+		setting: 'enableDeals',
+		legacy: 'shop_deals',
+		signIn: false,
+		request: 'GET /v1/chat/deals?limit=<1–20>',
+	},
+	{
+		tool: SHOP_TOOLS.top,
+		feature: 'shop_assistant',
+		setting: 'enableTop',
+		legacy: 'shop_top',
+		signIn: false,
+		request: 'GET /v1/chat/products/top?kind=top|new&limit=<1–12>',
+	},
 	{
 		tool: SHOP_TOOLS.orders,
-		feature: 'shop_my_orders',
+		feature: 'shop_assistant',
+		setting: 'enableMyOrders',
+		legacy: 'shop_my_orders',
 		signIn: true,
 		request: 'GET /v1/chat/me/orders?limit=<1–10> (SS-Sign-In)',
 	},
-	{ tool: SHOP_TOOLS.account, feature: 'shop_my_orders', signIn: true, request: 'GET /v1/chat/me/account (SS-Sign-In)' },
-	{ tool: SHOP_TOOLS.track, feature: 'track_shipment', signIn: true, request: 'GET /v1/chat/me/shipments (SS-Sign-In)' },
+	{
+		tool: SHOP_TOOLS.account,
+		feature: 'shop_assistant',
+		setting: 'enableMyOrders',
+		legacy: 'shop_my_orders',
+		signIn: true,
+		request: 'GET /v1/chat/me/account (SS-Sign-In)',
+	},
+	{
+		tool: SHOP_TOOLS.track,
+		feature: 'shop_assistant',
+		setting: 'enableTrackShipment',
+		legacy: 'track_shipment',
+		signIn: true,
+		request: 'GET /v1/chat/me/shipments (SS-Sign-In)',
+	},
 ]);
 
 /** The request of the store context the AI replies add (server token; the verified sign-in forwarded, C1). */
 export const STORE_CONTEXT_ENDPOINT = Object.freeze({
-	feature: 'shop_context',
+	feature: 'shop_assistant',
+	legacy: 'shop_context',
 	request: 'GET /v1/chat/context?productId=<the product the visitor views> (SS-Sign-In when signed in)',
 });
 
 /** The request of the context panel's shop info (server token; the conversation's signed-in visitor). */
 export const CONTEXT_ENDPOINT = Object.freeze({
-	feature: 'context_panel',
+	feature: 'inbox',
+	legacy: 'context_panel',
 	request: 'GET /v1/customers/<userId>/orders?limit=<1–20>',
 });
 
@@ -460,9 +503,11 @@ const SCHEMAS = {
  * @returns {AiToolSchema[]}
  */
 export const shopSchemas = (on, { signedIn }) =>
-	SHOP_ENDPOINTS.filter((row) => on.includes(row.feature) && (signedIn || !row.signIn)).map(
-		(row) => /** @type {AiToolSchema} */ (SCHEMAS[row.tool]),
-	);
+	SHOP_ENDPOINTS.filter(
+		(row) =>
+			(on.includes('shop_assistant') || on.includes(row.legacy) || on.includes(row.feature)) &&
+			(signedIn || !row.signIn),
+	).map((row) => /** @type {AiToolSchema} */ (SCHEMAS[row.tool]));
 
 /** A product id or slug as Ecommerce takes it, else null. @param {unknown} value */
 const productId = (value) => (typeof value === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(value.trim()) ? value.trim() : null);

@@ -24,12 +24,13 @@ export const accentStyle = (accent) =>
  * @param {{ branding: { name: string, logoUrl: string | null }, tagline?: string }} props
  */
 export function BrandMark({ branding, tagline }) {
-	const mark = String(branding.name ?? 'SS')
-		.split(/\s+/)
-		.filter(Boolean)
-		.slice(0, 2)
-		.map((part) => part[0]?.toUpperCase() ?? '')
-		.join('') || 'SS';
+	const mark =
+		String(branding.name ?? 'SS')
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((part) => part[0]?.toUpperCase() ?? '')
+			.join('') || 'SS';
 	return (
 		<div className="flex items-center gap-3">
 			{branding.logoUrl ? (

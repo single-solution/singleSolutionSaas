@@ -1,0 +1,66 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"enableSearch": {
+			"type": "boolean",
+			"title": "Search catalog and view product details",
+			"default": true,
+			"description": "Lets the AI search products, check stock and view details from Ecommerce.",
+			"x-ui": {
+				"group": "Shop tools",
+				"order": 1
+			}
+		},
+		"enableDeals": {
+			"type": "boolean",
+			"title": "Active deals and savings quotes",
+			"default": true,
+			"description": "Lets the AI look up active deals and calculate savings for visitors.",
+			"x-ui": {
+				"group": "Shop tools",
+				"order": 2
+			}
+		},
+		"enableTop": {
+			"type": "boolean",
+			"title": "Top and new products",
+			"default": true,
+			"description": "Lets the AI recommend top sellers and new arrivals.",
+			"x-ui": {
+				"group": "Shop tools",
+				"order": 3
+			}
+		},
+		"enableMyOrders": {
+			"type": "boolean",
+			"title": "My orders and account info",
+			"default": true,
+			"description": "Lets verified signed-in visitors ask about their recent orders and account details.",
+			"x-ui": {
+				"group": "Shop tools",
+				"order": 4
+			}
+		},
+		"enableTrackShipment": {
+			"type": "boolean",
+			"title": "Track shipments",
+			"default": true,
+			"description": "Lets verified signed-in visitors track package shipments.",
+			"x-ui": {
+				"group": "Shop tools",
+				"order": 5
+			}
+		},
+		"productCards": {
+			"type": "boolean",
+			"title": "Show product cards",
+			"default": true,
+			"description": "Shows rich interactive product cards below AI answers when products are recommended.",
+			"x-ui": {
+				"group": "Shop tools",
+				"order": 6
+			}
+		}
+	}
+}

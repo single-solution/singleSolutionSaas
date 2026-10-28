@@ -45,7 +45,7 @@ describe('inbox', () => {
 		const sys = await start(INBOX);
 		await sys.connect('ai', AI_KEY);
 		await sys.paste('notifications');
-		await sys.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
+		await sys.setting('inbox', 'recipients', ['team@shop.example.com']);
 		await sys.list('custom_fields', [{ key: 'tier', label: 'Tier', type: 'choice', options: ['Gold', 'Silver'] }]);
 		const ann = sys.visitor();
 		await ann('POST', '/v1/chat/messages', {
@@ -234,7 +234,7 @@ describe('inbox', () => {
 	});
 
 	it('the server API lists, replies, changes and deletes conversations; staff actions reach Accounts', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'attachments']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('accounts');
 		await sys.connect('storage', STORAGE_KEY);
 		await sys.setting('attachments', 'visitorUploads', 'everyone');
@@ -266,7 +266,7 @@ describe('inbox', () => {
 
 describe('teams and routing (C12)', () => {
 	it('gives each new chat to an online member of its team: round robin, least busy, by page', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff', 'assignment', 'presence_queue']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff']);
 		await sys.setting('assignment', 'autoAssign', 'round_robin');
 		await sys.list('teams', [
 			{ name: 'Wholesale', members: ['usr_sam'], languages: [], pages: ['/wholesale/**'] },
@@ -303,11 +303,11 @@ describe('teams and routing (C12)', () => {
 
 describe('delete every conversation (C20)', () => {
 	it('deletes every conversation and what belongs to it, with the server token and the domain typed', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'attachments', 'staff_alerts', 'leads_flows']);
+		const sys = await start(['visitor_chat', 'inbox', 'leads_flows']);
 		await sys.connect('storage', STORAGE_KEY);
 		await sys.paste('notifications');
 		await sys.setting('attachments', 'visitorUploads', 'everyone');
-		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		await sys.setting('inbox', 'recipients', ['boss@shop.example.com']);
 		// Notifications does not take the staff alerts: they are saved to be tried again
 		sys.responders.set('https://notifications.example.dev', () => ({ status: 503, body: {} }));
 		const ann = sys.visitor();
@@ -362,9 +362,9 @@ describe('delete every conversation (C20)', () => {
 	});
 
 	it('deleting one conversation also deletes the staff alerts still waiting to be sent about it', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
-		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		await sys.setting('inbox', 'recipients', ['boss@shop.example.com']);
 		sys.responders.set('https://notifications.example.dev', () => ({ status: 503, body: {} }));
 		const sent = await sys.visitor()('POST', '/v1/chat/messages', { text: 'Is the lamp in stock?' });
 		await sys.visitor()('POST', '/v1/chat/messages', { text: 'someone else' });
@@ -378,7 +378,7 @@ describe('delete every conversation (C20)', () => {
 	});
 
 	it('answers more when there is more than one call deletes, and the next call goes on', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
+		const sys = await start(['visitor_chat']);
 		await sys.connect('storage', STORAGE_KEY);
 		const data = await sys.product.data.forWebsite(sys.websiteId);
 		const at = new Date(sys.now());
@@ -423,7 +423,7 @@ describe('delete every conversation (C20)', () => {
 	});
 
 	it('stops between groups of ten when the attachments are slow, so the next call goes on after them', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
+		const sys = await start(['visitor_chat']);
 		await sys.connect('storage', STORAGE_KEY);
 		const data = await sys.product.data.forWebsite(sys.websiteId);
 		const at = new Date(sys.now());
@@ -466,7 +466,7 @@ describe('delete every conversation (C20)', () => {
 
 describe('leads', () => {
 	it('staff and the merchant’s server read and delete leads; delete-all scope leads deletes every one', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'leads_flows']);
+		const sys = await start(['visitor_chat', 'inbox', 'leads_flows']);
 		const ann = sys.visitor();
 		await ann('POST', '/v1/chat/messages', { text: 'hi' });
 		await ann('POST', '/v1/chat/leads', { fields: { name: 'Ann', email: 'ann@example.com' } });
@@ -538,7 +538,7 @@ describe('leads', () => {
 
 describe('knowledge and reports', () => {
 	it('edits knowledge entries and pages through tickets and the server API', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies', 'knowledge_base', 'knowledge_pages', 'knowledge_editor']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'knowledge_base']);
 		const ticket = await sys.ticket(['knowledge.edit']);
 		expect((await sys.admin(ticket, 'POST', '/v1/admin/knowledge/entries', { kind: 'faq', title: '', text: 'x' })).status).toBe(
 			422,
@@ -634,14 +634,11 @@ describe('knowledge and reports', () => {
 	it('reports count conversations, answers, reply times, ratings, leads and AI tokens', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
 			'ai_replies',
 			'inbox',
 			'handoff',
-			'ratings',
 			'leads_flows',
-			'reports',
-		]);
+			'reports']);
 		await sys.connect('ai', AI_KEY);
 		const a = sys.visitor();
 		await a('POST', '/v1/chat/messages', { text: 'question' });

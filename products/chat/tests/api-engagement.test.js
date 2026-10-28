@@ -40,7 +40,7 @@ const FLOWS = [
 
 describe('flows and leads', () => {
 	it('a keyword starts a flow: buttons, collected fields (a lead), a custom field, then a handoff', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'leads_flows', 'custom_fields', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'leads_flows', 'inbox', 'handoff']);
 		await sys.list('custom_fields', [{ key: 'budget', label: 'Budget', type: 'number' }]);
 		await sys.list('flows', FLOWS);
 		const v = sys.visitor();
@@ -67,7 +67,7 @@ describe('flows and leads', () => {
 	});
 
 	it('a page flow starts from the widget; typing instead of tapping ends a flow', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'leads_flows']);
+		const sys = await start(['visitor_chat', 'leads_flows']);
 		await sys.list('flows', [FLOWS[1], { ...FLOWS[0], steps: [{ kind: 'question', text: 'Pick', buttons: ['A'] }] }]);
 		const v = sys.visitor();
 		expect((await v('POST', '/v1/chat/flows/welcome/start', { page: { url: 'https://shop.example.com/cart' } })).status).toBe(
@@ -91,7 +91,7 @@ describe('flows and leads', () => {
 	});
 
 	it('leads with the merchant’s fields, consent and custom fields; contact capture saves a lead', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'leads_flows', 'custom_fields']);
+		const sys = await start(['visitor_chat', 'leads_flows']);
 		await sys.list('custom_fields', [{ key: 'size', label: 'Size', type: 'choice', options: ['S', 'M'] }]);
 		await sys.setting('leads_flows', 'leadFields', ['name', 'phone', 'message']);
 		await sys.setting('leads_flows', 'customLeadFields', ['size']);
@@ -120,7 +120,7 @@ describe('flows and leads', () => {
 
 describe('ratings, transcripts and attachments', () => {
 	it('ends a chat, asks for a rating and takes it; sends a transcript through Notifications', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ratings', 'transcripts']);
+		const sys = await start(['visitor_chat']);
 		await sys.paste('accounts');
 		// one label per point, the merchant's words (C13)
 		await sys.setting('ratings', 'labels', ['Bad', 'Good']);
@@ -160,7 +160,7 @@ describe('ratings, transcripts and attachments', () => {
 	});
 
 	it('emails the transcript only to the verified email of the signed-in visitor (SR-6-2)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'transcripts']);
+		const sys = await start(['visitor_chat']);
 		await sys.paste('accounts');
 		await sys.paste('notifications');
 		// an anonymous guest cannot make Chat mail the chat, with their own lines in it, to somebody else
@@ -192,7 +192,7 @@ describe('ratings, transcripts and attachments', () => {
 	});
 
 	it('visitors attach files as the setting allows, straight to the merchant’s storage', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'attachments']);
+		const sys = await start(['visitor_chat']);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
 		const off = await v('POST', '/v1/chat/uploads', { name: 'a.png', type: 'image/png', size: 100 });

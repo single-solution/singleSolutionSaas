@@ -7,7 +7,18 @@
  * PLAN 0.8.10 C1).
  * @module
  */
-import { estimateTokens } from '@ss/app-kit/ai';
+/**
+ * Rough token estimate (≈ 4 characters per token) when a provider reports no usage.
+ * @param {AiMessage[]} messages
+ * @param {string} output
+ */
+const estimateTokens = (messages, output) => {
+	const input = messages.reduce(
+		(sum, m) => sum + m.content.length + ('toolCalls' in m && m.toolCalls ? JSON.stringify(m.toolCalls).length : 0),
+		0,
+	);
+	return { input: Math.ceil(input / 4), output: Math.ceil(output.length / 4) };
+};
 
 /** @typedef {import('@ss/app-kit').AiMessage} AiMessage */
 /** @typedef {import('@ss/app-kit').AiResult} AiResult */

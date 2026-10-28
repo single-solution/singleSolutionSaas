@@ -377,7 +377,8 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		expect(shows('No features on')).toBe(true);
 		expect(shows('Spend per UTC day (last 30 days)')).toBe(true);
 		await press('Open Notes · beta.example.com');
-		fillDialog('Your password', PASSWORD);
+		await e.api.post('/v1/me/step-up-otp', {});
+		fillDialog('Authenticator code', world.lastOtp('bea@beta.test'));
 		await pressDialog('Open configure');
 		const launched = await e.waitCall(
 			'POST',
@@ -389,7 +390,8 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		// a refused launch shows its problem (the merchant is suspended meanwhile: every session ends)
 		await world.ownerBrowser.api.post(`/v1/admin/merchants/${beta.merchantId}/suspend`, { reason: 'check' });
 		await press('Open Notes · beta.example.com');
-		fillDialog('Your password', PASSWORD);
+		await e.api.post('/v1/me/step-up-otp', {});
+		fillDialog('Authenticator code', world.lastOtp('bea@beta.test'));
 		await pressDialog('Open configure');
 		await e.waitCall(
 			'POST',

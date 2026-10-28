@@ -1,0 +1,18 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"visitors": {
+			"type": "boolean",
+			"title": "Visitor push notifications",
+			"description": "Visitors who allow it get push notifications in their browser.",
+			"default": true
+		},
+		"staff": {
+			"type": "boolean",
+			"title": "Staff push notifications",
+			"description": "The website's staff get push notifications in their browser.",
+			"default": true
+		}
+	}
+}

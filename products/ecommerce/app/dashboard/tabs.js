@@ -77,8 +77,8 @@ const useShopOverview = (overview, { websiteId, open }) => {
 	const on = overview?.ok ? overview.data.featuresOn : [];
 	const shop = on.includes('checkout');
 	const catalog = on.includes('catalog');
-	const alertsOn = on.includes('staff_alerts');
-	const connections = useLoad(shop || alertsOn ? `${base}/connections` : null);
+	// staff alerts demoted under Checkout — load Connections whenever checkout is on
+	const connections = useLoad(shop ? `${base}/connections` : null);
 	const search = useLoad(catalog ? `${base}/search-index` : null);
 	const settings = useLoad(catalog || wantsSettings(overview, SETUP) ? `${base}/settings` : null);
 	// the settings and lists the switched-on features need to be set, as steps with a button to their section

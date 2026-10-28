@@ -42,8 +42,10 @@ export const mountSendMessage = ({ host, api, config }) => {
 		css: WIDGET_CSS,
 		render: (root) => {
 			const doc = /** @type {Document} */ (root.ownerDocument);
-			const channels = /** @type {Array<keyof typeof CHANNEL_FEATURES>} */ (Object.keys(CHANNEL_FEATURES)).filter((channel) =>
-				config.features.includes(CHANNEL_FEATURES[channel]),
+			const channels = /** @type {Array<keyof typeof CHANNEL_FEATURES>} */ (Object.keys(CHANNEL_FEATURES)).filter(
+				(channel) =>
+					config.features.includes(CHANNEL_FEATURES[channel]) ||
+					(config.features.includes('push') && (channel === 'push' || channel === 'staff_push')),
 			);
 			const channel = segmented(doc, {
 				label: t('send.channel'),

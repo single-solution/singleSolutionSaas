@@ -60,6 +60,13 @@ describe('the website Setup sheet', () => {
 		await env.setting('approval', 'mode', 'open');
 		expect((await partOf(env)).summaries[1]).toEqual({ title: 'Sign-up', text: 'Anyone can sign up.' });
 
+		// unified sign_in capability umbrella
+		await env.switchOn(['sign_in', 'approval']);
+		const umbrella = await partOf(env);
+		expect(validateProductBlueprint(umbrella).ok).toBe(true);
+		expect(umbrella.summaries[0].title).toBe('Sign-in methods');
+		expect(umbrella.build.map((/** @type {any} */ entry) => entry.feature)).toContain('sign_in');
+
 		// the OpenAPI document itself, public
 		const served = await env.call('GET', '/openapi.json');
 		expect(served.json).toEqual(openapi);

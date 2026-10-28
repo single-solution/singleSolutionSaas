@@ -1,13 +1,10 @@
 /**
- * PLAN 0.4.3 / §7 polish: opening the product dashboard from the Portal (password step-up on launch, merchant and
+ * PLAN §7 / A5: opening the product dashboard from the Portal (OTP step-up on launch, merchant and
  * admin launches, single use, Finance refused, Open as admin with no website for Owners) and `sessions.revoked`
  * ending dashboard sessions.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PASSWORD, PRODUCT_URL, startSystem } from './helpers.js';
-
-/** Password confirmation every Open configure call must send (stolen session blast radius). */
-const CONFIRM = { password: PASSWORD };
 
 /** @type {import('./helpers.js').System} */
 let sys;
@@ -32,26 +29,32 @@ afterAll(async () => {
 const session = (cookie) => sys.dashboard(cookie, 'GET', '/v1/dashboard/session');
 
 /** Merchant Open path for one website. @param {string} websiteId */
-const merchantLaunchPath = (websiteId) =>
-	`/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes/launch`;
+const merchantLaunchPath = (websiteId) => `/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes/launch`;
+
+/** Fresh OTP for the merchant under test. */
+const merchantOtp = () => sys.stepUp(m.client, m.email);
+
+/** Fresh OTP for an admin client. @param {ReturnType<import('./helpers.js').System['api']['session']>} client @param {string} email */
+const adminOtp = (client, email) => sys.stepUp(client, email);
 
 describe('opening the product dashboard', () => {
-	it('Open configure refuses a session alone: password is required, a wrong one shows nothing', async () => {
+	it('Open configure refuses a session alone: OTP is required, password or wrong code shows nothing', async () => {
 		const path = merchantLaunchPath(w1);
 		expect((await m.client.post(path, {})).status).toBe(422);
 		expect((await m.client.post(path, { password: 'not my password' })).status).toBeGreaterThanOrEqual(400);
+		expect((await m.client.post(path, { code: '000000' })).status).toBeGreaterThanOrEqual(400);
 		const owner = await sys.owner();
 		expect((await owner.post('/v1/admin/products/notes/launch', { websiteId: w1 })).status).toBe(422);
 		expect(
 			(await owner.post('/v1/admin/products/notes/launch', { websiteId: w1, password: 'not my password' })).status,
 		).toBeGreaterThanOrEqual(400);
-		const ok = await m.client.post(path, CONFIRM);
+		const ok = await m.client.post(path, await merchantOtp());
 		expect(ok.status).toBe(200);
 		expect(ok.json.url).toMatch(new RegExp(`^${PRODUCT_URL}/sso\\?launch=`));
 	});
 
 	it('a merchant launch opens the dashboard for its website, with only its websites that have the product', async () => {
-		const launch = await m.client.post(merchantLaunchPath(w2), CONFIRM);
+		const launch = await m.client.post(merchantLaunchPath(w2), await merchantOtp());
 		expect(launch.status).toBe(200);
 		expect(launch.json.url).toMatch(new RegExp(`^${PRODUCT_URL}/sso\\?launch=`));
 		expect(Date.parse(launch.json.expiresAt) - sys.clock.now()).toBeLessThanOrEqual(60_000);
@@ -71,18 +74,18 @@ describe('opening the product dashboard', () => {
 		expect(other.status).toBe(403);
 		expect((await sys.dashboard(opened.cookie, 'GET', `/v1/dashboard/websites/${w1}/overview`)).status).toBe(200);
 		// a website without the product has no launch
-		const none = await m.client.post(merchantLaunchPath(w3), CONFIRM);
+		const none = await m.client.post(merchantLaunchPath(w3), await merchantOtp());
 		expect(none.status).toBe(404);
 		expect((await sys.activity('product.dashboard_opened')).length).toBeGreaterThan(0);
 	});
 
 	it('a launch is single use', async () => {
-		const launch = await m.client.post(merchantLaunchPath(w1), CONFIRM);
+		const launch = await m.client.post(merchantLaunchPath(w1), await merchantOtp());
 		expect((await sys.open(launch.json.url)).status).toBe(303);
 		const again = await sys.open(launch.json.url);
 		expect([again.status, again.cookie]).toEqual([401, '']);
 		// and short-lived
-		const late = await m.client.post(merchantLaunchPath(w1), CONFIRM);
+		const late = await m.client.post(merchantLaunchPath(w1), await merchantOtp());
 		sys.clock.advance(2 * 60_000);
 		expect((await sys.open(late.json.url)).status).toBe(401);
 	});
@@ -91,7 +94,10 @@ describe('opening the product dashboard', () => {
 		const owner = await sys.owner();
 		const support = await sys.admin('support');
 		const finance = await sys.admin('finance');
-		const ownerLaunch = await owner.post('/v1/admin/products/notes/launch', { websiteId: w1, ...CONFIRM });
+		const ownerLaunch = await owner.post('/v1/admin/products/notes/launch', {
+			websiteId: w1,
+			...(await adminOtp(owner, 'owner@portal.test')),
+		});
 		const opened = await sys.open(ownerLaunch.json.url);
 		expect(opened.location).toBe(`/dashboard?websiteId=${w1}`);
 		expect((await session(opened.cookie)).json.who).toMatchObject({
@@ -100,7 +106,10 @@ describe('opening the product dashboard', () => {
 			role: 'portal_owner',
 		});
 
-		const defaults = await owner.post('/v1/admin/products/notes/launch', { websiteId: null, ...CONFIRM });
+		const defaults = await owner.post('/v1/admin/products/notes/launch', {
+			websiteId: null,
+			...(await adminOtp(owner, 'owner@portal.test')),
+		});
 		expect(defaults.status).toBe(200);
 		const openedDefaults = await sys.open(defaults.json.url);
 		expect(openedDefaults.location).toBe('/dashboard?view=defaults');
@@ -108,7 +117,7 @@ describe('opening the product dashboard', () => {
 
 		const supportLaunch = await support.client.post('/v1/admin/products/notes/launch', {
 			websiteId: w2,
-			...CONFIRM,
+			...(await adminOtp(support.client, support.email)),
 		});
 		const supportCookie = (await sys.open(supportLaunch.json.url)).cookie;
 		expect((await session(supportCookie)).json.who).toMatchObject({
@@ -117,21 +126,38 @@ describe('opening the product dashboard', () => {
 			role: 'portal_support',
 		});
 		expect((await sys.dashboard(supportCookie, 'GET', '/v1/dashboard/prices')).status).toBe(403);
-		expect((await support.client.post('/v1/admin/products/notes/launch', { websiteId: null, ...CONFIRM })).status).toBe(
-			403,
-		);
+		expect(
+			(
+				await support.client.post('/v1/admin/products/notes/launch', {
+					websiteId: null,
+					...(await adminOtp(support.client, support.email)),
+				})
+			).status,
+		).toBe(403);
 
-		expect((await finance.client.post('/v1/admin/products/notes/launch', { websiteId: w1, ...CONFIRM })).status).toBe(403);
-		expect((await finance.client.post('/v1/admin/products/notes/launch', { websiteId: null, ...CONFIRM })).status).toBe(
-			403,
-		);
+		expect(
+			(
+				await finance.client.post('/v1/admin/products/notes/launch', {
+					websiteId: w1,
+					...(await adminOtp(finance.client, finance.email)),
+				})
+			).status,
+		).toBe(403);
+		expect(
+			(
+				await finance.client.post('/v1/admin/products/notes/launch', {
+					websiteId: null,
+					...(await adminOtp(finance.client, finance.email)),
+				})
+			).status,
+		).toBe(403);
 	});
 
 	it('sessions.revoked ends dashboard sessions: password change, sign-out, role change, merchant suspended', async () => {
 		const owner = await sys.owner();
 		// a password change ends that person's dashboard sessions
 		const support = await sys.admin('support');
-		const supportCookie = await sys.adminSession(support.client, w1);
+		const supportCookie = await sys.adminSession(support.client, w1, 'notes', support.email);
 		expect((await session(supportCookie)).status).toBe(200);
 		const changed = await support.client.post('/v1/me/password', {
 			currentPassword: 'correct horse battery staple',
@@ -142,13 +168,13 @@ describe('opening the product dashboard', () => {
 
 		// signing out of the Portal ends them too
 		const other = await sys.admin('support');
-		const otherCookie = await sys.adminSession(other.client, w1);
+		const otherCookie = await sys.adminSession(other.client, w1, 'notes', other.email);
 		expect((await other.client.post('/v1/auth/sign-out')).status).toBe(204);
 		expect((await session(otherCookie)).status).toBe(401);
 
 		// so does a role change
 		const third = await sys.admin('support');
-		const thirdCookie = await sys.adminSession(third.client, w1);
+		const thirdCookie = await sys.adminSession(third.client, w1, 'notes', third.email);
 		await owner.patch(`/v1/admin/admins/${third.adminId}`, { role: 'owner', password: PASSWORD });
 		expect((await session(thirdCookie)).status).toBe(401);
 
@@ -161,7 +187,9 @@ describe('opening the product dashboard', () => {
 		const signIn = await sys.api.call('POST', '/v1/auth/sign-in', { body: { email: m.email, password: PASSWORD } });
 		expect(signIn.json?.status).not.toBe('ok');
 		const admin = await sys.adminSession(owner, w1);
-		expect((await sys.dashboard(admin, 'GET', `/v1/dashboard/websites/${w1}/overview`)).json.status.status).toBe('suspended');
+		expect((await sys.dashboard(admin, 'GET', `/v1/dashboard/websites/${w1}/overview`)).json.status.status).toBe(
+			'suspended',
+		);
 		expect(await sys.waitingNotices()).toEqual([]);
 	});
 });

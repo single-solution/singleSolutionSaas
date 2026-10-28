@@ -15,15 +15,20 @@ const PRODUCT_COPY = {
 		blurb: 'Sign-in & staff access',
 		more: 'Let people sign in, manage roles, and give your team the right access.',
 		for: 'Any site that needs members, staff, or protected pages.',
-		gets: ['Sign-in for visitors', 'Roles & staff access', 'My Account surfaces', 'Invite your team'],
+		gets: [
+			'Visitor sign-in on your pages',
+			'Roles and staff invites in Portal',
+			'My Account surfaces for members',
+			'Configure methods without a custom auth stack',
+		],
 		use: 'Place once. Visitors sign in on your frontend; you manage staff in the Portal.',
 	},
 	ecommerce: {
 		name: 'Ecommerce',
 		blurb: 'Catalog, cart & orders',
 		more: 'Sell online when you need it — catalog, checkout, orders, and returns.',
-		for: 'Merchants who sell goods or services online — optional, not required.',
-		gets: ['Catalog & categories', 'Cart & checkout', 'Orders & returns', 'Shop widgets'],
+		for: 'Merchants who sell goods or services — optional, not required.',
+		gets: ['Catalog and categories', 'Cart and checkout', 'Orders and returns', 'Shop widgets for your frontend'],
 		use: 'Turn on when you sell. Skip it if your site is services, community, or content.',
 	},
 	payments: {
@@ -31,134 +36,70 @@ const PRODUCT_COPY = {
 		blurb: 'Take payments',
 		more: 'Accept payments your way — wallets, cards, links, and proofs on the same site.',
 		for: 'Anyone who needs to collect money on the website.',
-		gets: ['Payment links', 'Wallets & cards', 'Proof review', 'Same-site checkout'],
-		use: 'Configure providers in Portal. Your frontend shows the pay flow; you clear reviews on web or mobile.',
+		gets: ['Payment links and checkout', 'Wallets and cards you configure', 'Proof review for staff', 'Same-site pay flows'],
+		use: 'Configure providers in Portal. Your frontend shows the pay flow; staff clear reviews on the site.',
 	},
 	chat: {
 		name: 'Chat',
 		blurb: 'Talk to visitors',
 		more: 'Live chat on your site, with help from AI when you want it and a human when you need it.',
 		for: 'Sites that answer questions before and after someone buys or signs up.',
-		gets: ['Visitor chat widget', 'Inbox in Portal', 'AI replies when enabled', 'Handoff to humans'],
-		use: 'Drop the widget on your pages. Reply from Portal or the mobile app.',
+		gets: ['Visitor chat widget', 'Inbox for your team', 'AI replies when enabled', 'Handoff to humans'],
+		use: 'Drop the widget on your pages. Reply from the live site — same product your visitors use.',
 	},
 	notifications: {
 		name: 'Notifications',
 		blurb: 'Reach people',
 		more: 'WhatsApp, SMS, email, and push — updates and alerts without bolting on another tool.',
 		for: 'Merchants who need status updates, alerts, and reminders to customers or staff.',
-		gets: ['WhatsApp · SMS · email · push', 'Sending policy', 'Templates you control', 'Caps & quiet hours'],
+		gets: ['WhatsApp, SMS, email, push', 'Sending policy you control', 'Templates', 'Caps and quiet hours'],
 		use: 'Connect channels once. Products and your flows send through the same stack.',
 	},
 	growth: {
 		name: 'Growth',
 		blurb: 'Measure & grow',
 		more: 'Consent, tags, SEO, and analytics that stay with your website.',
-		for: 'Anyone who wants consent, SEO, and analytics without a separate bolt-on maze.',
-		gets: ['Consent & tags', 'SEO helpers', 'Analytics hooks', 'Stays with the site'],
+		for: 'Anyone who wants consent, SEO, and analytics without a bolt-on maze.',
+		gets: ['Consent and tags', 'SEO helpers', 'Analytics hooks', 'Stays with the website'],
 		use: 'Enable on the website. Keep measurement next to the products that already run there.',
 	},
 };
 
-const HIGHLIGHTS = [
-	{
-		t: 'No backend to invent',
-		d: 'You design the frontend. Features, APIs, and widgets are ready — connect and go.',
-	},
-	{
-		t: 'Portal to run the business',
-		d: 'Websites, products, staff, and stats in one place. Clear docs when you share with a builder.',
-	},
-	{
-		t: 'Mobile app for the day',
-		d: 'Handle what needs you now from your phone — chats, payments, team tasks — without juggling dashboards.',
-	},
-	{
-		t: 'Add what you need',
-		d: 'Turn products on for your site as you grow. New products can join the catalog over time.',
-	},
-];
-
-const WHO = [
-	{
-		t: 'Shop or catalog',
-		d: 'Sell products or services. Add Ecommerce and Payments when you need them — leave them off until you do.',
-	},
-	{
-		t: 'Service or booking site',
-		d: 'Accounts for clients, Chat for questions, Notifications for reminders. Same Portal either way.',
-	},
-	{
-		t: 'Community or content',
-		d: 'Sign-in, messaging, and growth tools without building an admin stack from scratch.',
-	},
-];
-
-const HOW = [
-	{
-		n: '01',
-		t: 'Claim a website',
-		d: 'Sign in to the Portal. Your website is the home for products, staff, and stats.',
-	},
-	{
-		n: '02',
-		t: 'Place products',
-		d: 'Turn on only what you need. Configure features, texts, and connections for each one.',
-	},
-	{
-		n: '03',
-		t: 'Build the frontend',
-		d: 'Share one developer pack. Docs and OpenAPI are public. Secrets stay in the pack.',
-	},
-	{
-		n: '04',
-		t: 'Run the day',
-		d: 'Use the Portal on desktop. Use the mobile app when you are away. Same account.',
-	},
-];
-
-const RUN = [
+const WORK = [
 	{
 		k: 'Portal',
-		t: 'Your control room',
-		d: 'Websites, products, staff invites, credits, and stats. Share a pack with whoever builds the frontend.',
+		t: 'Control the website',
+		d: 'Claim sites, place products, invite staff, share one pack with whoever builds the frontend.',
 	},
 	{
-		k: 'Mobile',
-		t: 'Admin on the go',
-		d: 'Needs-you queue, chat replies, payment reviews — the same work, sized for your phone.',
+		k: 'Configure',
+		t: 'Shape each product',
+		d: 'Features, texts, and connections — how the product behaves for your visitors.',
+	},
+	{
+		k: 'Operate',
+		t: 'Run on the live site',
+		d: 'Tickets, chat, payments, and day work happen on the site with your team — not a separate admin stack to invent.',
 	},
 	{
 		k: 'Docs',
 		t: 'Builder-ready',
-		d: 'Guides, OpenAPI, and widget notes without a Portal login. Merchants keep keys in the pack.',
+		d: 'Public guides, OpenAPI, and widgets. Merchants keep secrets in the pack.',
 	},
 ];
 
 const FAQ = [
 	{
-		q: 'Do I have to use every product?',
-		a: 'No. Place only what your site needs. Add more later.',
+		q: 'Do I need every product?',
+		a: 'No. Place only what the site needs. Add more later.',
 	},
 	{
-		q: 'Is this only for online shops?',
-		a: 'No. Ecommerce is optional. The platform fits any merchant site based on the products you add.',
+		q: 'Only for online shops?',
+		a: 'No. Ecommerce is optional. Products define what the site can do.',
 	},
 	{
-		q: 'Who builds the website look?',
-		a: 'You (or your developer) own the frontend. We provide the features behind it.',
-	},
-	{
-		q: 'Where do staff and stats live?',
-		a: 'In the Portal. Invite staff, see activity, configure products in one place.',
-	},
-	{
-		q: 'Is there a mobile app?',
-		a: 'Yes — for the admin day: clear tasks, reply to chats, review payments.',
-	},
-	{
-		q: 'How does a developer start?',
-		a: 'One pack from the Portal plus the public Docs hub. No backend to invent.',
+		q: 'Who builds the look?',
+		a: 'You or your developer own the frontend. We ship the features behind it.',
 	},
 ];
 
@@ -170,10 +111,10 @@ const SCREENS = [
 		side: ['Overview', 'Websites', 'Credits', 'Account'],
 		sideOn: 1,
 		title: 'Your website home',
-		lede: 'See the site, add products, open settings, and share one pack with your developer.',
+		lede: 'Add products, open configure, share one pack with your developer.',
 		cards: [
 			{ b: 'Site', s: 'live' },
-			{ b: 'Stats', s: 'ready' },
+			{ b: 'Products', s: 'placed' },
 			{ b: 'Staff', s: 'invited' },
 		],
 		rows: [
@@ -184,12 +125,12 @@ const SCREENS = [
 	},
 	{
 		id: 'settings',
-		label: 'Settings',
+		label: 'Configure',
 		path: 'configure · product',
 		side: ['Features', 'Texts', 'Connections', 'Lists'],
 		sideOn: 0,
 		title: 'Product settings',
-		lede: 'Switch features on, edit texts, connect providers — how the product behaves for your visitors.',
+		lede: 'Switch features on, edit texts, connect providers.',
 		cards: [
 			{ b: 'On', s: 'features' },
 			{ b: 'Edit', s: 'texts' },
@@ -202,22 +143,22 @@ const SCREENS = [
 		],
 	},
 	{
-		id: 'mobile',
-		label: 'Mobile app',
-		path: 'mobile · today',
-		side: ['Needs you', 'Inbox', 'Payments', 'Team'],
+		id: 'operate',
+		label: 'On site',
+		path: 'site · operate',
+		side: ['Inbox', 'Orders', 'Payments', 'Team'],
 		sideOn: 0,
-		title: 'Run today from your phone',
-		lede: 'The admin day on mobile — confirm, reply, clear what needs you. Same account as the Portal.',
+		title: 'Operate on the live site',
+		lede: 'Staff work where the product runs — chat, payments, day tasks on the website.',
 		cards: [
-			{ b: 'Now', s: 'queue' },
 			{ b: 'Chat', s: 'open' },
 			{ b: 'Pay', s: 'review' },
+			{ b: 'Task', s: 'now' },
 		],
 		rows: [
-			{ k: 'Task', t: 'Something needs a decision', e: 'now' },
 			{ k: 'Chat', t: 'Visitor waiting for a reply', e: '2m' },
 			{ k: 'Pay', t: 'Payment to confirm', e: '5m' },
+			{ k: 'Team', t: 'Staff on the same site', e: '→' },
 		],
 	},
 	{
@@ -227,7 +168,7 @@ const SCREENS = [
 		side: ['Guides', 'OpenAPI', 'Widgets', 'Quickstart'],
 		sideOn: 0,
 		title: 'Public Docs hub',
-		lede: 'Builders and AI get guides and specs without a Portal login. Merchants keep secrets in the pack.',
+		lede: 'Builders get guides and specs without a Portal login. Secrets stay in the pack.',
 		cards: [
 			{ b: 'All', s: 'products' },
 			{ b: 'API', s: 'openapi' },
@@ -248,7 +189,7 @@ const pad = (n) => String(n).padStart(2, '0');
  */
 
 /**
- * Public marketing home — Unite craft, merchant-plain story.
+ * Public marketing home — four-beat portfolio, product-honest.
  * @param {{ brandName?: string, products?: MarketingProduct[] }} props
  */
 export function SiteHome({ brandName = 'Single Solution', products = [] }) {
@@ -271,7 +212,7 @@ export function SiteHome({ brandName = 'Single Solution', products = [] }) {
 	const activeId = spotId && catalog.some((p) => p.id === spotId) ? spotId : catalog[0]?.id || '';
 	const active = catalog.find((p) => p.id === activeId);
 	const activeCopy = active ? PRODUCT_COPY[active.id] : null;
-	const marquee = catalog.map((p) => p.name).concat(['Portal', 'Docs', 'Mobile app']);
+	const marquee = catalog.map((p) => p.name).concat(['Portal', 'Docs', 'Developer pack']);
 
 	useEffect(() => {
 		const onScroll = () => setScrolled(window.scrollY > 24);
@@ -325,12 +266,7 @@ export function SiteHome({ brandName = 'Single Solution', products = [] }) {
 					<a className="brand" href="#top">
 						{brandName}
 					</a>
-					<nav aria-label="Page">
-						<a href="#why">Why</a>
-						<a href="#how">How</a>
-						<a href="#products">Products</a>
-						<a href="#run">Run</a>
-						<a href="#inside">Inside</a>
+					<nav aria-label="Account">
 						<Link href="/docs">Docs</Link>
 					</nav>
 					<Link className="cta" href="/login">
@@ -351,22 +287,16 @@ export function SiteHome({ brandName = 'Single Solution', products = [] }) {
 							<span className="accent">We ship the features behind it.</span>
 						</h1>
 						<p className="lede">
-							Prebuilt products, a Portal for stats and staff, simple docs, and a mobile app — so you never build the
-							backend from scratch.
+							Your site. Our products. One Portal — so you never invent the backend from scratch.
 						</p>
 						<div className="hero-actions">
-							<ButtonLink href="/login" variant="primary" size="lg">
-								Get started
-							</ButtonLink>
+							<a className="text-link" href="#why">
+								See why →
+							</a>
 							<a className="text-link" href="#products">
 								See products →
 							</a>
 						</div>
-						<ul className="hero-points">
-							<li>No backend to build from scratch</li>
-							<li>Add products as you need them</li>
-							<li>Works for any kind of merchant site</li>
-						</ul>
 					</div>
 
 					<div className="hero-stage glass reveal" data-d={1} aria-hidden="true">
@@ -392,13 +322,13 @@ export function SiteHome({ brandName = 'Single Solution', products = [] }) {
 									<ul>
 										<li>Ready products</li>
 										<li>APIs & widgets</li>
-										<li>Portal · stats · staff</li>
-										<li>Docs · mobile app</li>
+										<li>Portal · staff · pack</li>
+										<li>Public Docs hub</li>
 									</ul>
 								</div>
 							</div>
 						</div>
-						<p className="fit-foot mono">Connect once · run the site · grow later</p>
+						<p className="fit-foot mono">Place products · share a pack · run the site</p>
 					</div>
 				</section>
 
@@ -418,128 +348,76 @@ export function SiteHome({ brandName = 'Single Solution', products = [] }) {
 							<span className="accent"> Ship your site.</span>
 						</h2>
 						<p>
-							Most teams burn time on accounts, payments, chat, messages, and admin tooling. {brandName} gives you those as
-							prebuilt products on your website — so your effort goes into the experience customers see.
+							Accounts, payments, chat, messages, and admin tooling eat months. {brandName} ships them as products on
+							your website — your effort goes into what customers see.
 						</p>
 					</header>
 					<div className="why-split reveal">
-						<article className="glass hard">
-							<span className="mono muted">Build it all yourself</span>
-							<p>Frontend and backend, every integration, every admin screen — months before the first release.</p>
+						<article className="glass hard burden">
+							<span className="mono muted">Build it yourself</span>
+							<p>
+								You own every layer — auth, payments, chat, admin, staff, docs handoff. Time, risk, and upkeep stay on
+								you.
+							</p>
 						</article>
 						<div className="vs mono">VS</div>
 						<article className="glass hard hot">
 							<span className="mono lime">With {brandName}</span>
-							<p>
-								Your frontend + our products. Portal, docs, and mobile app included. Add more products when you need them.
-							</p>
+							<p>You build the frontend. We ship the products, Portal, and one pack for your builder.</p>
 						</article>
 					</div>
-					<div className="table cols-3 glass hard reveal">
+					<div className="table cols-3 compare glass hard reveal">
 						<div className="row head">
-							<span>Need</span>
-							<span>DIY stack</span>
-							<span>With us</span>
+							<span>What you need</span>
+							<span>If you build it yourself</span>
+							<span>With {brandName}</span>
 						</div>
 						<div className="row">
-							<span>Backend features</span>
-							<span className="no">You build</span>
-							<span className="ok">Ready products</span>
+							<span>Accounts, payments, chat, messages…</span>
+							<span className="no">You design, build, host, and maintain each one</span>
+							<span className="ok">Place ready products on the site</span>
 						</div>
 						<div className="row">
-							<span>Admin & stats</span>
-							<span className="no">You invent</span>
-							<span className="ok">Portal</span>
+							<span>Somewhere to run the business</span>
+							<span className="no">You invent dashboards and keep them alive</span>
+							<span className="ok">Portal for websites, staff, and products</span>
 						</div>
 						<div className="row">
-							<span>Staff access</span>
-							<span className="mid">Custom</span>
-							<span className="ok">Built in</span>
+							<span>Team access</span>
+							<span className="no">Custom roles — you own the bugs and edge cases</span>
+							<span className="ok">Staff invites and access built in</span>
 						</div>
 						<div className="row">
-							<span>Builder handoff</span>
-							<span className="no">Scattered secrets</span>
-							<span className="ok">One pack + docs</span>
+							<span>Handing work to a developer</span>
+							<span className="no">Keys and notes scattered in chat and files</span>
+							<span className="ok">One pack + public Docs hub</span>
 						</div>
 						<div className="row">
-							<span>Day-to-day on phone</span>
-							<span className="no">Many apps</span>
-							<span className="ok">Mobile app</span>
+							<span>Day-to-day work</span>
+							<span className="no">Another admin stack to buy or build</span>
+							<span className="ok">Operate on the live site with your team</span>
 						</div>
 						<div className="row">
-							<span>Grow later</span>
-							<span className="mid">Rewrite</span>
-							<span className="ok">Add products</span>
+							<span>Growing later</span>
+							<span className="no">You rebuild or rewire when needs change</span>
+							<span className="ok">Add products when you need them</span>
 						</div>
-					</div>
-				</section>
-
-				<section id="how" className="block band">
-					<header className="block-head reveal">
-						<p className="eyebrow mono">02 // HOW IT WORKS</p>
-						<h2>Four steps from empty site to running day.</h2>
-						<p>
-							Merchant means anyone running a site here — shop, service, community, or whatever you add products for. Same
-							Portal. Same docs. Same mobile app.
-						</p>
-					</header>
-					<div className="split reveal">
-						<div className="split-copy">
-							<p className="eyebrow mono">The highlight</p>
-							<h3>Create a website without building a backend.</h3>
-							<p>
-								You own the look and the pages. We deliver the products, APIs, widgets, Portal, staff tools, stats, docs,
-								and mobile app around them.
-							</p>
-							<ul className="tick">
-								<li>Products plug into your frontend</li>
-								<li>Configure each one in Portal</li>
-								<li>Share one pack with a builder</li>
-								<li>Run the day on web or mobile</li>
-							</ul>
+						<div className="row burden-foot">
+							<span>Who carries the load</span>
+							<span className="no">You — every integration, every release</span>
+							<span className="ok">Shared — you own the frontend; we own the platform</span>
 						</div>
-						<ol className="how-list">
-							{HOW.map((h) => (
-								<li key={h.n} className="glass hard">
-									<span className="mono path-n">{h.n}</span>
-									<h3>{h.t}</h3>
-									<p>{h.d}</p>
-								</li>
-							))}
-						</ol>
-					</div>
-					<div className="helps" style={{ marginTop: '1.5rem' }}>
-						{HIGHLIGHTS.map((h, i) => (
-							<article key={h.t} className="help reveal" data-d={i % 4}>
-								<h3>{h.t}</h3>
-								<p>{h.d}</p>
-							</article>
-						))}
-					</div>
-				</section>
-
-				<section id="who" className="block">
-					<header className="block-head reveal">
-						<p className="eyebrow mono">03 // WHO IT FITS</p>
-						<h2>Not locked to one industry.</h2>
-						<p>Pick products for the site you actually run. More products can join the catalog later.</p>
-					</header>
-					<div className="desks reveal">
-						{WHO.map((w, i) => (
-							<article key={w.t} className={`glass hard${i === 0 ? ' hot' : ''}`}>
-								<span className="mono">{String(i + 1).padStart(2, '0')}</span>
-								<h3>{w.t}</h3>
-								<p>{w.d}</p>
-							</article>
-						))}
 					</div>
 				</section>
 
 				<section id="products" className="block band">
 					<header className="block-head reveal">
-						<p className="eyebrow mono">04 // PRODUCTS</p>
-						<h2>Turn on the capabilities your site needs.</h2>
-						<p>Each product is a building block. Select one to see who it is for, what you get, and how you use it.</p>
+						<p className="eyebrow mono">02 // PRODUCTS</p>
+						<h2>Turn on what the site needs.</h2>
+						<p>
+							Optional building blocks for shops, services, or communities — not locked to one industry. Select a
+							product for detail.
+						</p>
 					</header>
 
 					<div className="products reveal">
@@ -581,48 +459,29 @@ export function SiteHome({ brandName = 'Single Solution', products = [] }) {
 									Open {active.name} docs →
 								</Link>
 							</div>
-							<div className="table cols-2 glass hard">
+							<div className="table cols-1 glass hard">
 								<div className="row head">
-									<span>You get</span>
-									<span>On the platform</span>
+									<span>What you actually get</span>
 								</div>
-								{(activeCopy?.gets || ['Ready features', 'Portal settings', 'Docs & widgets']).map((g) => (
+								{(activeCopy?.gets || ['Ready features', 'Portal configure', 'Docs & widgets']).map((g) => (
 									<div className="row" key={g}>
 										<span>{g}</span>
-										<span className="ok">Included</span>
 									</div>
 								))}
 							</div>
 						</div>
 					) : null}
-
-					<div className="table cols-3 glass hard reveal" style={{ marginTop: '1.25rem' }}>
-						<div className="row head">
-							<span>Product</span>
-							<span>Job</span>
-							<span>Optional?</span>
-						</div>
-						{catalog.map((p) => {
-							const copy = PRODUCT_COPY[p.id];
-							return (
-								<div className="row" key={`sum-${p.id}`}>
-									<span>{p.name}</span>
-									<span>{copy?.blurb || 'Ready features'}</span>
-									<span className="ok">Yes — place when needed</span>
-								</div>
-							);
-						})}
-					</div>
 				</section>
 
-				<section id="run" className="block">
+				<section id="work" className="block">
 					<header className="block-head reveal">
-						<p className="eyebrow mono">05 // RUN THE DAY</p>
-						<h2>Portal, mobile app, and docs — around the products.</h2>
-						<p>The website is yours. These surfaces keep the business moving without another stack.</p>
+						<p className="eyebrow mono">03 // WHERE YOU WORK</p>
+						<h2>Portal, configure, operate on site, docs.</h2>
+						<p>Illustrated surfaces — same Unite craft as the product. The pack is how builders start.</p>
 					</header>
+
 					<div className="desks reveal">
-						{RUN.map((r) => (
+						{WORK.map((r) => (
 							<article key={r.k} className="glass hard">
 								<span className="mono">{r.k}</span>
 								<h3>{r.t}</h3>
@@ -636,17 +495,18 @@ export function SiteHome({ brandName = 'Single Solution', products = [] }) {
 							<span className="mono">developer pack</span>
 							<span className="mono">one handoff</span>
 						</div>
-						<pre>{`website: your-site
-products: [accounts, chat, …]
-docs:     /docs
-secrets:  stay in the pack
+						<pre>{`docsHubUrl
+domain
+products[]: id, docs, openapi, widget,
+            browserToken, serverToken,
+            featuresOn
+secrets stay in the pack
 frontend: you build`}</pre>
 						<div>
 							<p className="eyebrow mono">Builder handoff</p>
 							<h3 className="pack-h">One file. Public docs. No backend project.</h3>
 							<p>
-								Share the pack with whoever builds your frontend. They follow the Docs hub for guides and OpenAPI. You
-								keep credentials in Portal — not in chat threads.
+								Share the pack from Portal. Builders follow the Docs hub. You keep credentials out of chat threads.
 							</p>
 							<div className="hero-actions">
 								<ButtonLink href="/docs" variant="secondary" size="md">
@@ -655,17 +515,11 @@ frontend: you build`}</pre>
 							</div>
 						</div>
 					</div>
-				</section>
 
-				<section id="inside" className="block band">
-					<header className="block-head reveal">
-						<p className="eyebrow mono">06 // INSIDE</p>
-						<h2>
-							Portal, settings, mobile, docs —<span className="accent"> in plain view.</span>
-						</h2>
-						<p>Flip through the surfaces you actually use. Same Unite look as the live product.</p>
-					</header>
-					<div className="reveal">
+					<div className="reveal" style={{ marginTop: '1.5rem' }}>
+						<p className="eyebrow mono" style={{ marginBottom: '0.65rem' }}>
+							Illustrated · not live screenshots
+						</p>
 						<div className="shot-tabs" role="tablist" aria-label="Product surfaces">
 							{SCREENS.map((s, i) => (
 								<button
@@ -726,10 +580,11 @@ frontend: you build`}</pre>
 					</div>
 				</section>
 
-				<section id="faq" className="block">
+				<section id="start" className="block band close-band">
 					<header className="block-head reveal">
-						<p className="eyebrow mono">07 // ANSWERS</p>
-						<h2>Straight answers before you start.</h2>
+						<p className="eyebrow mono">04 // START</p>
+						<h2>Sign in. Place products. Share a pack.</h2>
+						<p>Then build the frontend and run the day on the live site.</p>
 					</header>
 					<div className="table cols-2 glass hard reveal">
 						<div className="row head">
@@ -743,35 +598,11 @@ frontend: you build`}</pre>
 							</div>
 						))}
 					</div>
-				</section>
-
-				<section id="start" className="block band close-band">
-					<header className="block-head reveal">
-						<p className="eyebrow mono">08 // START</p>
-						<h2>Three steps. Then you are live.</h2>
-					</header>
-					<ol className="path reveal">
-						<li>
-							<span className="mono path-n">01</span>
-							<h3>Sign in to the Portal</h3>
-							<p>Create your account and claim a website.</p>
-						</li>
-						<li>
-							<span className="mono path-n">02</span>
-							<h3>Add products</h3>
-							<p>Place the capabilities your site needs. Configure each one.</p>
-						</li>
-						<li>
-							<span className="mono path-n">03</span>
-							<h3>Build the frontend</h3>
-							<p>Share one pack with your developer. Use the Docs hub. Run the day in Portal or on mobile.</p>
-						</li>
-					</ol>
 					<div className="close-inner reveal">
 						<h2>Ready when you are.</h2>
 						<p>
-							{brandName} is the prebuilt platform behind your frontend — products, Portal, docs, and mobile app. Plans
-							follow your account.
+							{brandName} is the prebuilt platform behind your frontend — products, Portal, and docs. Plans follow your
+							account.
 						</p>
 						<div className="hero-actions">
 							<ButtonLink href="/login" variant="primary" size="lg">
@@ -788,11 +619,10 @@ frontend: you build`}</pre>
 			<footer className="reveal">
 				<div>
 					<strong>{brandName}</strong>
-					<span className="mono">Portal · Products · Docs · Mobile</span>
+					<span className="mono">Portal · Products · Docs · Pack</span>
 				</div>
 				<nav aria-label="Footer">
 					<a href="#products">Products</a>
-					<a href="#faq">Answers</a>
 					<Link href="/docs">Docs</Link>
 					<Link href="/login">Sign in</Link>
 				</nav>

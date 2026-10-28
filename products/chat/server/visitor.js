@@ -127,8 +127,16 @@ export const createVisitorApi = (product, service, reply) => {
 	 * @returns {Promise<{ visitor: Visitor, guestKey: string | null }>}
 	 */
 	const visitorOrGuest = async (s, visitor) => {
-		if (visitor && (visitor.kind === 'user' || s.on.includes('guest_chat'))) return { visitor, guestKey: null };
-		if (!s.on.includes('guest_chat')) throw problem('sign_in_required', 'Sign in to chat.');
+		const look = await s.values('visitor_chat');
+		const hasLegacyWho = s.on.includes('guest_chat') || s.on.includes('signed_in_chat');
+		const allowGuests = hasLegacyWho ? s.on.includes('guest_chat') : look.allowGuests !== false;
+		const allowSignedIn = hasLegacyWho ? s.on.includes('signed_in_chat') : look.allowSignedIn !== false;
+		if (visitor && visitor.kind === 'user') {
+			if (!allowSignedIn) throw problem('sign_in_required', 'Signed-in chat is not enabled.');
+			return { visitor, guestKey: null };
+		}
+		if (visitor && visitor.kind === 'guest' && allowGuests) return { visitor, guestKey: null };
+		if (!allowGuests) throw problem('sign_in_required', 'Sign in to chat.');
 		const guest = await service.newGuest(s);
 		return { visitor: guest.visitor, guestKey: guest.key };
 	};
@@ -208,8 +216,12 @@ export const createVisitorApi = (product, service, reply) => {
 	 */
 	const visitorAttachment = async (s, visitor, raw) => {
 		if (raw === undefined || raw === null) return null;
-		if (!s.on.includes('attachments')) throw problem('feature_off', 'Attachments are off.');
-		const settings = await s.values('attachments');
+		const look = await s.values('visitor_chat');
+		const attachmentsOn = s.on.includes('attachments') || (look.visitorUploads && look.visitorUploads !== 'off');
+		if (!attachmentsOn) throw problem('feature_off', 'Attachments are off.');
+		const settings = s.on.includes('attachments')
+			? await s.values('attachments')
+			: { visitorUploads: look.visitorUploads ?? 'off' };
 		if (settings.visitorUploads === 'off' || (settings.visitorUploads === 'signed_in' && visitor.kind !== 'user'))
 			throw problem('forbidden', 'Visitors cannot attach files here.');
 		const a = bodyOf(raw);
@@ -229,10 +241,17 @@ export const createVisitorApi = (product, service, reply) => {
 		const { visitor, guestKey } = await visitorOrGuest(s, known);
 		const attachment = await visitorAttachment(s, visitor, body.attachment);
 		let c = await conversationOf(s, visitor, body.page);
-		if (visitor.kind === 'guest' && s.on.includes('guest_chat')) {
-			if (guestLimitReached(c, await service.guestLimit(s.websiteId, await s.values('guest_chat')))) {
+		const look = await s.values('visitor_chat');
+		const hasLegacyWho = s.on.includes('guest_chat') || s.on.includes('signed_in_chat');
+		const allowGuests = hasLegacyWho ? s.on.includes('guest_chat') : look.allowGuests !== false;
+		const allowSignedIn = hasLegacyWho ? s.on.includes('signed_in_chat') : look.allowSignedIn !== false;
+		if (visitor.kind === 'guest' && allowGuests) {
+			const guestsSettings = s.on.includes('guest_chat') ? await s.values('guest_chat') : {};
+			const effectiveLimit =
+				hasLegacyWho && guestsSettings.messageLimit !== undefined ? guestsSettings.messageLimit : (look.messageLimit ?? 5);
+			if (guestLimitReached(c, await service.guestLimit(s.websiteId, { messageLimit: effectiveLimit }))) {
 				const next = limitNext({
-					signedInChat: s.on.includes('signed_in_chat'),
+					signedInChat: allowSignedIn,
 					signInUrl: (await s.ctx.website()).pages.signIn,
 					leads: s.on.includes('leads_flows'),
 				});
@@ -444,9 +463,21 @@ export const createVisitorApi = (product, service, reply) => {
 
 	/** @param {any} ctx */
 	const rate = async (ctx) => {
-		const { s, visitor, c } = await existing(ctx);
+		const { s, visitor } = await who(ctx);
+		const look = await s.values('visitor_chat');
+		const ratingsOn = s.on.includes('ratings') || look.ratingsEnabled === true;
+		if (!ratingsOn) throw problem('feature_off', 'Ratings are off.');
+		const c = visitor ? await s.store.conversations.current(visitor) : null;
+		if (!visitor || !c) throw problem('not_found', 'There is no chat yet.');
 		const body = bodyOf(ctx.body);
-		const settings = await s.values('ratings');
+		const settings = s.on.includes('ratings')
+			? await s.values('ratings')
+			: {
+					kind: look.ratingKind ?? 'csat',
+					labels: look.ratingLabels ?? ['1', '2', '3', '4', '5'],
+					askWhen: look.ratingAskWhen ?? 'on_resolve',
+					askComment: look.ratingAskComment !== false,
+				};
 		const scale = ratingScale(settings);
 		const score = Number(body.score);
 		if (!Number.isInteger(score) || score < scale.min || score > scale.max)
@@ -462,7 +493,12 @@ export const createVisitorApi = (product, service, reply) => {
 
 	/** @param {any} ctx */
 	const transcript = async (ctx) => {
-		const { s, visitor, c } = await existing(ctx);
+		const { s, visitor } = await who(ctx);
+		const look = await s.values('visitor_chat');
+		const transcriptsOn = s.on.includes('transcripts') || look.emailTranscripts !== false;
+		if (!transcriptsOn) throw problem('feature_off', 'Transcripts are not enabled.');
+		const c = visitor ? await s.store.conversations.current(visitor) : null;
+		if (!visitor || !c) throw problem('not_found', 'There is no chat yet.');
 		// only to the email Accounts verified for the signed-in visitor: an address typed in the chat proves nothing, and
 		// there is no step that confirms one (SR-6-2)
 		if (visitor.kind !== 'user') throw problem('sign_in_required', 'Sign in to get the transcript by email.');
@@ -482,8 +518,13 @@ export const createVisitorApi = (product, service, reply) => {
 	/** @param {any} ctx */
 	const upload = async (ctx) => {
 		const { s, visitor: known } = await who(ctx);
+		const look = await s.values('visitor_chat');
+		const attachmentsOn = s.on.includes('attachments') || (look.visitorUploads && look.visitorUploads !== 'off');
+		if (!attachmentsOn) throw problem('feature_off', 'Attachments are off.');
 		const { visitor, guestKey } = await visitorOrGuest(s, known);
-		const settings = await s.values('attachments');
+		const settings = s.on.includes('attachments')
+			? await s.values('attachments')
+			: { visitorUploads: look.visitorUploads ?? 'off' };
 		if (settings.visitorUploads === 'off' || (settings.visitorUploads === 'signed_in' && visitor.kind !== 'user'))
 			throw problem('forbidden', 'Visitors cannot attach files here.');
 		return {

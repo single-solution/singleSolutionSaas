@@ -283,6 +283,37 @@ describe('events and totals', () => {
 			expect.objectContaining({ type: 'purchase', data: expect.objectContaining({ orderId: 'ord_1', value: 2500 }) }),
 		]);
 	});
+
+	it('goals and funnels lists can be read and edited when only visitor_analytics is switched on (Workstream E demote)', async () => {
+		await env.switchOn(['visitor_analytics']);
+		try {
+			const goals = await (await env.call('GET', '/v1/lists/goals', { token: env.server })).json();
+			expect(goals.value.length).toBeGreaterThan(0);
+			const funnels = await (await env.call('GET', '/v1/lists/funnels', { token: env.server })).json();
+			expect(funnels.value.length).toBeGreaterThan(0);
+			const saved = await env.call('PUT', '/v1/lists/goals', {
+				token: env.server,
+				body: { value: goals.value },
+			});
+			expect(saved.status).toBe(200);
+		} finally {
+			await env.switchOn(ALL);
+		}
+	});
+
+	it('visitor_analytics settings can configure searchParams and toGa4 (Workstream E demote)', async () => {
+		await env.setting('visitor_analytics', 'searchParams', 'q, custom_query');
+		await env.setting('visitor_analytics', 'toGa4', true);
+		const res = await (await env.call('GET', '/v1/settings', { token: env.server })).json();
+		const values = res.features.find((/** @type {any} */ f) => f.key === 'visitor_analytics')?.values;
+		expect(values.searchParams.value).toBe('q, custom_query');
+		expect(values.toGa4.value).toBe(true);
+		const config = await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json();
+		expect(config.settings.record.searchParams).toEqual(['q', 'custom_query']);
+		expect(config.settings.record.vitalsToGa4).toBe(true);
+		await env.setting('visitor_analytics', 'searchParams', '');
+		await env.setting('visitor_analytics', 'toGa4', false);
+	});
 });
 
 /** The website's settings in the Portal: its name and the time zone, Tokyo. @param {string} websiteId @param {Record<string, any>} [format] */

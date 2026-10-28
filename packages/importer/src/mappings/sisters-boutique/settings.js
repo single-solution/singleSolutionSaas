@@ -221,6 +221,7 @@ export const settingsPlan = (values) => {
 				'catalog.search': 'basic',
 				// the shop search matches the whole phrase in the name (`apps/web/src/lib/core/queries.ts`:363-364)
 				'catalog.searchMatch': 'phrase',
+				'catalog.defaultChartId': DEFAULT_CHART_ID,
 				'size_charts.defaultChartId': DEFAULT_CHART_ID,
 				'checkout.numberPattern': ORDER_PATTERN,
 				'checkout.numberPrefix': ORDER_PREFIX,

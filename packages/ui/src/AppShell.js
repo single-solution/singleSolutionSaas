@@ -190,7 +190,10 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 											'focus-visible:outline-2 focus-visible:outline-focus',
 											rail ? 'justify-center px-0' : 'px-2.5',
 											on
-												? cx('font-medium text-fg', placed ? 'bg-transparent' : 'border border-line bg-surface ss-hard')
+												? cx(
+														'font-medium text-fg',
+														placed ? 'bg-transparent' : 'border border-line bg-surface ss-hard',
+													)
 												: 'font-medium text-muted hover:bg-surface/70 hover:text-fg',
 										)}>
 										{item.icon ? (
@@ -502,11 +505,7 @@ export function AppShell({
 	const sidebar = (/** @type {boolean} */ narrow, /** @type {boolean} */ inDrawer) => (
 		<ShellContext.Provider value={{ ...shell, rail: narrow }}>
 			<div className="flex h-full min-h-0 flex-col">
-				<div
-					className={cx(
-						'flex h-14 shrink-0 items-center gap-2 px-3',
-						narrow ? 'justify-center px-0' : 'justify-between',
-					)}>
+				<div className={cx('flex h-14 shrink-0 items-center gap-2 px-3', narrow ? 'justify-center px-0' : 'justify-between')}>
 					<Brand {...brand} markOnly={narrow} />
 					{inDrawer ? (
 						<button

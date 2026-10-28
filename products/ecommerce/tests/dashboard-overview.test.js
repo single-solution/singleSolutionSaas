@@ -112,10 +112,10 @@ describe('Ecommerce’s Overview', () => {
 		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
 		const text = container.textContent ?? '';
 		expect(text).toContain('Welcome back, Sam');
-		expect(text).toContain('Needs setup: set currency, country in the Portal');
+		expect(text).toContain('Set currency, country in Website settings › Region and format');
 		// one link to the Portal's Region and format; no form and no "Set currency" step of Ecommerce's own
 		expect(text).not.toContain('Set your currency');
-		const link = [...container.querySelectorAll('a')].find((node) => node.textContent === 'Open Website settings');
+		const link = [...container.querySelectorAll('a')].find((node) => node.textContent === 'Open in the Portal');
 		expect(link?.getAttribute('href')).toBe('https://portal.example.com/websites/web_1/settings#region');
 		// no checkout or staff alerts: no connections read
 		expect(loads()).not.toContain('/connections');
@@ -123,7 +123,7 @@ describe('Ecommerce’s Overview', () => {
 		serve({ on: ['catalog'], settings: { catalog: { currency: value('EUR', 'portal') } } });
 		const set = render(inDashboard(<Overview {...props} />));
 		await settle();
-		expect(set.container.textContent).not.toContain('Needs setup');
+		expect(set.container.textContent).not.toContain('setup step');
 		expect(set.container.textContent).toContain('Everything on shop.example.com is ready');
 	});
 
@@ -179,7 +179,7 @@ describe('Ecommerce’s Overview', () => {
 			'Shoppers are not told where to pay: Bank transfer',
 			'The Atlas Search index products_search is missing',
 			'Atlas Search: index not found',
-			'3 more things need you',
+			'4 more things need you',
 		])
 			expect(text).toContain(words);
 		const docs = [...container.querySelectorAll('a')].find((node) => node.textContent === 'How to create it');
@@ -187,11 +187,12 @@ describe('Ecommerce’s Overview', () => {
 		await press(container, 'Add them');
 		expect(opened).toEqual(['settings#checkout.payment-methods']);
 		cleanup();
-		// recipients set, the admin page set, the note written: nothing of them
+		// recipients set, the admin page set, the note written, order flow set: nothing of them
 		serve({
 			on: ['catalog', 'checkout', 'staff_alerts'],
 			connections: [{ name: 'link_payments', label: 'Payments', neededBy: [], status: 'connected' }],
 			methods: byHand({ accounts: [{ label: '', currency: '', rows: [{ label: 'Account', value: '123' }] }] }),
+			lists: { order_flow: { statuses: [{ key: 'placed' }, { key: 'done' }] } },
 			settings: {
 				catalog: { currency: value('USD', 'website') },
 				staff_alerts: {

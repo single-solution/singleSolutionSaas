@@ -8,20 +8,7 @@ import { ADMIN_ORIGIN, GATEWAY_URL, HOOK_URL, ORIGIN, PUSH_ORIGIN, browserSubscr
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
 
-const ALL = [
-	'email',
-	'sms',
-	'whatsapp',
-	'browser_push',
-	'staff_push',
-	'webhooks',
-	'fallback',
-	'quiet_hours',
-	'send_limits',
-	'delayed_send',
-	'multi_language',
-	'send_api',
-];
+const ALL = ['email', 'sms', 'whatsapp', 'push', 'webhooks', 'send_api'];
 const RESEND = { provider: 'resend', secret: 're_secret_1234', from: 'Shop <shop@shop.example.com>' };
 const TWILIO = { provider: 'twilio', accountSid: `AC${'a'.repeat(32)}`, secret: 'twilio-token-9876', from: '+15550001111' };
 const META = {
@@ -225,6 +212,17 @@ describe('the send API', () => {
 			body: { template: 'accounts.code', to: { phone: '+15550002222' } },
 		});
 		expect(browser.status).toBe(401);
+		// PLAN C2: configure (dashboard cookie) cannot send or read the delivery log
+		const cookie = await env.adminSession();
+		expect(
+			(
+				await env.call('POST', '/v1/messages/sms', {
+					cookie,
+					body: { template: 'welcome', to: { phone: '+15550002222' } },
+				})
+			).status,
+		).toBe(401);
+		expect((await env.call('GET', '/v1/messages?limit=1', { cookie })).status).toBe(401);
 	});
 
 	it('sends SMS through Twilio and WhatsApp through Meta, with provider templates', async () => {

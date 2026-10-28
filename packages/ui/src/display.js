@@ -523,7 +523,11 @@ export function EmptyState({ title, description, action, icon = 'box', kind, ton
 				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
-			<span className={cx('flex size-10 items-center justify-center rounded-control', TINTS[tone ?? (kind ? 'primary' : 'info')])}>
+			<span
+				className={cx(
+					'flex size-10 items-center justify-center rounded-control',
+					TINTS[tone ?? (kind ? 'primary' : 'info')],
+				)}>
 				<Icon name={icon} size={18} />
 			</span>
 			<div className="max-w-sm space-y-0.5">

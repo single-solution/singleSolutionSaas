@@ -59,7 +59,7 @@ const leave = async (sys, set) => {
 
 describe('the AI reply in the same request, and replies that went stale (CH-1, RT-6)', () => {
 	it('?wait=1 answers at the wait limit with the reply pending; the reply finishes after the response', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'typing_receipts', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff']);
 		await sys.setting('ai_replies', 'neverDisclose', true);
 		const ai = slowAi(sys, 21_000);
 		// the first answer takes 21 s and says it is a bot: the retry would start after the 20 s wait
@@ -90,7 +90,7 @@ describe('the AI reply in the same request, and replies that went stale (CH-1, R
 	});
 
 	it('a reply cut short shows no typing once stale, starts again once on the next check, then counts as failed', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'typing_receipts']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.setting('ai_replies', 'onFailure', 'message');
 		const v = sys.visitor();
 		sys.ai({ text: 'Hello there.' });
@@ -123,7 +123,7 @@ describe('the AI reply in the same request, and replies that went stale (CH-1, R
 
 describe('the language lock (CH-2, CH-16 to CH-19, CH-38)', () => {
 	it('answers a message in another script in that language or in Latin letters; the default language stays', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.setting('language_lock', 'allowedLanguages', ['hi', 'en']);
 		await sys.setting('language_lock', 'defaultLanguage', 'en');
 		await sys.setting('language_lock', 'acceptLatinFor', ['hi']);
@@ -142,7 +142,7 @@ describe('the language lock (CH-2, CH-16 to CH-19, CH-38)', () => {
 	});
 
 	it('a reply still in the wrong language gets the unavailable message in the visitor’s language, no handoff', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff']);
 		await sys.setting('language_lock', 'markerWords', ['tl: po ba ito magkano opo salamat', 'es: es la el precio cuesta']);
 		await sys.setting('language_lock', 'unavailableTexts', ['tl: Paumanhin po, hindi ako makasagot ngayon.']);
 		// both answers are clearly in another configured language (the whole answer is checked)
@@ -162,7 +162,7 @@ describe('the language lock (CH-2, CH-16 to CH-19, CH-38)', () => {
 
 describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 	it('the network limit counts guests only; a signed-in visitor keeps answers on a busy network', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.paste('accounts');
 		await sys.setting('ai_replies', 'onFailure', 'message');
 		const network = '198.51.100.7';
@@ -181,7 +181,7 @@ describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 	});
 
 	it('at most NEW_GUESTS_PER_NETWORK new guests per network address in 15 minutes', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat']);
+		const sys = await start(['visitor_chat']);
 		const network = '198.51.100.8';
 		// the address has started all but one of its new guests
 		for (let i = 1; i < NEW_GUESTS_PER_NETWORK; i += 1)
@@ -202,7 +202,7 @@ describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 
 describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-6, CH-7, CH-9)', () => {
 	it('resuming the AI hands a waiting chat back; a later handoff waits its own grace', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff']);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'talk to someone' });
 		const first = (await v('GET', '/v1/chat')).json.conversation;
@@ -229,7 +229,7 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 	});
 
 	it('assigns a chat to staff Chat has not seen yet when Accounts lets them reply in the inbox', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'assignment']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
 		const id = (await v('GET', '/v1/chat')).json.conversation.id;
@@ -272,7 +272,7 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		// someone Accounts does not let reply in the inbox cannot be assigned
 		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_nobody' })).status).toBe(422);
 		// without Assignment the list is the staff Chat keeps (those assigned were kept), by name
-		await sys.switchOn(['visitor_chat', 'guest_chat', 'inbox']);
+		await sys.switchOn(['visitor_chat', 'inbox']);
 		expect(
 			(await sys.serverCall('GET', '/v1/staff')).json.items
 				.filter((/** @type {any} */ m) => m.id !== 'usr_test_staff')
@@ -281,13 +281,13 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 	});
 
 	it('staff alerts reach the assigned person’s email and their phone from Accounts (CH-12)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts', 'assignment']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		await sys.paste('accounts');
 		sys.accounts.setUsers([
 			{ id: 'usr_ana', name: 'Ana', email: 'ana@shop.example.com', phone: '+12025550143', permissions: ['chat:inbox.reply'] },
 		]);
-		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		await sys.setting('inbox', 'recipients', ['boss@shop.example.com']);
 		const v = sys.visitor();
 		const id = (await v('POST', '/v1/chat/messages', { text: 'hello' })).json.chat.conversation.id;
 		expect(sys.messages().map((m) => m.to)).toEqual([{ email: 'boss@shop.example.com' }]);
@@ -314,7 +314,7 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 	});
 
 	it('a sign-in fills the moved guest chat’s name and phone, and a merged chat with a new question is open', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('accounts');
 		// moved: the account has no conversation yet
 		const guest = sys.visitor();
@@ -338,9 +338,9 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 	});
 
 	it('staff alerts carry the name and the message up to 500 characters; the phone with includePhone', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
-		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		await sys.setting('inbox', 'recipients', ['boss@shop.example.com']);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/contact', { name: 'Ann', phone: '+447700900123' });
 		const long = `Is the white lamp in stock?\n\n\n\nI need two of them, delivered to my shop by Friday. ${'Please call me. '.repeat(30)}`;
@@ -351,8 +351,8 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		expect(alert.values.preview).toHaveLength(140);
 		expect(alert.values.message).toHaveLength(500);
 		expect(alert.values.message.startsWith('Is the white lamp in stock?\n\nI need two of them')).toBe(true);
-		await sys.setting('staff_alerts', 'includePhone', true);
-		await sys.setting('staff_alerts', 'frequency', 'every_message');
+		await sys.setting('inbox', 'includePhone', true);
+		await sys.setting('inbox', 'frequency', 'every_message');
 		await v('POST', '/v1/chat/messages', { text: 'Call me' });
 		expect(sys.messages().at(-1).values).toMatchObject({ name: 'Ann', phone: '+447700900123', message: 'Call me' });
 	});
@@ -360,12 +360,12 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 
 describe('options from the settings draft (CH-13, CH-21, RW-8)', () => {
 	it('the inbox can show signed-in visitors only; alerts link with {conversationId}; tables get messages of their own', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies', 'inbox', 'staff_alerts']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox']);
 		await sys.paste('accounts');
 		await sys.paste('notifications');
 		await sys.setting('inbox', 'guests', 'signed_in');
-		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
-		await sys.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/inquiries?inquiry={conversationId}');
+		await sys.setting('inbox', 'recipients', ['boss@shop.example.com']);
+		await sys.setting('inbox', 'adminUrl', 'https://admin.shop.example.com/inquiries?inquiry={conversationId}');
 		await sys.setting('ai_replies', 'bubbles', 5);
 		await sys.setting('ai_replies', 'tableBubble', true);
 		sys.ai({ text: 'Two lamps:\n| Lamp | Price |\n|---|---|\n| A | $1 |\nWant one?' }, { text: 'Hi Ann.' });
@@ -392,7 +392,7 @@ describe('options from the settings draft (CH-13, CH-21, RW-8)', () => {
 
 describe('attachment links (CH-8)', () => {
 	it('never expire: each use signs a fresh storage link; PDFs are downloads, images open in the browser', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
+		const sys = await start(['visitor_chat']);
 		await sys.connect('storage', STORAGE_KEY);
 		await sys.setting('attachments', 'visitorUploads', 'everyone');
 		const v = sys.visitor();
@@ -414,7 +414,7 @@ describe('attachment links (CH-8)', () => {
 		// not Chat's link, or attachments off: not found
 		expect((await sys.open(`${doc.url.slice(0, -4)}AAAA`)).status).toBe(404);
 		expect((await sys.open('https://chat.example.dev/v1/files/not-a-link')).status).toBe(404);
-		await sys.switchOn(['visitor_chat', 'guest_chat']);
+		await sys.switchOn(['visitor_chat']);
 		expect((await sys.open(doc.url)).status).toBe(404);
 	});
 });

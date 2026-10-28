@@ -169,18 +169,45 @@ export const createAdmin = (product, service) => {
 		/** @param {string} feature */
 		const values = (feature) => product.settings.values(websiteId, feature);
 		const look = await values('visitor_chat');
-		const guests = await values('guest_chat');
+		const guests = on.includes('guest_chat') ? await values('guest_chat') : {};
+		const hasLegacyWho = on.includes('guest_chat') || on.includes('signed_in_chat');
+		const allowGuests = hasLegacyWho ? on.includes('guest_chat') : look.allowGuests !== false;
+		const allowSignedIn = hasLegacyWho ? on.includes('signed_in_chat') : look.allowSignedIn !== false;
+		const effectiveLimit = hasLegacyWho && guests.messageLimit !== undefined ? guests.messageLimit : (look.messageLimit ?? 5);
+		const effectiveContactCapture =
+			hasLegacyWho && guests.contactCapture !== undefined ? guests.contactCapture : (look.contactCapture ?? 'never');
 		const leads = await values('leads_flows');
-		const attachments = await values('attachments');
-		const ratings = await values('ratings');
+		const attachments = on.includes('attachments')
+			? await values('attachments')
+			: { visitorUploads: look.visitorUploads ?? 'off' };
+		const ratings = on.includes('ratings')
+			? await values('ratings')
+			: {
+					kind: look.ratingKind ?? 'csat',
+					labels: look.ratingLabels ?? ['1', '2', '3', '4', '5'],
+					askWhen: look.ratingAskWhen ?? 'on_resolve',
+					askComment: look.ratingAskComment !== false,
+				};
 		const ai = await values('ai_replies');
 		const idle = await values('proactive_idle');
+		const proactiveIdleMinutes =
+			look.proactiveIdleMinutes && look.proactiveIdleMinutes > 0 ? look.proactiveIdleMinutes : (idle.idleMinutes ?? 0);
+		const proactiveOncePer =
+			look.proactiveOncePer && look.proactiveOncePer !== 'session' ? look.proactiveOncePer : (idle.oncePer ?? 'session');
+		const proactiveHideOnMobile =
+			look.proactiveHideOnMobile !== undefined && look.proactiveHideOnMobile !== false
+				? look.proactiveHideOnMobile
+				: (idle.hideOnMobile ?? false);
+		const proactiveExit = on.includes('proactive_exit') || Boolean(look.proactiveExit);
+		const pageRulesOn = on.includes('proactive_pages') || on.includes('visitor_chat');
 		const visitorRules = uploadRules(
 			{ ...attachments, uploadTypes: await product.lists.get(websiteId, 'upload_types') },
 			'visitor',
 		);
 		const flows = on.includes('leads_flows') ? await product.lists.get(websiteId, 'flows') : [];
 		return {
+			allowGuests,
+			allowSignedIn,
 			look: {
 				avatarUrl: /^https:\/\//.test(String(look.avatarUrl)) ? look.avatarUrl : '',
 				launcherPosition: look.launcherPosition,
@@ -192,19 +219,20 @@ export const createAdmin = (product, service) => {
 			},
 			// the limit that applies now: none while the Customer role's sign-in is paused, with the setting (C17)
 			guests: {
-				messageLimit: on.includes('guest_chat') ? await service.guestLimit(websiteId, guests) : guests.messageLimit,
-				contactCapture: guests.contactCapture,
+				messageLimit: allowGuests ? await service.guestLimit(websiteId, { messageLimit: effectiveLimit }) : 0,
+				contactCapture: effectiveContactCapture,
 			},
 			// the sign-in page is the website's, set once in the Portal (Website settings › Domains, pages and legal)
-			signInUrl: on.includes('signed_in_chat') ? (await product.website(websiteId)).pages.signIn : '',
+			signInUrl: allowSignedIn ? (await product.website(websiteId)).pages.signIn : '',
 			// "never disclose" hides the AI label (C1)
 			ai: { showLabel: aiLabelShown(ai) },
 			handoff: { showButton: (await values('handoff')).showButton },
 			proactive: {
-				idleMinutes: idle.idleMinutes,
-				pageRules: on.includes('proactive_pages') ? await product.lists.get(websiteId, 'page_rules') : [],
-				oncePer: idle.oncePer,
-				hideOnMobile: idle.hideOnMobile,
+				idleMinutes: proactiveIdleMinutes,
+				pageRules: pageRulesOn ? await product.lists.get(websiteId, 'page_rules') : [],
+				oncePer: proactiveOncePer,
+				hideOnMobile: proactiveHideOnMobile,
+				exitIntent: proactiveExit,
 			},
 			// the inbox's tags, topics and priorities (C7): admin widgets only, never visitors
 			...(ctx.ticket && on.includes('inbox')
@@ -227,14 +255,22 @@ export const createAdmin = (product, service) => {
 				types: visitorRules.types,
 				limits: visitorRules.limits,
 				maxBytes: visitorRules.max,
-				storage: on.includes('attachments') && (await product.connections.storage(websiteId)) !== null,
+				storage:
+					(on.includes('attachments') || (look.visitorUploads && look.visitorUploads !== 'off')) &&
+					(await product.connections.storage(websiteId)) !== null,
 			},
 			ratings: {
+				enabled: on.includes('ratings') || look.ratingsEnabled === true,
 				kind: ratingScale(ratings).kind,
 				labels: ratingScale(ratings).labels,
 				askWhen: ratings.askWhen,
 				comment: ratings.askComment,
 			},
+			typing: {
+				showTyping: on.includes('typing_receipts') ? (await values('typing_receipts')).showTyping : look.showTyping !== false,
+				showSeen: on.includes('typing_receipts') ? (await values('typing_receipts')).showSeen : look.showSeen !== false,
+			},
+			transcripts: on.includes('transcripts') || look.emailTranscripts !== false,
 		};
 	};
 

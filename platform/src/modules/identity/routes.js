@@ -106,7 +106,11 @@ export const identityRoutes = (ctx, service) => {
 	 */
 	const confirmed = (c, confirmation) => {
 		if (confirmation.code !== undefined || confirmation.recoveryCode !== undefined) {
-			return accounts.confirmOtp(kindOf(c), { code: confirmation.code, recoveryCode: confirmation.recoveryCode, id: sessionOf(c).subject }, metaOf(c));
+			return accounts.confirmOtp(
+				kindOf(c),
+				{ code: confirmation.code, recoveryCode: confirmation.recoveryCode, id: sessionOf(c).subject },
+				metaOf(c),
+			);
 		}
 		if (confirmation.password !== undefined && confirmation.password !== '') {
 			return accounts.confirm(kindOf(c), { password: confirmation.password, id: sessionOf(c).subject }, metaOf(c));
@@ -459,11 +463,11 @@ export const identityRoutes = (ctx, service) => {
 			rateLimit: { limit: 60, windowMs: 60_000 },
 			handler: async (c) => {
 				const { merchantId, website } = await authorizedWebsite(c, P.tokensReveal);
-				const confirmation = valid(inputs.confirmation(c.body));
+				const confirmation = valid(inputs.otpConfirmation(c.body));
 				const productId = /** @type {string} */ (c.params.productId);
 				await service.requireProductOn(String(website._id), productId);
 				// a fresh confirmation, whoever the session is: a stolen session cannot show the server token
-				await confirmed(c, confirmation);
+				await confirmedOtp(c, confirmation);
 				return ok(
 					await tokens.reveal({ merchantId, websiteId: String(website._id), productId, actor: actorOf(c), meta: metaOf(c) }),
 				);
@@ -480,7 +484,9 @@ export const identityRoutes = (ctx, service) => {
 				const { kind, ...confirmation } = valid(inputs.tokenRegenerate(c.body));
 				const productId = /** @type {string} */ (c.params.productId);
 				await service.requireProductOn(String(website._id), productId);
-				await confirmed(c, confirmation);
+				if (kind === 'server') {
+					await confirmedOtp(c, confirmation);
+				}
 				return ok(
 					await tokens.regenerate({
 						merchantId,

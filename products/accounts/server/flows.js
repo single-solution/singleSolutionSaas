@@ -504,6 +504,7 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const passwordSignUp = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'email_password');
 		const body = bodyOf(ctx.body);
 		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
@@ -517,6 +518,7 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const passwordSignIn = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'email_password');
 		const email = normalizeEmail(bodyOf(ctx.body).email);
 		const user = email ? await s.store.users.byEmail(email) : null;
 		return passwordSignInOf(s, ctx, { method: 'email_password', user });
@@ -532,6 +534,7 @@ export const createFlows = (product, service) => {
 	 */
 	const phonePasswordSignUp = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'phone_password');
 		const { signUp } = await service.settings(s, 'phone_password');
 		if (signUp === false) throw problem('sign_up_closed', 'Sign-up with a phone number and a password is closed.');
 		const body = bodyOf(ctx.body);
@@ -561,6 +564,7 @@ export const createFlows = (product, service) => {
 	/** Sign in with a phone number and a password, or a sign-in code from staff (A2, A3). @param {any} ctx */
 	const phonePasswordSignIn = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'phone_password');
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		const user = phone ? await s.store.users.byPhone(phone) : null;
 		return passwordSignInOf(s, ctx, { method: 'phone_password', user });
@@ -574,6 +578,7 @@ export const createFlows = (product, service) => {
 	 */
 	const phoneForgot = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'phone_password');
 		const { selfReset } = await service.settings(s, 'phone_password');
 		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the business.');
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
@@ -593,6 +598,7 @@ export const createFlows = (product, service) => {
 	/** Choose a new password with the code (A2); every device signs in again. @param {any} ctx */
 	const phoneReset = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'phone_password');
 		const body = bodyOf(ctx.body);
 		const { selfReset } = await service.settings(s, 'phone_password');
 		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the business.');
@@ -627,6 +633,7 @@ export const createFlows = (product, service) => {
 	 */
 	const forgotPassword = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'email_password');
 		const body = bodyOf(ctx.body);
 		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
@@ -661,6 +668,7 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const resetPassword = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'email_password');
 		const body = bodyOf(ctx.body);
 		if (!parseSecret(body.token)) throw problem('code_invalid', 'This reset link is not valid or has expired.');
 		const pending = await service.takeSecret(s, body.token, 'reset', { keep: true });
@@ -687,6 +695,9 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const phoneCodeRequest = async (ctx) => {
 		const s = await service.site(ctx);
+		if (!(await service.isMethodOn(s, 'phone_code')) && !(await service.isMethodOn(s, 'phone_password'))) {
+			throw problem('feature_off', 'The feature phone_code or phone_password is off.');
+		}
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
 		const { channel } = await service.settings(s, 'phone');
@@ -697,7 +708,7 @@ export const createFlows = (product, service) => {
 		await service.allowCode(
 			s,
 			await provenPhoneHolderOf(s, phone),
-			s.on.includes('phone_code') ? 'phone_code' : 'phone_password',
+			(await service.isMethodOn(s, 'phone_code')) ? 'phone_code' : 'phone_password',
 		);
 		const sent = await sendCode(s, 'phone', phone, {}, (code) =>
 			service.notify(s, channel, 'accounts.phone_code', { phone }, { code, minutes: CODE_MINUTES }),
@@ -708,6 +719,7 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const phoneCodeSignIn = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'phone_code');
 		const body = bodyOf(ctx.body);
 		const phone = await service.phoneOf(s, body.phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
@@ -719,6 +731,7 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const emailCodeRequest = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'email_code');
 		const body = bodyOf(ctx.body);
 		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
@@ -736,6 +749,7 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const emailCodeSignIn = async (ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, 'email_code');
 		const body = bodyOf(ctx.body);
 		if (body.link !== undefined) {
 			const record = await service.takeSecret(s, body.link, 'email', { field: 'linkHash', keep: true });
@@ -765,6 +779,7 @@ export const createFlows = (product, service) => {
 	 */
 	const socialStart = (provider) => async (/** @type {any} */ ctx) => {
 		const s = await service.site(ctx);
+		await service.ensureMethod(s, provider);
 		const body = bodyOf(ctx.body);
 		const returnTo = returnAddress(body.returnTo, s.domain);
 		if (!returnTo) throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
@@ -899,6 +914,7 @@ export const createFlows = (product, service) => {
 		const record = await service.takeSecret(s, body.code, 'handoff', { keep: true });
 		const user = record ? await s.store.users.get(record.target) : null;
 		if (!record || !user) throw problem('code_invalid', 'This sign-in has expired. Start again.');
+		await service.ensureMethod(s, String(record.data.method));
 		// tied to the browser that started it: a link finished by another browser signs nobody in, and its refusal leaves
 		// the code for the right browser (SR-4-4)
 		const binding = bindingOf(body.binding);
@@ -1160,9 +1176,9 @@ export const createFlows = (product, service) => {
 			...(user.email ? { emailVerified: true } : { phoneVerified: true }),
 			...(name ? { name } : {}),
 		};
-		if (body.password !== undefined && s.on.includes('email_password') && user.email)
+		if (body.password !== undefined && (await service.isMethodOn(s, 'email_password')) && user.email)
 			set.passwordHash = await newPassword(s, body.password, { who: { name: name || user.name, email: user.email } });
-		else if (body.password !== undefined && s.on.includes('phone_password') && user.phone)
+		else if (body.password !== undefined && (await service.isMethodOn(s, 'phone_password')) && user.phone)
 			set.passwordHash = await newPassword(s, body.password, { method: 'phone_password', who: { name: name || user.name } });
 		if (set.passwordHash) set.passwordChangedAt = new Date(now());
 		if (!(await s.store.codes.consume(record.id))) throw problem('code_invalid', 'This invite is not valid or has expired.');

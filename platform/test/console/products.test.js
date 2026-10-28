@@ -106,12 +106,16 @@ describe('admin Products (jsdom)', () => {
 			fillDialog('Product URL', 'http://127.0.0.1:1');
 			fillDialog('Connect secret', delta.secret);
 			await pressDialog('Connect');
-			await until(() => ownerBrowser.calls.some((/** @type {any} */ c) => c.path === '/v1/admin/products' && c.status === 502));
+			await until(() =>
+				ownerBrowser.calls.some((/** @type {any} */ c) => c.path === '/v1/admin/products' && c.status === 502),
+			);
 			// an id already connected: use Reconnect
 			fillDialog('Product URL', notes.url);
 			fillDialog('Connect secret', notes.secret);
 			await pressDialog('Connect');
-			await until(() => ownerBrowser.calls.some((/** @type {any} */ c) => c.path === '/v1/admin/products' && c.status === 409));
+			await until(() =>
+				ownerBrowser.calls.some((/** @type {any} */ c) => c.path === '/v1/admin/products' && c.status === 409),
+			);
 			await until(() => shows('This product is already connected. Open it and use Reconnect.'));
 			// a new product: connected inactive, then its page opens
 			fillDialog('Product URL', delta.url);
@@ -159,11 +163,17 @@ describe('admin Products (jsdom)', () => {
 			expect(document.querySelector('#connection')).not.toBeNull();
 			expect(shows('Earned this month') && shows('Websites')).toBe(true);
 
-			// Open as admin: password confirm, then Defaults with no website
+			// Open as admin: OTP confirm, then Defaults with no website
 			await press('Open as admin');
-			fillDialog('Your password', ownerBrowser.password);
+			await ownerBrowser.api.post('/v1/me/step-up-otp', {});
+			const openCode = world.lastOtp('olivia@ss.test');
+			fillDialog('Authenticator code', openCode);
 			await pressDialog('Open configure');
-			const launched = await ownerBrowser.waitCall('POST', '/v1/admin/products/notes/launch', (/** @type {any} */ st) => st === 200);
+			const launched = await ownerBrowser.waitCall(
+				'POST',
+				'/v1/admin/products/notes/launch',
+				(/** @type {any} */ st) => st === 200,
+			);
 			expect(open).toHaveBeenCalledWith(launched.body.url, '_blank', 'noopener,noreferrer');
 			expect(claimsOf(launched.body.url)).toMatchObject({ kind: 'admin', admin: { role: 'owner', websiteId: null } });
 
@@ -174,7 +184,10 @@ describe('admin Products (jsdom)', () => {
 			expect(buttons('Set active')).toHaveLength(1);
 			await press('Set active');
 			await until(
-				() => ownerBrowser.calls.filter((/** @type {any} */ c) => c.path === '/v1/admin/products/notes/status' && c.status === 200).length === 2,
+				() =>
+					ownerBrowser.calls.filter(
+						(/** @type {any} */ c) => c.path === '/v1/admin/products/notes/status' && c.status === 200,
+					).length === 2,
 			);
 			await until(() => shows('The product is active'));
 

@@ -58,12 +58,62 @@ const STORAGE = {
 const setUp = async (name) => {
 	const h = await bootPortal({ db: mongo.db(name) });
 	cleanups.push(h.close);
-	const owner = await h.owner();
+	const rawOwner = await h.owner();
 	const notes = await h.connect({ ...notesManifest(), needs: { database: true, storage: 'none' } });
 	const chat = await h.connect({ ...notesManifest(), id: 'chat', name: 'Chat', needs: { database: true, storage: 'optional' } });
 	const plain = await h.connect({ ...notesManifest(), id: 'plain', name: 'Plain', needs: { database: false, storage: 'none' } });
 	const m = await h.merchant('m@shop.test', ['shop.example.com', 'blog.example.com']);
 	const [w1 = '', w2 = ''] = m.websiteIds;
+
+	/**
+	 * @template {ReturnType<typeof h.api.session>} T
+	 * @param {T} client
+	 * @param {string} email
+	 * @returns {T}
+	 */
+	const wrap = (client, email) => {
+		const rawPut = client.put.bind(client);
+		const rawPost = client.post.bind(client);
+		client.put = async (path, body) => {
+			if (
+				body &&
+				typeof body === 'object' &&
+				/** @type {Record<string, unknown>} */ (body).password === PASSWORD &&
+				!(/** @type {Record<string, unknown>} */ (body).code)
+			) {
+				const rest = Object.fromEntries(
+					Object.entries(/** @type {Record<string, unknown>} */ (body)).filter(([k]) => k !== 'password'),
+				);
+				const otp = await h.confirmOtp(client, email);
+				return rawPut(path, { ...rest, ...otp });
+			}
+			return rawPut(path, body);
+		};
+		client.post = async (path, body) => {
+			if (
+				body &&
+				typeof body === 'object' &&
+				/** @type {Record<string, unknown>} */ (body).password === PASSWORD &&
+				!(/** @type {Record<string, unknown>} */ (body).code)
+			) {
+				const rest = Object.fromEntries(
+					Object.entries(/** @type {Record<string, unknown>} */ (body)).filter(([k]) => k !== 'password'),
+				);
+				const otp = await h.confirmOtp(client, email);
+				return rawPost(path, { ...rest, ...otp });
+			}
+			return rawPost(path, body);
+		};
+		return client;
+	};
+	const owner = wrap(rawOwner, 'owner@portal.test');
+	wrap(m.client, m.email);
+	const rawAdmin = h.admin.bind(h);
+	h.admin = async (role) => {
+		const res = await rawAdmin(role);
+		wrap(res.client, res.email);
+		return res;
+	};
 	for (const productId of ['notes', 'chat', 'plain']) {
 		await owner.post(`/v1/merchants/${m.merchantId}/websites/${w1}/products`, { productId });
 		h.clock.advance(1000);

@@ -264,7 +264,10 @@ export const createService = (product) => {
 			list: (name) => once(`l:${name}`, () => product.lists.get(websiteId, name)),
 			signIn: () =>
 				once('signIn', async () => {
-					if (!on.includes('signed_in_chat')) return null;
+					const look = await product.settings.values(websiteId, 'visitor_chat');
+					const hasLegacyWho = on.includes('guest_chat') || on.includes('signed_in_chat');
+					const allowSignedIn = hasLegacyWho ? on.includes('signed_in_chat') : look.allowSignedIn !== false;
+					if (!allowSignedIn) return null;
 					const verified = await ctx.signIn();
 					return verified?.ok ? { token: verified.token, user: verified.user, claims: verified.claims } : null;
 				}),
@@ -313,7 +316,11 @@ export const createService = (product) => {
 		const key = s.ctx.headers.get(GUEST_HEADER);
 		const guest = key && GUEST_KEY.test(key) ? await s.store.guests.byKey(sha256Hex(key)) : null;
 		if (user && guest) await claim(s, await s.store.conversations.ofGuest(guest.id), user);
-		if (user && byPhone && user.phone && (await s.values('signed_in_chat')).claimByPhone)
+		const look = await s.values('visitor_chat');
+		const hasLegacyWho = s.on.includes('guest_chat') || s.on.includes('signed_in_chat');
+		const signedIn = s.on.includes('signed_in_chat') ? await s.values('signed_in_chat') : {};
+		const claimByPhone = hasLegacyWho ? Boolean(signedIn.claimByPhone) : Boolean(look.claimByPhone);
+		if (user && byPhone && user.phone && claimByPhone)
 			await claim(s, await s.store.conversations.guestsByPhone(user.phone), user);
 		if (user) return user;
 		return guest ? { kind: 'guest', id: guest.id, name: null, email: null, phone: null } : null;
@@ -422,7 +429,10 @@ export const createService = (product) => {
 	 * @param {Site} s
 	 */
 	const linker = async (s) => {
-		const storage = s.on.includes('attachments') ? await product.connections.storage(s.websiteId) : null;
+		const look = await s.values('visitor_chat');
+		const storageOn =
+			s.on.includes('attachments') || (look.visitorUploads && look.visitorUploads !== 'off') || s.on.includes('inbox');
+		const storage = storageOn ? await product.connections.storage(s.websiteId) : null;
 		const base = product.address();
 		return (/** @type {import('../core/conversation.js').Attachment} */ attachment) => {
 			if (!storage) return null;
@@ -446,7 +456,10 @@ export const createService = (product) => {
 		const file = product.files.open(String(ctx.params.token));
 		const serving = file ? await product.serving(file.w, { after: ctx.after }) : null;
 		const on = file && serving?.ok ? await product.featuresOn(file.w) : [];
-		const storage = file && on.includes('attachments') ? await product.connections.storage(file.w) : null;
+		const look = file && serving?.ok ? await product.settings.values(file.w, 'visitor_chat') : {};
+		const storageOn =
+			on.includes('attachments') || (look.visitorUploads && look.visitorUploads !== 'off') || on.includes('inbox');
+		const storage = file && storageOn ? await product.connections.storage(file.w) : null;
 		if (!file || !storage || !file.k.startsWith('chat/')) throw problem('not_found', 'No such file.');
 		const url = storage.presignGet({
 			key: file.k,
@@ -490,20 +503,28 @@ export const createService = (product) => {
 	 * @param {ConversationRecord | null} c
 	 */
 	const chatView = async (s, visitor, c) => {
-		const receipts = s.on.includes('typing_receipts') ? await s.values('typing_receipts') : null;
-		const { showPaused } = await s.values('visitor_chat');
-		const guestChat = s.on.includes('guest_chat');
-		const limit = visitor?.kind !== 'user' && guestChat ? await guestLimit(s.websiteId, await s.values('guest_chat')) : 0;
+		const look = await s.values('visitor_chat');
+		const receipts = s.on.includes('typing_receipts')
+			? await s.values('typing_receipts')
+			: { showTyping: look.showTyping !== false, showSeen: look.showSeen !== false };
+		const showPaused = look.showPaused;
+		const hasLegacyWho = s.on.includes('guest_chat') || s.on.includes('signed_in_chat');
+		const guestChat = hasLegacyWho ? s.on.includes('guest_chat') : look.allowGuests !== false;
+		const guestsSettings = s.on.includes('guest_chat') ? await s.values('guest_chat') : {};
+		const effectiveLimit =
+			hasLegacyWho && guestsSettings.messageLimit !== undefined ? guestsSettings.messageLimit : (look.messageLimit ?? 5);
+		const limit = visitor?.kind !== 'user' && guestChat ? await guestLimit(s.websiteId, { messageLimit: effectiveLimit }) : 0;
 		const hours = await officeHours(s);
 		/** @type {Record<string, unknown> | null} */
 		let conversation = null;
 		if (c) {
+			const queueOn = s.on.includes('presence_queue')
+				? (await s.values('presence_queue')).queuePosition
+				: s.on.includes('inbox')
+					? (await s.values('inbox')).queuePosition !== false
+					: false;
 			const queue =
-				s.on.includes('presence_queue') &&
-				(await s.values('presence_queue')).queuePosition &&
-				c.waiting &&
-				c.assignedTo === null &&
-				c.status !== 'resolved'
+				queueOn && c.waiting && c.assignedTo === null && c.status !== 'resolved'
 					? await s.store.conversations.queuePosition(c)
 					: null;
 			const flow = c.flow ? (await s.list('flows')).find((f) => f.id === c.flow?.id) : null;
@@ -551,7 +572,7 @@ export const createService = (product) => {
 	 */
 	const visitorMessages = async (s, messages) => {
 		const urlOf = await linker(s);
-		const cards = s.on.includes('product_cards');
+		const cards = s.on.includes('product_cards') || s.on.includes('shop_assistant');
 		return messages.map((m) => visitorMessageView(m, urlOf, { cards }));
 	};
 
@@ -563,8 +584,11 @@ export const createService = (product) => {
 	 */
 	const inboxView = async (s, c, { full = false, staff } = {}) => {
 		const names = staff ?? new Map((await s.store.staff.list()).map((m) => [m.id, m.name]));
-		const seen = s.on.includes('typing_receipts') && (await s.values('typing_receipts')).showSeen;
-		const single = s.on.includes('internal_notes') && (await s.values('internal_notes')).mode === 'single';
+		const look = await s.values('visitor_chat');
+		const seen = s.on.includes('typing_receipts') ? (await s.values('typing_receipts')).showSeen : look.showSeen !== false;
+		const single = s.on.includes('internal_notes')
+			? (await s.values('internal_notes')).mode === 'single'
+			: (await s.values('inbox')).notesMode === 'single';
 		return {
 			id: c.id,
 			visitor: { kind: c.visitor.kind, id: c.visitor.id, name: c.name, email: c.email, phone: c.phone },
@@ -594,11 +618,11 @@ export const createService = (product) => {
 				? {
 						fields: c.fields,
 						...(single ? { note: c.note ?? '' } : {}),
-						...(s.on.includes('ai_summary') ? { summary: c.summary } : {}),
-						...(s.on.includes('ratings')
+						...(s.on.includes('ai_summary') || s.on.includes('inbox') ? { summary: c.summary } : {}),
+						...(s.on.includes('ratings') || look.ratingsEnabled === true
 							? { rating: c.rating ? { kind: c.rating.kind, score: c.rating.score, comment: c.rating.comment } : null }
 							: {}),
-						...(s.on.includes('context_panel')
+						...(s.on.includes('context_panel') || s.on.includes('inbox')
 							? {
 									context: {
 										name: c.name,
@@ -637,7 +661,7 @@ export const createService = (product) => {
 	 */
 	const staffMessages = async (s, messages) => {
 		const urlOf = await linker(s);
-		const cards = s.on.includes('product_cards');
+		const cards = s.on.includes('product_cards') || s.on.includes('shop_assistant');
 		return messages.map((m) => staffMessageView(m, urlOf, { cards }));
 	};
 
@@ -682,8 +706,9 @@ export const createService = (product) => {
 	 * @param {'new_message' | 'needs_you'} kind
 	 */
 	const staffAlert = async (s, c, kind) => {
-		if (!s.on.includes('staff_alerts')) return;
-		const settings = await s.values('staff_alerts');
+		const hasStaffAlerts = s.on.includes('staff_alerts') || s.on.includes('inbox');
+		if (!hasStaffAlerts) return;
+		const settings = s.on.includes('staff_alerts') ? await s.values('staff_alerts') : await s.values('inbox');
 		if (kind === 'new_message' && settings.frequency !== 'every_message') {
 			const claimed = await s.store.conversations.update(c.id, { set: { alerted: true }, unless: { alerted: false } });
 			if (!claimed) return;
@@ -694,7 +719,7 @@ export const createService = (product) => {
 		const recent = await s.store.messages.list(c.id, { limit: 20, internal: false });
 		const latest = [...recent].reverse().find((m) => m.author === 'visitor');
 		await product.staffAlerts.send(s.ctx, {
-			feature: 'staff_alerts',
+			feature: s.on.includes('staff_alerts') ? 'staff_alerts' : 'inbox',
 			event: kind,
 			values: {
 				visitor: c.name ?? c.email ?? c.phone ?? 'Guest',
@@ -725,8 +750,15 @@ export const createService = (product) => {
 	 */
 	const visitorAlert = async (s, c, reply) => {
 		// only to an email or phone Accounts verified for the signed-in visitor, never to what a visitor typed (SR-6-3)
-		if (!s.on.includes('visitor_alerts') || (!c.verifiedPhone && !c.verifiedEmail)) return;
-		const { frequency, channels } = await s.values('visitor_alerts');
+		const hasVisitorAlerts = s.on.includes('visitor_alerts') || s.on.includes('inbox');
+		if (!hasVisitorAlerts || (!c.verifiedPhone && !c.verifiedEmail)) return;
+		const inboxSettings = s.on.includes('inbox') ? await s.values('inbox') : {};
+		const { frequency, channels } = s.on.includes('visitor_alerts')
+			? await s.values('visitor_alerts')
+			: {
+					frequency: inboxSettings.visitorAlertsFrequency ?? 'once',
+					channels: inboxSettings.visitorAlertsChannels ?? [],
+				};
 		const routes = alertRoutes(channels, { email: c.verifiedEmail, phone: c.verifiedPhone });
 		if (routes.length === 0) return;
 		const checked = c.visitorCheckedAt ? new Date(c.visitorCheckedAt).getTime() : 0;
@@ -813,15 +845,16 @@ export const createService = (product) => {
 	 * @param {Site} s
 	 */
 	const capped = async (s) => {
-		if (!s.on.includes('ai_caps')) return false;
+		const hasLegacyCaps = s.on.includes('ai_caps');
+		const ai = s.on.includes('ai_replies') ? await s.values('ai_replies') : {};
+		const caps = hasLegacyCaps ? await s.values('ai_caps') : ai;
+		const dailyTokens = Number(caps.dailyTokens ?? 0);
+		const monthlyTokens = Number(caps.monthlyTokens ?? 0);
+		if (!hasLegacyCaps && dailyTokens === 0 && monthlyTokens === 0) return false;
 		const { timeZone } = await s.business();
 		const keys = windowKeys(now(), timeZone);
 		const used = await s.store.usage.get([keys.day, keys.month]);
-		const caps = await s.values('ai_caps');
-		return capReached(
-			{ day: Number(used[keys.day]), month: Number(used[keys.month]) },
-			{ dailyTokens: Number(caps.dailyTokens), monthlyTokens: Number(caps.monthlyTokens) },
-		);
+		return capReached({ day: Number(used[keys.day]), month: Number(used[keys.month]) }, { dailyTokens, monthlyTokens });
 	};
 
 	/**
@@ -834,8 +867,13 @@ export const createService = (product) => {
 		const { timeZone } = await s.business();
 		const keys = windowKeys(now(), timeZone);
 		const before = await s.store.usage.add([keys.day, keys.month], tokens);
-		if (!s.on.includes('ai_cost_alerts') || !s.on.includes('ai_caps')) return;
-		const { monthlyTokens } = await s.values('ai_caps');
+		const hasLegacyCostAlerts = s.on.includes('ai_cost_alerts');
+		const ai = s.on.includes('ai_replies') ? await s.values('ai_replies') : {};
+		const costAlertsOn =
+			(hasLegacyCostAlerts && s.on.includes('ai_caps')) || (s.on.includes('ai_replies') && ai.costAlerts !== false);
+		const caps = s.on.includes('ai_caps') ? await s.values('ai_caps') : ai;
+		const monthlyTokens = Number(caps.monthlyTokens ?? 0);
+		if (!costAlertsOn || monthlyTokens === 0) return;
 		const month = Number(before[keys.month]);
 		const crossed = alertCrossed({
 			before: month,
@@ -899,8 +937,11 @@ export const createService = (product) => {
 	 * @returns {Promise<ConversationRecord>}
 	 */
 	const route = async (s, c, language) => {
-		if (!s.on.includes('assignment') || c.assignedTo !== null) return c;
-		const { autoAssign } = await s.values('assignment');
+		const hasAssignment = s.on.includes('assignment') || s.on.includes('inbox');
+		if (!hasAssignment || c.assignedTo !== null) return c;
+		const autoAssign = s.on.includes('assignment')
+			? (await s.values('assignment')).autoAssign
+			: (await s.values('inbox')).autoAssign;
 		const mode = ROUTED.find((each) => each === autoAssign);
 		if (!mode) return c;
 		const page = c.currentPage ?? c.page;
@@ -912,8 +953,12 @@ export const createService = (product) => {
 		}
 		const team = teamFor(/** @type {any} */ (await s.list('teams')), { language, path });
 		const open = await s.store.conversations.openByStaff();
-		const presence = s.on.includes('presence_queue');
-		const defaultMax = presence ? Number((await s.values('presence_queue')).maxChats) || null : null;
+		const presence = s.on.includes('presence_queue') || s.on.includes('inbox');
+		const defaultMax = presence
+			? Number(
+					s.on.includes('presence_queue') ? (await s.values('presence_queue')).maxChats : (await s.values('inbox')).maxChats,
+				) || null
+			: null;
 		const candidates = (await s.store.staff.list())
 			.filter((m) => (team ? inTeam(team, m) : true))
 			.filter((m) => {

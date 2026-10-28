@@ -32,7 +32,7 @@ import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { DaysLeft, creditDayBars, formatChartCredits, merchantPill } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
-import { ConfirmChange } from '../../views/confirm-change.js';
+import { ConfirmOtp } from '../../views/confirm-change.js';
 import { ActivityTimeline } from '../../views/login-settings.js';
 import { WEBSITE } from '../../../texts/console.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -334,7 +334,7 @@ export function OverviewView(props) {
 					</Card>
 				</div>
 			</Page>
-			<ConfirmChange
+			<ConfirmOtp
 				open={Boolean(launching)}
 				title={WEBSITE.openConfirmTitle(launching?.name ?? '')}
 				help={WEBSITE.openConfirmHelp}

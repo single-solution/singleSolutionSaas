@@ -53,135 +53,130 @@
 		"needs": [
 			{
 				"product": "chat",
-				"scopes": ["permissions.read"],
-				"features": ["roles"]
+				"scopes": [
+					"permissions.read"
+				],
+				"features": [
+					"roles"
+				]
 			},
 			{
 				"product": "chat",
-				"scopes": ["data_rights.export", "data_rights.erase"],
-				"features": ["data_rights"]
+				"scopes": [
+					"data_rights.export",
+					"data_rights.erase"
+				],
+				"features": [
+					"data_rights"
+				]
 			},
 			{
 				"product": "ecommerce",
-				"scopes": ["orders.read.customer"],
-				"features": ["orders_tab"]
+				"scopes": [
+					"orders.read.customer"
+				],
+				"features": []
 			},
 			{
 				"product": "ecommerce",
-				"scopes": ["permissions.read"],
-				"features": ["roles"]
+				"scopes": [
+					"permissions.read"
+				],
+				"features": [
+					"roles"
+				]
 			},
 			{
 				"product": "ecommerce",
-				"scopes": ["data_rights.export", "data_rights.erase"],
-				"features": ["data_rights"]
+				"scopes": [
+					"data_rights.export",
+					"data_rights.erase"
+				],
+				"features": [
+					"data_rights"
+				]
 			},
 			{
 				"product": "growth",
-				"scopes": ["permissions.read"],
-				"features": ["roles"]
+				"scopes": [
+					"permissions.read"
+				],
+				"features": [
+					"roles"
+				]
 			},
 			{
 				"product": "growth",
-				"scopes": ["data_rights.export", "data_rights.erase"],
-				"features": ["data_rights"]
+				"scopes": [
+					"data_rights.export",
+					"data_rights.erase"
+				],
+				"features": [
+					"data_rights"
+				]
 			},
 			{
 				"product": "notifications",
-				"scopes": ["messages.send"],
-				"features": ["phone_code", "phone_password", "email_password", "email_code", "approval", "role_requests"]
+				"scopes": [
+					"messages.send"
+				],
+				"features": [
+					"sign_in",
+					"approval",
+					"role_requests"
+				]
 			},
 			{
 				"product": "notifications",
-				"scopes": ["permissions.read"],
-				"features": ["roles"]
+				"scopes": [
+					"permissions.read"
+				],
+				"features": [
+					"roles"
+				]
 			},
 			{
 				"product": "notifications",
-				"scopes": ["data_rights.export", "data_rights.erase"],
-				"features": ["data_rights"]
+				"scopes": [
+					"data_rights.export",
+					"data_rights.erase"
+				],
+				"features": [
+					"data_rights"
+				]
 			},
 			{
 				"product": "payments",
-				"scopes": ["permissions.read"],
-				"features": ["roles"]
+				"scopes": [
+					"permissions.read"
+				],
+				"features": [
+					"roles"
+				]
 			},
 			{
 				"product": "payments",
-				"scopes": ["data_rights.export", "data_rights.erase"],
-				"features": ["data_rights"]
+				"scopes": [
+					"data_rights.export",
+					"data_rights.erase"
+				],
+				"features": [
+					"data_rights"
+				]
 			}
 		]
 	},
 	"features": [
 		{
-			"key": "phone_code",
-			"name": "Phone code",
-			"description": "Sign-up and sign-in with a one-time code sent by SMS or WhatsApp through the merchant's Notifications (linked by the Portal).",
+			"key": "sign_in",
+			"name": "Sign-in",
+			"description": "Sign-in methods (one-time code or password by phone, password or code by email, and Google, Apple and Facebook), password rules and phone delivery channels.",
 			"dependsOn": [],
-			"recommendFor": ["signIn.phone"],
+			"recommendFor": [
+				"signIn.*"
+			],
 			"settings": {
-				"$ref": "schemas/phone_code.settings.json"
-			}
-		},
-		{
-			"key": "phone_password",
-			"name": "Phone + password",
-			"description": "Sign-up and sign-in with a phone number and a password, with password rules, login limits and Forgot password (a code by SMS or WhatsApp, or your own page).",
-			"dependsOn": [],
-			"recommendFor": ["signIn.phone"],
-			"settings": {
-				"$ref": "schemas/phone_password.settings.json"
-			}
-		},
-		{
-			"key": "email_password",
-			"name": "Email + password",
-			"description": "Sign-up and sign-in with an email address and a password, with password rules, login limits and Forgot password (reset links through Notifications).",
-			"dependsOn": [],
-			"recommendFor": ["signIn.email"],
-			"settings": {
-				"$ref": "schemas/email_password.settings.json"
-			}
-		},
-		{
-			"key": "email_code",
-			"name": "Email code / magic link",
-			"description": "Sign-in with a one-time code or a single-use link sent by email through the merchant's Notifications.",
-			"dependsOn": [],
-			"recommendFor": ["signIn.email"],
-			"settings": {
-				"$ref": "schemas/email_code.settings.json"
-			}
-		},
-		{
-			"key": "google",
-			"name": "Google",
-			"description": "Sign-in with Google, using the merchant's own Google OAuth client.",
-			"dependsOn": [],
-			"recommendFor": ["signIn.social"],
-			"settings": {
-				"$ref": "schemas/google.settings.json"
-			}
-		},
-		{
-			"key": "apple",
-			"name": "Apple",
-			"description": "Sign in with Apple, using the merchant's own Apple Services ID and key.",
-			"dependsOn": [],
-			"recommendFor": ["signIn.social"],
-			"settings": {
-				"$ref": "schemas/apple.settings.json"
-			}
-		},
-		{
-			"key": "facebook",
-			"name": "Facebook",
-			"description": "Sign-in with Facebook, using the merchant's own Facebook app.",
-			"dependsOn": [],
-			"recommendFor": ["signIn.social"],
-			"settings": {
-				"$ref": "schemas/facebook.settings.json"
+				"$ref": "schemas/sign_in.settings.json"
 			}
 		},
 		{
@@ -189,27 +184,26 @@
 			"name": "Roles and permissions",
 			"description": "One user list with roles: ready-made templates the merchant changes or deletes and the merchant's own, the role for new sign-ups, the permissions products supply plus the merchant's own names, session lengths per role, and the Users and Roles admin widgets.",
 			"dependsOn": [],
-			"recommendFor": ["signIn.*", "offers.member_prices"],
+			"recommendFor": [
+				"signIn.*",
+				"offers.member_prices"
+			],
 			"settings": {
 				"$ref": "schemas/roles.settings.json"
 			}
 		},
 		{
-			"key": "custom_fields",
-			"name": "Custom fields",
-			"description": "The merchant's own profile fields (text, number, date, choice), shown at sign-up and in My account.",
-			"dependsOn": [],
+			"key": "role_requests",
+			"name": "Role requests",
+			"description": "Visitors ask for a role (for example membership) with their name and phone number or email address; staff invite them with a setup link or decline.",
+			"dependsOn": [
+				"roles"
+			],
+			"recommendFor": [
+				"offers.member_prices"
+			],
 			"settings": {
-				"$ref": "schemas/custom_fields.settings.json"
-			}
-		},
-		{
-			"key": "two_step",
-			"name": "Two-step sign-in",
-			"description": "A 6-digit authenticator-app code after the first step, with 10 recovery codes; optional, or required per role.",
-			"dependsOn": [],
-			"settings": {
-				"$ref": "schemas/two_step.settings.json"
+				"$ref": "schemas/role_requests.settings.json"
 			}
 		},
 		{
@@ -222,18 +216,18 @@
 			}
 		},
 		{
-			"key": "risk_checks",
-			"name": "Risk checks",
-			"description": "Refuses disposable email addresses and too many accounts from one device or one network.",
+			"key": "two_step",
+			"name": "Two-step sign-in",
+			"description": "A 6-digit authenticator-app code after the first step, with 10 recovery codes; optional, or required per role.",
 			"dependsOn": [],
 			"settings": {
-				"$ref": "schemas/risk_checks.settings.json"
+				"$ref": "schemas/two_step.settings.json"
 			}
 		},
 		{
 			"key": "consents",
 			"name": "Consents",
-			"description": "The merchant's consent list (terms, privacy policy, marketing …): sign-up and sign-in ask the required agreements again when their version changes; marketing consent stays apart, given or withdrawn by the user in My account; each answer is recorded on the user with its version and time.",
+			"description": "The merchant's consent list (terms, privacy policy, marketing \u2026): sign-up and sign-in ask the required agreements again when their version changes; marketing consent stays apart, given or withdrawn by the user in My account; each answer is recorded on the user with its version and time.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/consents.settings.json"
@@ -244,9 +238,23 @@
 			"name": "Data rights",
 			"description": "Download my data at once; Delete my account after the merchant approves (or after N days), erased in every product on the website through the Portal's links.",
 			"dependsOn": [],
-			"recommendFor": ["signIn.*"],
+			"recommendFor": [
+				"signIn.*"
+			],
 			"settings": {
 				"$ref": "schemas/data_rights.settings.json"
+			}
+		},
+		{
+			"key": "import",
+			"name": "Import",
+			"description": "Roles, custom fields, users (with their old password hashes), role requests and activity history moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
+			"dependsOn": [],
+			"recommendFor": [
+				"moving.yes"
+			],
+			"settings": {
+				"$ref": "schemas/import.settings.json"
 			}
 		},
 		{
@@ -256,45 +264,6 @@
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/activity_copies.settings.json"
-			}
-		},
-		{
-			"key": "orders_tab",
-			"name": "Orders tab",
-			"description": "My account shows the user's orders from Ecommerce (linked by the Portal).",
-			"dependsOn": [],
-			"recommendFor": ["signIn.*+sells.*"],
-			"settings": {
-				"$ref": "schemas/orders_tab.settings.json"
-			}
-		},
-		{
-			"key": "staff_links",
-			"name": "Staff sign-in codes and setup links",
-			"description": "Staff make a one-time sign-in code to read to a user, or a setup link to send them (for example by WhatsApp) to choose a password.",
-			"dependsOn": [],
-			"settings": {
-				"$ref": "schemas/staff_links.settings.json"
-			}
-		},
-		{
-			"key": "role_requests",
-			"name": "Role requests",
-			"description": "Visitors ask for a role (for example membership) with their name and phone number or email address; staff invite them with a setup link or decline.",
-			"dependsOn": ["roles"],
-			"recommendFor": ["offers.member_prices"],
-			"settings": {
-				"$ref": "schemas/role_requests.settings.json"
-			}
-		},
-		{
-			"key": "import",
-			"name": "Import",
-			"description": "Roles, custom fields, users (with their old password hashes), role requests and activity history moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
-			"dependsOn": [],
-			"recommendFor": ["moving.yes"],
-			"settings": {
-				"$ref": "schemas/import.settings.json"
 			}
 		}
 	],
@@ -323,12 +292,12 @@
 	"widgets": [
 		{
 			"key": "sign_in",
-			"feature": ["phone_code", "phone_password", "email_password", "email_code", "google", "apple", "facebook"],
+			"feature": "sign_in",
 			"kind": "visitor"
 		},
 		{
 			"key": "my_account",
-			"feature": ["phone_code", "phone_password", "email_password", "email_code", "google", "apple", "facebook"],
+			"feature": "sign_in",
 			"kind": "visitor"
 		},
 		{

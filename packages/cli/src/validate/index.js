@@ -104,6 +104,19 @@ const LIVE_OPS_SEGMENTS = Object.freeze([
 	'shipments',
 	'refunds',
 	'customers',
+	'payments',
+	'subscriptions',
+	'users',
+	'members',
+	'checkouts',
+	'carts',
+	'leads',
+	'subscribers',
+	'disputes',
+	'payouts',
+	'transactions',
+	// Notifications send/delivery (not dashboard message-catalog paths — those live under …/dashboard/…/messages)
+	'delivery',
 ]);
 
 const CODE_FILE = /\.(?:m?js|cjs|jsx)$/;

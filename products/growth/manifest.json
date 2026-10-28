@@ -44,7 +44,9 @@
 		"needs": [
 			{
 				"product": "accounts",
-				"scopes": ["activity.write"],
+				"scopes": [
+					"activity.write"
+				],
 				"features": []
 			}
 		]
@@ -55,7 +57,9 @@
 			"name": "Meta pixel",
 			"description": "Loads the merchant's Meta pixel once the visitor consents to marketing, and sends it the shop events.",
 			"dependsOn": [],
-			"recommendFor": ["marketing.meta"],
+			"recommendFor": [
+				"marketing.meta"
+			],
 			"settings": {
 				"$ref": "schemas/meta_pixel.settings.json"
 			}
@@ -65,7 +69,9 @@
 			"name": "Google tags",
 			"description": "Google Analytics 4, Google Ads and Tag Manager with the merchant's ids, after consent, with Google Consent Mode v2 and the shop events.",
 			"dependsOn": [],
-			"recommendFor": ["marketing.google"],
+			"recommendFor": [
+				"marketing.google"
+			],
 			"settings": {
 				"$ref": "schemas/google_tags.settings.json"
 			}
@@ -75,7 +81,9 @@
 			"name": "TikTok pixel",
 			"description": "Loads the merchant's TikTok pixel once the visitor consents to marketing, and sends it the shop events.",
 			"dependsOn": [],
-			"recommendFor": ["marketing.tiktok"],
+			"recommendFor": [
+				"marketing.tiktok"
+			],
 			"settings": {
 				"$ref": "schemas/tiktok_pixel.settings.json"
 			}
@@ -100,7 +108,9 @@
 				"marketing.tiktok+countries.eea",
 				"marketing.analytics+countries.eea"
 			],
-			"requires": ["pages.privacy"],
+			"requires": [
+				"pages.privacy"
+			],
 			"settings": {
 				"$ref": "schemas/consent_banner.settings.json"
 			}
@@ -110,39 +120,11 @@
 			"name": "Visitor analytics",
 			"description": "Anonymous first-party analytics in the merchant's database: visits, page views, sources, devices and countries; the analytics dashboard widget.",
 			"dependsOn": [],
-			"recommendFor": ["marketing.analytics"],
+			"recommendFor": [
+				"marketing.analytics"
+			],
 			"settings": {
 				"$ref": "schemas/visitor_analytics.settings.json"
-			}
-		},
-		{
-			"key": "conversion_funnel",
-			"name": "Goals and funnels",
-			"description": "Counts the merchant's goals and funnels, each step an event (the shop events, contacts, or the merchant's own events sent with SSGrowth.track) or a page; the shop funnel to start with, and revenue per currency.",
-			"dependsOn": ["visitor_analytics"],
-			"recommendFor": ["marketing.analytics"],
-			"settings": {
-				"$ref": "schemas/conversion_funnel.settings.json"
-			}
-		},
-		{
-			"key": "searches_404s",
-			"name": "Searches and 404s",
-			"description": "Records what visitors search for on the site and the pages they reach that do not exist.",
-			"dependsOn": ["visitor_analytics"],
-			"recommendFor": ["marketing.analytics", "marketing.seo"],
-			"settings": {
-				"$ref": "schemas/searches_404s.settings.json"
-			}
-		},
-		{
-			"key": "web_vitals",
-			"name": "Web Vitals",
-			"description": "Measures how fast and stable pages are for real visitors (LCP, INP, CLS, FCP, TTFB): kept in your analytics while Visitor analytics is on, and sent to Google Analytics 4 when you ask, also without it.",
-			"dependsOn": [],
-			"recommendFor": ["marketing.seo"],
-			"settings": {
-				"$ref": "schemas/web_vitals.settings.json"
 			}
 		},
 		{
@@ -150,7 +132,9 @@
 			"name": "robots and verification",
 			"description": "The robots.txt rules (with the AI training crawlers the merchant blocks) and the verification tags (Google, Bing, Meta, Yandex and the merchant's own), served for the merchant's site to include.",
 			"dependsOn": [],
-			"recommendFor": ["marketing.seo"],
+			"recommendFor": [
+				"marketing.seo"
+			],
 			"settings": {
 				"$ref": "schemas/robots_verification.settings.json"
 			}
@@ -160,7 +144,9 @@
 			"name": "IndexNow",
 			"description": "Tells search engines about new or changed pages at once, with the merchant's IndexNow key, when the merchant asks (widget or API).",
 			"dependsOn": [],
-			"recommendFor": ["marketing.seo"],
+			"recommendFor": [
+				"marketing.seo"
+			],
 			"settings": {
 				"$ref": "schemas/indexnow.settings.json"
 			}
@@ -170,7 +156,9 @@
 			"name": "SEO checklist",
 			"description": "Checks the merchant's live site on request (their pages and sample pages from the sitemap: status codes, robots.txt, canonical links, structured data, the server's HTML, speed and Web Vitals, missing pages and redirects) and shows what to fix, with steps.",
 			"dependsOn": [],
-			"recommendFor": ["marketing.seo"],
+			"recommendFor": [
+				"marketing.seo"
+			],
 			"settings": {
 				"$ref": "schemas/seo_checklist.settings.json"
 			}
@@ -180,7 +168,10 @@
 			"name": "Redirects",
 			"description": "Rules that send old addresses of the website (exact paths, paths under a prefix, or wildcard patterns) to their new page, for good (301 or 308) or for now (302 or 307), or answer them as gone (410), read by the website's server; suggestions from the 404 log, and CSV import and export.",
 			"dependsOn": [],
-			"recommendFor": ["moving.yes", "marketing.seo"],
+			"recommendFor": [
+				"moving.yes",
+				"marketing.seo"
+			],
 			"settings": {
 				"$ref": "schemas/redirects.settings.json"
 			}
@@ -190,7 +181,10 @@
 			"name": "Notice bar",
 			"description": "An announcement bar on the website: the merchant's announcements, each with its text, link, schedule on the business time zone's clock, pages and how long a closed one stays closed.",
 			"dependsOn": [],
-			"recommendFor": ["offers.discounts", "offers.coupons"],
+			"recommendFor": [
+				"offers.discounts",
+				"offers.coupons"
+			],
 			"settings": {
 				"$ref": "schemas/notice_bar.settings.json"
 			}
@@ -200,7 +194,9 @@
 			"name": "Import",
 			"description": "Daily analytics totals moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
 			"dependsOn": [],
-			"recommendFor": ["moving.yes"],
+			"recommendFor": [
+				"moving.yes"
+			],
 			"settings": {
 				"$ref": "schemas/import.settings.json"
 			}
@@ -251,7 +247,10 @@
 		},
 		{
 			"key": "seo_checklist",
-			"feature": ["seo_checklist", "indexnow"],
+			"feature": [
+				"seo_checklist",
+				"indexnow"
+			],
 			"kind": "admin"
 		},
 		{

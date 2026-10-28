@@ -700,4 +700,43 @@ describe('K-27: rolling sessions, new recovery codes and reset links to another 
 		await env.setting('email_password', 'resetHosts', []);
 		expect(code(await forgot(page))).toBe('validation_failed');
 	});
+
+	it('operates via unified sign_in feature flag and enforces enabled methods', async () => {
+		await env.switchOn(['sign_in']);
+		// default methods includes email_password
+		const res = await signUp('umbrella@example.com');
+		expect(res.status).toBe(200);
+		expect(res.json.status).toBe('signed_in');
+
+		// phone_password is off by default under sign_in
+		const phoneRes = await env.visitor('POST', '/v1/sign-in/phone-password', {
+			phone: '+447700900123',
+			password: 'some password',
+		});
+		expect(code(phoneRes)).toBe('feature_off');
+
+		// enable phone_code in sign_in methods
+		await env.setting('sign_in', 'methods', ['email_password', 'phone_code']);
+		const ask = await askCode('+447700900999');
+		expect(ask.status).toBe(202);
+
+		// password rules: minLength enforced from sign_in settings
+		await env.setting('sign_in', 'minLength', 12);
+		const weak = await env.visitor('POST', '/v1/sign-up/password', {
+			email: 'short@example.com',
+			password: 'short',
+			name: 'Short Pass',
+		});
+		expect(code(weak)).toBe('weak_password');
+		await env.setting('sign_in', 'minLength', 8);
+
+		// widget config returns sign_in and my_account widgets and methods
+		const config = (await env.visitor('GET', '/v1/widget/config')).json;
+		expect(config.widgets).toContain('sign_in');
+		expect(config.widgets).toContain('my_account');
+		expect(config.settings.methods).toEqual(['email_password', 'phone_code']);
+
+		// restore switchOn to ALL
+		await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
+	});
 });

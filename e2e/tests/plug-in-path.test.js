@@ -1,14 +1,13 @@
 /**
  * PLAN §1 / §7 “Then new products”: the only plug-in path — connect → set active → place on a website → Open
- * configure (password step-up + SSO) → Setup sheet blueprint. No Portal page named after the product; the website
+ * configure (OTP step-up + SSO) → Setup sheet blueprint. No Portal page named after the product; the website
  * shows a product row and the sheet aggregates `GET /v1/blueprint`.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateBlueprint } from '@ss/contracts';
-import { CONNECT_SECRET, PASSWORD, PRODUCT_URL, codeOf, startSystem } from './helpers.js';
+import { CONNECT_SECRET, PRODUCT_URL, codeOf, startSystem } from './helpers.js';
 
 const DOMAIN = 'plugin.example.com';
-const CONFIRM = { password: PASSWORD };
 
 /** @type {import('./helpers.js').System} */
 let sys;
@@ -24,9 +23,9 @@ describe('new product plug-in path (manifest → connect → place → launch �
 		const owner = await sys.owner();
 
 		// 1. Connect (URL + CONNECT_SECRET) → inactive; wrong secret refused
-		expect(
-			codeOf(await owner.post('/v1/admin/products', { url: PRODUCT_URL, secret: `${CONNECT_SECRET}-wrong` })),
-		).toBe('unauthorized');
+		expect(codeOf(await owner.post('/v1/admin/products', { url: PRODUCT_URL, secret: `${CONNECT_SECRET}-wrong` }))).toBe(
+			'unauthorized',
+		);
 		const connected = await owner.post('/v1/admin/products', { url: PRODUCT_URL, secret: CONNECT_SECRET });
 		expect(connected.status).toBe(201);
 		expect(connected.json.product).toMatchObject({
@@ -63,10 +62,11 @@ describe('new product plug-in path (manifest → connect → place → launch �
 			}),
 		]);
 
-		// 4. Open configure: password required; then single-use launch → dashboard session
+		// 4. Open configure: OTP required; then single-use launch → dashboard session
 		const launchPath = `/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes/launch`;
 		expect((await m.client.post(launchPath, {})).status).toBe(422);
-		const launch = await m.client.post(launchPath, CONFIRM);
+		expect((await m.client.post(launchPath, { password: 'not my password' })).status).toBeGreaterThanOrEqual(400);
+		const launch = await m.client.post(launchPath, await sys.stepUp(m.client, m.email));
 		expect(launch.status).toBe(200);
 		expect(launch.json.url).toMatch(new RegExp(`^${PRODUCT_URL}/sso\\?launch=`));
 		const opened = await sys.open(launch.json.url);
@@ -77,8 +77,11 @@ describe('new product plug-in path (manifest → connect → place → launch �
 		expect(session.json.who).toMatchObject({ kind: 'merchant', id: m.merchantId });
 		expect((await sys.open(launch.json.url)).status).toBe(401);
 
-		// Owner Open as admin for the same website (password step-up)
-		const adminLaunch = await owner.post('/v1/admin/products/notes/launch', { websiteId, ...CONFIRM });
+		// Owner Open as admin for the same website (OTP step-up)
+		const adminLaunch = await owner.post('/v1/admin/products/notes/launch', {
+			websiteId,
+			...(await sys.stepUp(owner, 'owner@portal.test')),
+		});
 		expect(adminLaunch.status).toBe(200);
 		const adminOpened = await sys.open(adminLaunch.json.url);
 		expect((await sys.dashboard(adminOpened.cookie, 'GET', '/v1/dashboard/session')).json.who).toMatchObject({
@@ -96,7 +99,7 @@ describe('new product plug-in path (manifest → connect → place → launch �
 		]);
 		const revealed = await m.client.post(
 			`/v1/merchants/${m.merchantId}/websites/${websiteId}/tokens/notes/reveal`,
-			CONFIRM,
+			await sys.stepUp(m.client, m.email),
 		);
 		expect(revealed.status).toBe(200);
 		const text = JSON.stringify(sheet.json);

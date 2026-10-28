@@ -347,9 +347,7 @@ describe('rights: products on websites, switching features, credits, receipts an
 					expect(
 						(await x.as(x.other, 'POST', `/v1/merchants/${M1}/websites/${W1}/products`, { productId: PRODUCT })).status,
 					).toBe(403);
-					expect(
-						(await x.as(x.other, 'DELETE', `/v1/merchants/${M1}/websites/${W1}/products/${PRODUCT}`)).status,
-					).toBe(403);
+					expect((await x.as(x.other, 'DELETE', `/v1/merchants/${M1}/websites/${W1}/products/${PRODUCT}`)).status).toBe(403);
 				},
 			},
 			anonymous: (x) => x.h.call('GET', `/v1/merchants/${M1}/websites/${W1}/products`),
@@ -430,14 +428,29 @@ describe('rights: product dashboards, Products, settings, defaults and prices', 
 		const websiteId = String(m.websiteIds[0]);
 		await owner.post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products`, { productId: 'notes' });
 		await owner.post(`/v1/merchants/${other.merchantId}/websites/${other.websiteIds[0]}/products`, { productId: 'notes' });
-		const support = (await t.admin('support')).client;
-		const finance = (await t.admin('finance')).client;
+		const supportAdmin = await t.admin('support');
+		const financeAdmin = await t.admin('finance');
+		const support = supportAdmin.client;
+		const finance = financeAdmin.client;
+		/** @param {any} client */
+		const emailFor = (client) => {
+			if (client === support) return supportAdmin.email;
+			if (client === finance) return financeAdmin.email;
+			return 'owner@portal.test';
+		};
 		/** @param {any} client @param {Record<string, unknown>} [body] */
-		const open = (client, body = {}) => client.post('/v1/admin/products/notes/launch', { password: PASSWORD, ...body });
-		const merchantOpen = (/** @type {any} */ client, /** @type {{ merchantId: string, websiteIds: string[] }} */ who) =>
-			client.post(`/v1/merchants/${who.merchantId}/websites/${who.websiteIds[0]}/products/notes/launch`, {
-				password: PASSWORD,
-			});
+		const open = async (client, body = {}) => {
+			const otp = await t.confirmOtp(client, emailFor(client));
+			return client.post('/v1/admin/products/notes/launch', { ...otp, ...body });
+		};
+		const merchantOpen = async (
+			/** @type {any} */ client,
+			/** @type {{ merchantId: string, websiteIds: string[], email?: string }} */ who,
+		) => {
+			const email = who.email ?? 'm@shop.test';
+			const otp = await t.confirmOtp(client, email);
+			return client.post(`/v1/merchants/${who.merchantId}/websites/${who.websiteIds[0]}/products/notes/launch`, otp);
+		};
 		/** The role a launch carries (what the product checks). @param {{ json: any }} res */
 		const roleOf = async (res) => {
 			const claims = await t.verify(res.json.url, 'notes');

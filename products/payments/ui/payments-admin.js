@@ -166,7 +166,11 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 				const left = payment.amount - payment.refunded;
 				/** @type {HTMLElement[]} */
 				const buttons = [];
-				if (can('refunds') && (payment.status === 'paid' || payment.status === 'partially_refunded') && left > 0) {
+				if (
+					(can('refunds') || can('payment_api')) &&
+					(payment.status === 'paid' || payment.status === 'partially_refunded') &&
+					left > 0
+				) {
 					const refund = element(doc, 'button', { type: 'button' }, t('admin.refund'));
 					refund.addEventListener('click', () => {
 						const amount = /** @type {HTMLInputElement} */ (

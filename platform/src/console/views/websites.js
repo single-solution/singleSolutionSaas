@@ -34,7 +34,7 @@ import { api, routes } from '../paths.js';
 import { DaysLeft, ProductStatusBadge, creditDayBars, formatChartCredits, productStatusLabel, productTone } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
 import { PageProblem, openDashboard } from './common.js';
-import { ConfirmChange } from './confirm-change.js';
+import { ConfirmOtp } from './confirm-change.js';
 import { ActivityTimeline } from './login-settings.js';
 import { contactLine } from './sign-in.js';
 import { dailyCostOf, websiteDot } from './website.js';
@@ -269,7 +269,7 @@ export function OverviewView(props) {
 					</div>
 				)}
 			</Page>
-			<ConfirmChange
+			<ConfirmOtp
 				open={Boolean(launching)}
 				title={WEBSITE.openConfirmTitle(launching?.card.name ?? '')}
 				help={WEBSITE.openConfirmHelp}

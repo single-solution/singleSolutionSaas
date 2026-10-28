@@ -21,6 +21,19 @@ export const CHANNEL_FEATURES = Object.freeze({
 	staff_push: 'staff_push',
 });
 
+/**
+ * Whether a channel is active according to the switched-on features.
+ * When `push` is on, both browser push and staff push channels are active.
+ * @param {Channel} channel
+ * @param {string[]} on
+ * @returns {boolean}
+ */
+export const isChannelActive = (channel, on) => {
+	if (channel === 'push') return on.includes('push') || on.includes('browser_push');
+	if (channel === 'staff_push') return on.includes('push') || on.includes('staff_push');
+	return on.includes(CHANNEL_FEATURES[channel]);
+};
+
 /** The connection each channel sends through (push and staff push share the merchant's push keys). */
 export const CHANNEL_CONNECTIONS = Object.freeze({
 	email: 'email',

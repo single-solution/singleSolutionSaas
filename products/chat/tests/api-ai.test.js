@@ -23,13 +23,8 @@ describe('AI replies', () => {
 	it('answers from knowledge entries, website pages and the merchant’s instructions', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
 			'ai_replies',
-			'ai_instructions',
-			'knowledge_base',
-			'knowledge_pages',
-			'knowledge_editor',
-		]);
+			'knowledge_base']);
 		await sys.setting('ai_instructions', 'instructions', 'Always greet with Salam.');
 		const ticket = await sys.ticket(['knowledge.edit']);
 		const entry = await sys.admin(ticket, 'POST', '/v1/admin/knowledge/entries', {
@@ -64,7 +59,7 @@ describe('AI replies', () => {
 	});
 
 	it('uses only the entries in the visitor’s language, or in any language (C21)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'knowledge_base', 'language_lock']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'knowledge_base']);
 		await sys.setting('language_lock', 'allowedLanguages', ['en', 'fr']);
 		for (const entry of [
 			{ kind: 'faq', title: 'Delivery', text: 'Delivery takes three days.', language: 'en' },
@@ -81,7 +76,7 @@ describe('AI replies', () => {
 	});
 
 	it('calls the merchant’s webhook tool, signed with the tool signing secret', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'webhook_tools']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'webhook_tools']);
 		await sys.list('tools', [
 			{
 				name: 'stock_check',
@@ -107,7 +102,7 @@ describe('AI replies', () => {
 	});
 
 	it('tells a webhook tool and the booking endpoint only the verified sign-in, never what the visitor typed (SR-6-1)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies', 'webhook_tools', 'book_slot']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'webhook_tools', 'book_slot']);
 		await sys.paste('accounts');
 		await sys.setting('book_slot', 'bookingUrl', `${TOOLS}/booking`);
 		await sys.setting('book_slot', 'needsContact', false);
@@ -166,7 +161,7 @@ describe('AI replies', () => {
 	});
 
 	it('lists free slots and books one through the booking endpoint; the escalate tool hands off', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'book_slot', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'book_slot', 'inbox', 'handoff']);
 		await sys.setting('book_slot', 'bookingUrl', `${TOOLS}/booking`);
 		sys.responders.set(`${TOOLS}/booking`, (call) =>
 			JSON.parse(call.body).action === 'list_slots'
@@ -204,7 +199,7 @@ describe('AI replies', () => {
 	});
 
 	it('asks the merchant’s own booking questions and the service (C10)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'book_slot']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'book_slot']);
 		await sys.setting('book_slot', 'bookingUrl', `${TOOLS}/booking`);
 		await sys.setting('book_slot', 'needsContact', false);
 		await sys.list('booking_questions', [
@@ -267,7 +262,7 @@ describe('AI replies', () => {
 	});
 
 	it('locks the answer language and retries once; moderation drops a leaking answer', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'moderation']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'moderation']);
 		await sys.setting('language_lock', 'allowedLanguages', ['ar']);
 		await sys.setting('ai_replies', 'onFailure', 'message');
 		sys.ai({ text: 'Hello, how can I help?' }, { text: 'مرحبا، كيف أساعدك؟' });

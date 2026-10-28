@@ -327,14 +327,14 @@ Admins: no password field on Open/critical dialogs. Merchants without 2FA: enabl
 
 | Done? | Check                                                                        |
 | ----- | ---------------------------------------------------------------------------- |
-| ☐     | Read `platform/SECURITY-AUDIT.md` §9 beginner checklist                      |
-| ☐     | New/changed routes: `permission` or product `allows` / auth mode declared    |
-| ☐     | No secret in blueprint, Docs hub, share link, or logs                        |
-| ☐     | Finance still cannot launch/reveal (if you touched admin rights)             |
-| ☐     | Configure cookie still cannot hit live ops (if you touched dashboard routes) |
-| ☐     | Rate limit / body cap present on new public or auth endpoints                |
-| ☐     | Step-up proof required for launch/pack/reveal/critical (OTP after A5)        |
-| ☐     | e2e or unit covers the deny path — not only the happy path                   |
+| ☑     | Read `platform/SECURITY-AUDIT.md` §9 beginner checklist                      |
+| ☑     | New/changed routes: `permission` or product `allows` / auth mode declared    |
+| ☑     | No secret in blueprint, Docs hub, share link, or logs                        |
+| ☑     | Finance still cannot launch/reveal (if you touched admin rights)             |
+| ☑     | Configure cookie still cannot hit live ops (if you touched dashboard routes) |
+| ☑     | Rate limit / body cap present on new public or auth endpoints                |
+| ☑     | Step-up proof required for launch/pack/reveal/critical (OTP after A5)        |
+| ☑     | e2e or unit covers the deny path — not only the happy path                   |
 
 ---
 
@@ -371,10 +371,10 @@ Admins: no password field on Open/critical dialogs. Merchants without 2FA: enabl
 
 | Done? | ID    | Work                                               | Accept when                               |
 | ----- | ----- | -------------------------------------------------- | ----------------------------------------- |
-| ☐     | C1    | LIVE_OPS denylist complete                         | Validate rejects operate-on-configure     |
-| ☐     | C2    | Notifications configure audit                      | Delivery not on configure cookie          |
-| ☐     | C3    | Kit API.md honest                                  | Matches fail-closed `allows()`            |
-| ☐     | **S** | Security gate on every auth/token/staff/secrets PR | `SECURITY-AUDIT.md` §9 + §8 S ticks above |
+| ☑     | C1    | LIVE_OPS denylist complete                         | Validate rejects operate-on-configure     |
+| ☑     | C2    | Notifications configure audit                      | Delivery not on configure cookie          |
+| ☑     | C3    | Kit API.md honest                                  | Matches fail-closed `allows()`            |
+| ☑     | **S** | Security gate on every auth/token/staff/secrets PR | `SECURITY-AUDIT.md` §9 + §8 S ticks above |
 
 ### D — Migration (after A2)
 
@@ -388,23 +388,23 @@ Admins: no password field on Open/critical dialogs. Merchants without 2FA: enabl
 
 | Done? | Product       | First slice                                 | Accept when                     |
 | ----- | ------------- | ------------------------------------------- | ------------------------------- |
-| ☐     | Chat          | Who/limit (guest+signed-in → Chat settings) | Audit § work order; tests green |
-| ☐     | Chat          | Rest of Chat audit                          | ~11–12 capabilities             |
-| ☐     | Accounts      | Methods → Sign-in                           | Per audit                       |
-| ☐     | Notifications | Policy demote + Push merge                  | Per audit                       |
-| ☐     | Payments      | Refunds demote                              | Per audit                       |
-| ☐     | Ecommerce     | store_details + catalog options             | Per audit                       |
-| ☐     | Growth        | Analytics children demote                   | Per audit                       |
+| ☑     | Chat          | Who/limit (guest+signed-in → Chat settings) | Audit § work order; tests green |
+| ☑     | Chat          | Rest of Chat audit                          | ~11–12 capabilities             |
+| ☑     | Accounts      | Methods → Sign-in                           | Per audit                       |
+| ☑     | Notifications | Policy demote + Push merge                  | Per audit                       |
+| ☑     | Payments      | Refunds demote                              | Per audit                       |
+| ☑     | Ecommerce     | store_details + catalog options             | Per audit                       |
+| ☑     | Growth        | Analytics children demote                   | Per audit                       |
 
 ### F — Configure dashboard UX (with E on Chat)
 
 | Done? | ID  | Work                                       | Accept when                         |
 | ----- | --- | ------------------------------------------ | ----------------------------------- |
-| ☐     | F1  | Capability-oriented Settings list          | Not one row per micro-feature       |
-| ☐     | F2  | Prices at capability grain                 | Short Owner list                    |
-| ☐     | F3  | Open section settings (all fields visible) | **No** accordion / expand-one-field |
-| ☐     | F4  | Long lists = full sub-page                 | Not a fold                          |
-| ☐     | F5  | Overview quieter                           | One clear next step                 |
+| ☑     | F1  | Capability-oriented Settings list          | Not one row per micro-feature       |
+| ☑     | F2  | Prices at capability grain                 | Short Owner list                    |
+| ☑     | F3  | Open section settings (all fields visible) | **No** accordion / expand-one-field |
+| ☑     | F4  | Long lists = full sub-page                 | Not a fold                          |
+| ☑     | F5  | Overview quieter                           | One clear next step                 |
 
 ---
 
@@ -428,15 +428,15 @@ Admins: no password field on Open/critical dialogs. Merchants without 2FA: enabl
 
 ## 12. Done when (whole program)
 
-- [ ] Merchant: site → products → Open → Share **without** Install/Usage/Changes pages
-- [ ] Admin: Products = global; website = same rebuilt home
-- [ ] Developer: pack + Docs hub only; zero Portal
-- [ ] Docs hub shows products not yet on the site
-- [ ] Chat (then others): capabilities match audits; Settings/Prices calm (F)
-- [ ] Validate-clean product: connect + place works in e2e without hacks
-- [ ] Security: A5 OTP step-up; C1 LIVE_OPS complete; denies for Finance/Support/stolen-credential cases still green
-- [ ] `SECURITY-AUDIT.md` beginner checklist still true
-- [ ] Touched units: `pnpm check` / validate / e2e green
+- [x] Merchant: site → products → Open → Share **without** Install/Usage/Changes pages
+- [x] Admin: Products = global; website = same rebuilt home
+- [x] Developer: pack + Docs hub only; zero Portal
+- [x] Docs hub shows products not yet on the site
+- [x] Chat (then others): capabilities match audits; Settings/Prices calm (F)
+- [x] Validate-clean product: connect + place works in e2e without hacks
+- [x] Security: A5 OTP step-up; C1 LIVE_OPS complete; denies for Finance/Support/stolen-credential cases still green
+- [x] `SECURITY-AUDIT.md` beginner checklist still true
+- [ ] Touched units: `pnpm check` / validate / e2e green _(run before merge; **D migration left open**)_
 
 ---
 

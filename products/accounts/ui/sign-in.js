@@ -47,7 +47,9 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 	const when = datesOf(config, win);
 	const { settings } = config;
 	/** @param {string} feature */
-	const on = (feature) => config.features.includes(feature);
+	const on = (feature) =>
+		config.features.includes(feature) ||
+		(config.features.includes('sign_in') && Array.isArray(settings?.methods) && settings.methods.includes(feature));
 	const methods = FORM_METHODS.filter(on);
 	const providers = PROVIDERS.filter(on);
 	const signUpOpen = settings.signUp.mode !== 'invite';

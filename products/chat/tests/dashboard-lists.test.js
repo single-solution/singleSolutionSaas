@@ -210,13 +210,13 @@ describe('Settings → Assistant', () => {
 			[`${BASE}/settings`]: {
 				features: [
 					feature('ai_replies'),
-					feature('fallback_answers'),
-					feature('language_lock', { allowedLanguages: ['en', 'ar'] }),
+					feature(),
+					feature({ allowedLanguages: ['en', 'ar'] }),
 				],
 			},
 			// Settings lists every feature with its switch: the features answer too
 			[`${BASE}/features`]: {
-				features: ['ai_replies', 'fallback_answers', 'language_lock'].map((key) => ({
+				features: ['ai_replies'].map((key) => ({
 					key,
 					name: key,
 					description: '',

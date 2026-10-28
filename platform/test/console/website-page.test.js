@@ -209,11 +209,19 @@ describe('website page (jsdom)', () => {
 			// refused: the product was set inactive meanwhile
 			await ownerBrowser.api.post('/v1/admin/products/chatty/status', { status: 'inactive' });
 			await pressDialog('Add Chatty');
-			await ownerBrowser.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/products`, (/** @type {any} */ st) => st === 409);
+			await ownerBrowser.waitCall(
+				'POST',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/products`,
+				(/** @type {any} */ st) => st === 409,
+			);
 			expect(shows('This product is not offered: it is not connected or it is inactive.')).toBe(true);
 			await ownerBrowser.api.post('/v1/admin/products/chatty/status', { status: 'active' });
 			await pressDialog('Add Chatty');
-			await ownerBrowser.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/products`, (/** @type {any} */ st) => st === 201);
+			await ownerBrowser.waitCall(
+				'POST',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/products`,
+				(/** @type {any} */ st) => st === 201,
+			);
 			await until(() => shows('Chatty added.'));
 			expect(testRouter.push).toHaveBeenLastCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}/products/chatty`);
 			expect(buttons('Actions for Chatty')).toHaveLength(1);

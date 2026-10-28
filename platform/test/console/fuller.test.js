@@ -172,7 +172,8 @@ describe('fuller Portal screens (jsdom)', () => {
 			expect(pushed('/admin/products/notes')).toBe(true);
 			await menu('Actions for Notes');
 			await clickEl(menuItem('Open as admin'));
-			fillDialog('Your password', ownerBrowser.password);
+			await ownerBrowser.api.post('/v1/me/step-up-otp', {});
+			fillDialog('Authenticator code', world.lastOtp('olivia@ss.test'));
 			await pressDialog('Open configure');
 			await until(() => open.mock.calls.length > 0);
 			await press('Add credits');

@@ -43,7 +43,9 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 	const when = datesOf(config, win);
 	const { settings } = config;
 	/** @param {string} feature */
-	const on = (feature) => config.features.includes(feature);
+	const on = (feature) =>
+		config.features.includes(feature) ||
+		(config.features.includes('sign_in') && Array.isArray(settings?.methods) && settings.methods.includes(feature));
 
 	return mountWidget({
 		host,

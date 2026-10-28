@@ -2484,7 +2484,7 @@
 				"summary": "Export the customers as CSV (Customers admin widget)",
 				"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders, what they spent and their tags (joined with |, E11), then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission. Both also need customers.manage.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"security": [
 					{
@@ -2514,7 +2514,7 @@
 				"summary": "Export orders as CSV (Orders and Customers admin widgets)",
 				"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters, its tags (joined with |, E11); then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission. Both also need orders.read.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"security": [
 					{
@@ -2687,7 +2687,7 @@
 				"summary": "Export the products as CSV (Customers admin widget)",
 				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does), then one field:<slug> column per product and variant field (inactive ones too; a product field's value on each of its variant rows, a variant field's per row, several values joined with |, yes/no as true or false), then sold_out and updated_at; prices in the shop currency's main unit. The admin twin needs the csv.run permission. Both also need catalog.edit.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"security": [
 					{
@@ -2715,7 +2715,7 @@
 				"summary": "Import products from CSV, or update prices and stock (Customers admin widget)",
 				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A field:<slug> column sets that field's value (the field defined for the product's category, nearest first, else the one for every category; several values separated by |; yes/no as true, false, yes, no, 1 or 0): an empty cell clears that one value and a column left out keeps the values; an unknown slug is a header problem (unknown_field) and a value that does not fit is a row problem (field_value). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission. Both also need catalog.edit.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"security": [
 					{
@@ -4411,7 +4411,7 @@
 				"summary": "The landing pages (Catalog admin widget)",
 				"description": "Every matching landing page by id (at most 2,000; not paged), each with its address, its products and their variants in stock and whether search engines index it now (judged on every read). Automatic landing pages (the setting auto) have no record and are not listed.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4497,7 +4497,7 @@
 				"summary": "Create a landing page (Catalog admin widget)",
 				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least 3 of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4555,7 +4555,7 @@
 				"summary": "Delete a landing page (Catalog admin widget)",
 				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4592,7 +4592,7 @@
 				"summary": "A landing page (Catalog admin widget)",
 				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4636,7 +4636,7 @@
 				"summary": "Change a landing page (Catalog admin widget)",
 				"description": "Members left out keep their value; null (or '') clears categoryId or brandId and null clears facet, but one of them must stay. 404 not_found; 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4775,7 +4775,7 @@
 				"summary": "Every stock location (Catalog admin widget)",
 				"description": "Needs Multi-location stock (403 feature_off otherwise).",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4810,7 +4810,7 @@
 				"summary": "Create a stock location (Catalog admin widget)",
 				"description": "Needs Multi-location stock (403 feature_off otherwise). 422 validation_failed (/name, /pickup, /sort). Send an Idempotency-Key so a retried request makes one location.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4891,7 +4891,7 @@
 				"summary": "Delete a stock location (Catalog admin widget)",
 				"description": "Needs Multi-location stock (403 feature_off otherwise). 409 conflict while it holds stock (move it first); 404 not_found. Variants forget the location.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -4928,7 +4928,7 @@
 				"summary": "Change a stock location (Catalog admin widget)",
 				"description": "Needs Multi-location stock (403 feature_off otherwise). Only the members sent change. 422 validation_failed; 404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -5353,7 +5353,7 @@
 				"summary": "Move several orders to one status (Orders admin widget)",
 				"description": "Each order moves on its own, as POST /v1/orders/:id/move moves it (without the updatedAt check); an order that cannot move is listed with its problem and the others still move. Send ids, or items with each order's shipment, serial numbers and attachments. Needs bulk_actions (the widget the bulk.run permission). 422 validation_failed for no or more than 200 ids, a malformed id, a missing to or a bad item. Send an Idempotency-Key so a retried request is done once.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "bulk_actions",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "bulk.run",
 				"security": [
 					{
@@ -8485,7 +8485,7 @@
 				"summary": "Change many products at once (Catalog admin widget)",
 				"description": "One action on up to 500 products: status (a draft without variants stays a draft), price (every variant's price by a percentage or a fixed amount, never below 0), stock (every variant's units, at locationId with multi-location stock), add_category or remove_category (a product keeps at most 20 categories), and (E23) brand (brandId, null for none), add_tags or remove_tags (tags), item_type (typeKey, null for its category's; a product with units in stock, or with stock counted in its unit of measure, keeps how it is numbered and measured), compare_at_price (compareAt on every variant) and field (field: a product or variant field's id or slug, the one defined for the product's category first; value: checked like the product's own; null clears it). The last six are checked like PATCH /v1/products/:id: a product it refuses is listed in refused and left as it was. Ids not found are listed in missing. Needs Bulk actions; the admin twin needs the bulk.run permission. Both also need catalog.edit. 422 validation_failed at /ids, /action or the action's member.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "bulk_actions",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "bulk.run",
 				"security": [
 					{
@@ -9037,7 +9037,7 @@
 				"summary": "Add the missing variants of many products (Catalog admin widget)",
 				"description": "For each product (at most 100), every missing combination of its attribute setup's variant attribute values becomes a new variant with the given price (else the product's lowest price) and stock (left out with multi-location stock). A product that would have more than 250 variants, or another problem, is reported in its result; nothing else stops. Needs Variants. 422 validation_failed at /ids, /price or /stock.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "variants",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -10710,7 +10710,7 @@
 				"summary": "Add the missing variants of a product (Catalog admin widget)",
 				"description": "Every missing combination of the product's attribute setup's variant attribute values becomes a new variant (none when nothing is missing). Needs Variants. 422 validation_failed at /price (required: a price or null) or /stock; 404 not_found; 409 conflict when the product would have more than 250 variants.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "variants",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13075,7 +13075,7 @@
 				"summary": "The serial numbers, by serial number (Catalog admin widget)",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 400 bad_request for an invalid cursor or limit. A Link header names the next page.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13169,7 +13169,7 @@
 				"summary": "Record serial numbers of a variant in stock (Catalog admin widget)",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13304,7 +13304,7 @@
 				"summary": "Delete a serial number (Catalog admin widget)",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 409 conflict for a sold unit; 404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13341,7 +13341,7 @@
 				"summary": "Give a unit one of your unit states, or put it back in stock (Catalog admin widget)",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13406,7 +13406,7 @@
 				"summary": "Every size chart (Catalog admin widget)",
 				"description": "Needs Size charts (403 feature_off otherwise).",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13441,7 +13441,7 @@
 				"summary": "Create a size chart (Catalog admin widget)",
 				"description": "Needs Size charts (403 feature_off otherwise). 422 validation_failed lists every field problem (e.g. /name, /unit, /columns/<n>/key, /rows/<n>/size, /rows/<n>/values/<key>: not a column of the chart); 409 conflict at 1,000 charts. Send an Idempotency-Key so a retried request makes one chart.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13597,7 +13597,7 @@
 				"summary": "Delete a size chart (Catalog admin widget)",
 				"description": "Needs Size charts (403 feature_off otherwise). 409 conflict while products, brands or categories name it, or while it is the default chart (size_charts setting defaultChartId); 404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13634,7 +13634,7 @@
 				"summary": "Read a size chart (Catalog admin widget)",
 				"description": "Needs Size charts (403 feature_off otherwise). 404 not_found.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -13678,7 +13678,7 @@
 				"summary": "Change a size chart (Catalog admin widget)",
 				"description": "Needs Size charts (403 feature_off otherwise). Only the members sent change. 404 not_found; 422 validation_failed lists every field problem (e.g. /name, /unit, /columns/<n>/key, /rows/<n>/size, /rows/<n>/values/<key>: not a column of the chart).",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"security": [
 					{
@@ -16919,7 +16919,7 @@
 				"summary": "Export the customers as CSV",
 				"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders, what they spent and their tags (joined with |, E11), then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission. Both also need customers.manage.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"x-ss-access": "staff",
 				"security": [
@@ -16954,7 +16954,7 @@
 				"summary": "Export orders as CSV",
 				"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters, its tags (joined with |, E11); then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission. Both also need orders.read.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"x-ss-access": "staff",
 				"security": [
@@ -17131,7 +17131,7 @@
 				"summary": "Export the products as CSV",
 				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does), then one field:<slug> column per product and variant field (inactive ones too; a product field's value on each of its variant rows, a variant field's per row, several values joined with |, yes/no as true or false), then sold_out and updated_at; prices in the shop currency's main unit. The admin twin needs the csv.run permission. Both also need catalog.edit.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"x-ss-access": "staff",
 				"security": [
@@ -17164,7 +17164,7 @@
 				"summary": "Import products from CSV, or update prices and stock",
 				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A field:<slug> column sets that field's value (the field defined for the product's category, nearest first, else the one for every category; several values separated by |; yes/no as true, false, yes, no, 1 or 0): an empty cell clears that one value and a column left out keeps the values; an unknown slug is a header problem (unknown_field) and a value that does not fit is a row problem (field_value). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission. Both also need catalog.edit.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "csv",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "csv.run",
 				"x-ss-access": "staff",
 				"security": [
@@ -18817,7 +18817,7 @@
 				"summary": "Delete every record of a scope",
 				"description": "catalog: products, categories, brands, attributes, serial numbers, size charts, landing pages and the landing pages remembered as indexed; orders: orders, booked slots, coupon uses and return claims (held stock is given back and every open Payments payment canceled first: 503 payments_unavailable, with nothing deleted, while Payments cannot be reached); customers: customer records and loyalty accounts. confirm is the words DELETE and the scope, for example DELETE orders (422 at /confirm). Needs the data.delete_all permission (the Owner role has it; give it to no other role lightly) and bulk_actions.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "bulk_actions",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "data.delete_all",
 				"x-ss-access": "staff",
 				"security": [
@@ -19286,7 +19286,7 @@
 				"summary": "Shop events, newest first",
 				"description": "Needs the events feature. Order, return, review, catalog and stock events are recorded while it is on, settings.changed always; kept 30 days; also sent to your webhook URLs through Notifications when it is on the website. 422 validation_failed for a since that is not an ISO 8601 time or types that are not ecommerce event types. 400 bad_request for a bad cursor or limit.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "events",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "orders.read",
 				"x-ss-access": "staff",
 				"security": [
@@ -19370,7 +19370,7 @@
 				"summary": "Count the events",
 				"description": "422 validation_failed for a since that is not an ISO 8601 time or types that are not ecommerce event types. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "events",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "orders.read",
 				"x-ss-access": "staff",
 				"security": [
@@ -19433,7 +19433,7 @@
 				"summary": "Count the events by type or delivery",
 				"description": "by=type counts by full type (ecommerce.order.placed …); by=delivery by pending, sent, not_connected and failed. 422 validation_failed for a since that is not an ISO 8601 time or types that are not ecommerce event types. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "events",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "orders.read",
 				"x-ss-access": "staff",
 				"security": [
@@ -20056,7 +20056,7 @@
 				"summary": "The landing pages",
 				"description": "Every matching landing page by id (at most 2,000; not paged), each with its address, its products and their variants in stock and whether search engines index it now (judged on every read). Automatic landing pages (the setting auto) have no record and are not listed.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20146,7 +20146,7 @@
 				"summary": "Create a landing page",
 				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least 3 of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20208,7 +20208,7 @@
 				"summary": "Delete a landing page",
 				"description": "404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20249,7 +20249,7 @@
 				"summary": "A landing page",
 				"description": "404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20297,7 +20297,7 @@
 				"summary": "Change a landing page",
 				"description": "Members left out keep their value; null (or '') clears categoryId or brandId and null clears facet, but one of them must stay. 404 not_found; 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20571,7 +20571,7 @@
 				"summary": "llms-full.txt: every product in stock",
 				"description": "Answers text/plain (Markdown), not JSON: every active product in stock shoppers may see (up to 50,000) with its price range, by category, with the grades of each category. 404 not_found while the llms_txt setting full is off.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "llms_txt",
+				"x-ss-feature": "seo",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -20605,7 +20605,7 @@
 				"summary": "llms.txt of the catalog",
 				"description": "Answers text/plain (Markdown), not JSON: the llms_txt setting custom as written when you wrote your own file (G16); else the business name, the llms_txt setting description, the categories shoppers see in tree order (up to 200), the best-selling products (the llms_txt setting products, up to 200, with price and summary) and, unless the setting policies is off, the shop's policies as text.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "llms_txt",
+				"x-ss-feature": "seo",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -20639,7 +20639,7 @@
 				"summary": "Every stock location",
 				"description": "Needs Multi-location stock (403 feature_off otherwise).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20679,7 +20679,7 @@
 				"summary": "Create a stock location",
 				"description": "Needs Multi-location stock (403 feature_off otherwise). 422 validation_failed (/name, /pickup, /sort). Send an Idempotency-Key so a retried request makes one location.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20764,7 +20764,7 @@
 				"summary": "Delete a stock location",
 				"description": "Needs Multi-location stock (403 feature_off otherwise). 409 conflict while it holds stock (move it first); 404 not_found. Variants forget the location.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -20805,7 +20805,7 @@
 				"summary": "Change a stock location",
 				"description": "Needs Multi-location stock (403 feature_off otherwise). Only the members sent change. 422 validation_failed; 404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "multi_location",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -21324,7 +21324,7 @@
 				"summary": "Move several orders to one status",
 				"description": "Each order moves on its own, as POST /v1/orders/:id/move moves it (without the updatedAt check); an order that cannot move is listed with its problem and the others still move. Send ids, or items with each order's shipment, serial numbers and attachments. Needs bulk_actions (the widget the bulk.run permission). 422 validation_failed for no or more than 200 ids, a malformed id, a missing to or a bad item. Send an Idempotency-Key so a retried request is done once.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "bulk_actions",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "bulk.run",
 				"x-ss-access": "staff",
 				"security": [
@@ -24759,7 +24759,7 @@
 				"summary": "Change many products at once",
 				"description": "One action on up to 500 products: status (a draft without variants stays a draft), price (every variant's price by a percentage or a fixed amount, never below 0), stock (every variant's units, at locationId with multi-location stock), add_category or remove_category (a product keeps at most 20 categories), and (E23) brand (brandId, null for none), add_tags or remove_tags (tags), item_type (typeKey, null for its category's; a product with units in stock, or with stock counted in its unit of measure, keeps how it is numbered and measured), compare_at_price (compareAt on every variant) and field (field: a product or variant field's id or slug, the one defined for the product's category first; value: checked like the product's own; null clears it). The last six are checked like PATCH /v1/products/:id: a product it refuses is listed in refused and left as it was. Ids not found are listed in missing. Needs Bulk actions; the admin twin needs the bulk.run permission. Both also need catalog.edit. 422 validation_failed at /ids, /action or the action's member.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "bulk_actions",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "bulk.run",
 				"x-ss-access": "staff",
 				"security": [
@@ -25324,7 +25324,7 @@
 				"summary": "Add the missing variants of many products",
 				"description": "For each product (at most 100), every missing combination of its attribute setup's variant attribute values becomes a new variant with the given price (else the product's lowest price) and stock (left out with multi-location stock). A product that would have more than 250 variants, or another problem, is reported in its result; nothing else stops. Needs Variants. 422 validation_failed at /ids, /price or /stock.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "variants",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -27050,7 +27050,7 @@
 				"summary": "Add the missing variants of a product",
 				"description": "Every missing combination of the product's attribute setup's variant attribute values becomes a new variant (none when nothing is missing). Needs Variants. 422 validation_failed at /price (required: a price or null) or /stock; 404 not_found; 409 conflict when the product would have more than 250 variants.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "variants",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -29553,7 +29553,7 @@
 				"summary": "An attribute's glossary page in a category",
 				"description": ":category is a category's id or slug (an earlier slug too), :slug the attribute's slug (any case) or id: the attribute defined for that category or the nearest category above it first, else the one for every category that applies to it (no categories named, or the category or one above it named) (E45). As GET /v1/seo/attributes/:slug otherwise, with {category} of attributeUrl this category's slug. 404 not_found for an unknown or hidden category, or no active attribute for it. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -29731,7 +29731,7 @@
 				"summary": "An attribute's glossary page",
 				"description": ":slug is the attribute's slug (any case) or id: the attribute for every category with it, else the first defined for a category (E45). Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug} and {category} (the attribute's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found for an unknown or inactive attribute. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -29957,7 +29957,7 @@
 				"summary": "A grade's glossary page in a category",
 				"description": ":category is a category's id or slug (an earlier slug too): the grade as that category, or the nearest category above it, defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Condition grades and unit numbers is off, for an unknown or hidden category, or no offered grade with the key for it. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -30125,7 +30125,7 @@
 				"summary": "A grade's glossary page",
 				"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false). The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "landing_pages",
+				"x-ss-feature": "seo",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -30603,7 +30603,7 @@
 				"summary": "The serial numbers, by serial number",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 400 bad_request for an invalid cursor or limit. A Link header names the next page.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -30701,7 +30701,7 @@
 				"summary": "Record serial numbers of a variant in stock",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -30840,7 +30840,7 @@
 				"summary": "Delete a serial number",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 409 conflict for a sold unit; 404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -30881,7 +30881,7 @@
 				"summary": "Give a unit one of your unit states, or put it back in stock",
 				"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "grades_serials",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -31198,7 +31198,7 @@
 				"summary": "The shopper's alerts, newest first",
 				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). At most 100. A guest's alerts are not listed.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "alerts",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -31252,7 +31252,7 @@
 				"summary": "Set a back-in-stock or price-drop alert",
 				"description": "A signed-in shopper (SS-Sign-In) gets it at the email and phone of their sign-in (422 validation_failed at /kind when they have neither, or only a phone of a country the shop does not serve). Without a sign-in, while the alerts setting guests is on, a guest gives the contact guests are known by — the checkout setting guestIdentity: a phone, an email address, or either (else 403 sign_in_required): 422 validation_failed at /phone (code invalid, or country_not_allowed outside the checkout setting countries) or /email. One waiting alert of a kind per guest contact and product. The message goes out once, through Notifications on the alerts setting channels, when the product (or the variant) is back in stock, or its price falls below the price now (or to targetPrice). Setting the same waiting alert again answers that one. 404 not_found for a product that is missing, not active or hidden from the shopper; 422 validation_failed at /kind (back_in_stock for an item in stock), /productId (at most 100 waiting alerts), /variantId (not an active variant) or /targetPrice. Send an Idempotency-Key so a retried request sets one alert.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "alerts",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -31370,7 +31370,7 @@
 				"summary": "Stop the alerts of a message’s recipient",
 				"description": "The token comes from the {stopUrl} link of an alert message (the alerts setting stopUrl, default /alerts/unsubscribe/{token}, on the page with the alerts_stop widget). Every alert of the email address or phone that message went to is removed; no sign-in is needed. A token not known (or not 32 characters) removes nothing.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "alerts",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -31435,7 +31435,7 @@
 				"summary": "Remove one of the shopper’s alerts",
 				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). 404 not_found when it is not theirs.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "alerts",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -31893,7 +31893,7 @@
 				"summary": "Compare products side by side",
 				"description": "On their fields shown in the comparison (show.compare), price, brand, grades, rating and image. ids names 1 to 4 products; repeats are dropped. Too many or none, or an id that is not a product id, answer 422 validation_failed at /ids.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "compare",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -34347,7 +34347,10 @@
 				"summary": "The store's public details",
 				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The store's details as the website's settings in the Portal hold them (Website settings › Business, Brand and look and Region and format; Ecommerce keeps no record of its own): name (the business name while none is set), tagline, the pictures (logo, logoDark, icon, favicon and faviconDark: the https addresses set in Brand and look), contacts (the main phone and the phone list), address in parts and as lines, opening hours, social links, time zone, language and siteUrl (the website's own address). Every field is public.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "store_details",
+				"x-ss-feature": [
+					"catalog",
+					"checkout"
+				],
 				"security": [
 					{
 						"browserToken": []
@@ -34393,7 +34396,10 @@
 				"summary": "The business.json made from the website settings",
 				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The business.json version 1 your website serves at /.well-known/business.json: name (the Portal's business name), logo, email, phone (the main one, else the first of the phone list), the address as text, country, time zone, the shop currency and currencies, and language; members with no value are left out. 409 conflict when the Portal's Business section gives no name. business.json has one logo and one phone: the dark logo, icon, favicons and other phones are in GET /v1/shop/store only.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "store_details",
+				"x-ss-feature": [
+					"catalog",
+					"checkout"
+				],
 				"security": [
 					{
 						"browserToken": []
@@ -34439,7 +34445,7 @@
 				"summary": "The shopper's wishlist",
 				"description": "For a signed-in shopper (SS-Sign-In), else 403 sign_in_required; a guest's wishlist is kept in their browser and joined at sign-in (POST /v1/shop/wishlist/merge). Products no longer active, or in a hidden category or brand, are left out.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "wishlist",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -34495,7 +34501,7 @@
 				"summary": "Remove a product from the wishlist",
 				"description": "For a signed-in shopper (SS-Sign-In), else 403 sign_in_required; a guest's wishlist is kept in their browser and joined at sign-in (POST /v1/shop/wishlist/merge). Removing a product not saved changes nothing. Answers the wishlist.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "wishlist",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -34557,7 +34563,7 @@
 				"summary": "Save a product to the wishlist",
 				"description": "For a signed-in shopper (SS-Sign-In), else 403 sign_in_required; a guest's wishlist is kept in their browser and joined at sign-in (POST /v1/shop/wishlist/merge). Saving a saved product changes nothing. 404 not_found when the product is not active (or in a hidden category or brand); 422 validation_failed at /productId when the wishlist holds 200 products already.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "wishlist",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -34621,7 +34627,7 @@
 				"summary": "Join a guest's wishlist to the shopper's",
 				"description": "For a signed-in shopper (SS-Sign-In), else 403 sign_in_required; a guest's wishlist is kept in their browser and joined at sign-in (POST /v1/shop/wishlist/merge). Products already saved keep their place; the active ones of the rest are added in the order given while there is room (200); others are skipped. More than 200 ids, or one that is not a product id, answer 422 validation_failed at /productIds.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "wishlist",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"browserToken": []
@@ -34701,7 +34707,7 @@
 				"summary": "Every size chart",
 				"description": "Needs Size charts (403 feature_off otherwise).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -34741,7 +34747,7 @@
 				"summary": "Create a size chart",
 				"description": "Needs Size charts (403 feature_off otherwise). 422 validation_failed lists every field problem (e.g. /name, /unit, /columns/<n>/key, /rows/<n>/size, /rows/<n>/values/<key>: not a column of the chart); 409 conflict at 1,000 charts. Send an Idempotency-Key so a retried request makes one chart.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -34901,7 +34907,7 @@
 				"summary": "Delete a size chart",
 				"description": "Needs Size charts (403 feature_off otherwise). 409 conflict while products, brands or categories name it, or while it is the default chart (size_charts setting defaultChartId); 404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -34942,7 +34948,7 @@
 				"summary": "Read a size chart",
 				"description": "Needs Size charts (403 feature_off otherwise). 404 not_found.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
@@ -34990,7 +34996,7 @@
 				"summary": "Change a size chart",
 				"description": "Needs Size charts (403 feature_off otherwise). Only the members sent change. 404 not_found; 422 validation_failed lists every field problem (e.g. /name, /unit, /columns/<n>/key, /rows/<n>/size, /rows/<n>/values/<key>: not a column of the chart).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "size_charts",
+				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [

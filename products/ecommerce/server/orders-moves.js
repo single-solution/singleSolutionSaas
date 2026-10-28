@@ -368,7 +368,7 @@ export const createMoves = (product, service) => {
 		const rules = /** @type {NonNullable<typeof checked.move>} */ (checked.move);
 		// the permission the move needs of the staff member, by ticket or by sign-in on a server route (into a refunded status
 		// always the refund permission, E27)
-		if (!allows(ctx, rules.permission))
+		if (!trigger && !allows(ctx, rules.permission))
 			throw problem(
 				'forbidden',
 				rules.permission === 'orders.refund'
@@ -434,7 +434,7 @@ export const createMoves = (product, service) => {
 		};
 		// a move that gives money back needs the refund permission, whatever permission it names (a cancel that refunds
 		// what was paid, before delivery or after it, E40): planned with the order as read, before anything is called
-		if (!allows(ctx, 'orders.refund')) {
+		if (!trigger && !allows(ctx, 'orders.refund')) {
 			const planned = planTransition({ order, flow, to: input.to, input: asked, rules: settings, now });
 			if (planned.ok && (planned.plan.external.length > 0 || planned.plan.refunded > 0))
 				throw problem('forbidden', 'This move gives money back, so it needs the refund permission.');

@@ -37,6 +37,7 @@ import passwordsShared from '../schemas/passwords.shared.json' with { type: 'jso
 import phoneShared from '../schemas/phone.shared.json' with { type: 'json' };
 import profileShared from '../schemas/profile.shared.json' with { type: 'json' };
 import roleRequests from '../schemas/role_requests.settings.json' with { type: 'json' };
+import signIn from '../schemas/sign_in.settings.json' with { type: 'json' };
 import staffLinks from '../schemas/staff_links.settings.json' with { type: 'json' };
 import riskChecks from '../schemas/risk_checks.settings.json' with { type: 'json' };
 import roles from '../schemas/roles.settings.json' with { type: 'json' };
@@ -53,25 +54,15 @@ import { INDEXES, createStore } from './store.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
-	phone_code: phoneCode,
-	phone_password: phonePassword,
-	email_password: emailPassword,
-	email_code: emailCode,
-	google,
-	apple,
-	facebook,
+	sign_in: signIn,
 	roles,
-	custom_fields: customFields,
-	two_step: twoStep,
+	role_requests: roleRequests,
 	approval,
-	risk_checks: riskChecks,
+	two_step: twoStep,
 	consents,
 	data_rights: dataRights,
-	activity_copies: activityCopies,
-	orders_tab: ordersTab,
-	staff_links: staffLinks,
-	role_requests: roleRequests,
 	import: importSettings,
+	activity_copies: activityCopies,
 };
 
 /**
@@ -80,9 +71,9 @@ const SETTINGS = {
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 const SHARED_SETTINGS = {
-	phone: { name: 'Phone numbers and codes', features: ['phone_code', 'phone_password'], settings: phoneShared },
-	passwords: { name: 'Passwords', features: ['email_password', 'phone_password'], settings: passwordsShared },
-	profile: { name: 'Profile', features: [...SIGN_IN_METHODS], settings: profileShared },
+	phone: { name: 'Phone numbers and codes', features: ['sign_in', 'phone_code', 'phone_password'], settings: phoneShared },
+	passwords: { name: 'Passwords', features: ['sign_in', 'email_password', 'phone_password'], settings: passwordsShared },
+	profile: { name: 'Profile', features: ['sign_in', ...SIGN_IN_METHODS], settings: profileShared },
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -178,12 +169,18 @@ const SIGN_UP_TEXTS = Object.freeze({
 /**
  * Accounts' own part of the website Setup sheet: the sign-in methods that are on and, while Approval / invite sign-up
  * is on, who can sign up. Never a secret.
- * @param {{ on: string[], signUp: keyof typeof SIGN_UP_TEXTS | null }} website `signUp`: the sign-up mode, null while
+ * @param {{ on: string[], signUp: keyof typeof SIGN_UP_TEXTS | null, signInMethods?: string[] }} website `signUp`: the sign-up mode, null while
  *   Approval / invite sign-up is off
  */
-const setupPart = ({ on, signUp }) => {
+const setupPart = ({ on, signUp, signInMethods = [] }) => {
 	const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
-	const methods = SIGN_IN_METHODS.filter((key) => on.includes(key)).map((key) => names.get(key));
+	const methods = (
+		on.includes('sign_in')
+			? signInMethods.length > 0
+				? signInMethods
+				: SIGN_IN_METHODS
+			: SIGN_IN_METHODS.filter((key) => on.includes(key))
+	).map((key) => names.get(key) ?? key);
 	return {
 		summaries: [
 			{
@@ -244,15 +241,21 @@ export const createProductInstance = (options) => {
 			google: {
 				label: 'Google OAuth client',
 				kind: 'secret',
-				neededBy: ['google'],
+				neededBy: ['google', 'sign_in'],
 				secretField: 'clientSecret',
 				...provider('google'),
 			},
-			apple: { label: 'Apple Sign in key', kind: 'secret', neededBy: ['apple'], secretField: 'keyId', ...provider('apple') },
+			apple: {
+				label: 'Apple Sign in key',
+				kind: 'secret',
+				neededBy: ['apple', 'sign_in'],
+				secretField: 'keyId',
+				...provider('apple'),
+			},
 			facebook: {
 				label: 'Facebook app',
 				kind: 'secret',
-				neededBy: ['facebook'],
+				neededBy: ['facebook', 'sign_in'],
 				secretField: 'appSecret',
 				...provider('facebook'),
 			},
@@ -270,6 +273,8 @@ export const createProductInstance = (options) => {
 				const on = await product.featuresOn(websiteId);
 				const store = createStore(await ctx.data(), { now });
 				const rules = on.includes('approval') ? await product.settings.values(websiteId, 'approval') : OPEN_SIGN_UP;
+				const signInSettings = on.includes('sign_in') ? await product.settings.values(websiteId, 'sign_in') : null;
+				const activeMethods = signInSettings?.methods ?? [];
 				const emailPassword = on.includes('email_password')
 					? await product.settings.values(websiteId, 'email_password')
 					: null;
@@ -283,13 +288,18 @@ export const createProductInstance = (options) => {
 				const requests = on.includes('role_requests') ? await product.settings.values(websiteId, 'role_requests') : null;
 				const roleNames = requests ? await store.roles.list() : [];
 				return {
+					methods: activeMethods,
 					signUp: { mode: rules.mode, requiredFields: rules.requiredFields },
 					// the fields the user sees (A6): staff-only ones never reach the browser
 					customFields: on.includes('custom_fields')
 						? (await store.fields.list()).filter((field) => field.visibility !== 'staff')
 						: [],
 					// each password method's own minimum, for the browser's own check of a new password (A2)
-					passwordMinLength: emailPassword ? emailPassword.minLength : null,
+					passwordMinLength: emailPassword
+						? emailPassword.minLength
+						: signInSettings && (activeMethods.includes('email_password') || on.includes('email_password'))
+							? signInSettings.minLength
+							: null,
 					phonePassword: phonePassword
 						? {
 								signUp: phonePassword.signUp,
@@ -297,7 +307,14 @@ export const createProductInstance = (options) => {
 								selfReset: phonePassword.selfReset,
 								forgotUrl: phonePassword.forgotUrl,
 							}
-						: null,
+						: signInSettings && (activeMethods.includes('phone_password') || on.includes('phone_password'))
+							? {
+									signUp: signInSettings.signUp,
+									minLength: signInSettings.minLength,
+									selfReset: signInSettings.selfReset,
+									forgotUrl: signInSettings.forgotUrl,
+								}
+							: null,
 					consents: on.includes('consents') ? await store.consents.list() : [],
 					remember: signUpRole?.remember ?? 'ask',
 					signInPaused: signUpRole?.signIn === 'paused',
@@ -320,11 +337,14 @@ export const createProductInstance = (options) => {
 				};
 			},
 			// its part of the website Setup sheet: the sign-in methods that are on and who can sign up
-			blueprint: async ({ websiteId, on }) =>
-				setupPart({
+			blueprint: async ({ websiteId, on }) => {
+				const signInSettings = on.includes('sign_in') ? await product.settings.values(websiteId, 'sign_in') : null;
+				return setupPart({
 					on,
 					signUp: on.includes('approval') ? (await product.settings.values(websiteId, 'approval')).mode : null,
-				}),
+					signInMethods: signInSettings?.methods ?? [],
+				});
+			},
 		},
 		data: { indexes: INDEXES },
 		// the website Setup sheet: the API document and what the merchant's website builds per feature

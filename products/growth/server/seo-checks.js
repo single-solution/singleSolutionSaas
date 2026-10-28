@@ -88,11 +88,13 @@ export const invalid = (field, message) =>
  * @param {string} websiteId
  */
 export const robotsInputOf = async (product, websiteId) => {
-	const [values, searches] = await Promise.all([
+	const [values, searches, analytics] = await Promise.all([
 		product.settings.values(websiteId, 'robots_verification'),
 		product.settings.values(websiteId, 'searches_404s'),
+		product.settings.values(websiteId, 'visitor_analytics'),
 	]);
-	return { values, searchParams: searchParamsOf(String(searches.searchParams)) };
+	const searchParams = searches?.searchParams ?? analytics?.searchParams ?? '';
+	return { values, searchParams: searchParamsOf(String(searchParams)) };
 };
 
 /**
@@ -135,8 +137,8 @@ export const seoCheckRoutes = (product, { log }) => {
 	 * @param {string[]} on
 	 */
 	const totalsOf = async (ctx, on) => {
-		const vitalsKept = on.includes('web_vitals') && on.includes('visitor_analytics');
-		const notFound = on.includes('searches_404s');
+		const vitalsKept = (on.includes('web_vitals') || on.includes('visitor_analytics')) && on.includes('visitor_analytics');
+		const notFound = on.includes('searches_404s') || on.includes('visitor_analytics');
 		if (!vitalsKept && !notFound) return { vitals: null, notFound: null };
 		const today = dayOf(now(), (await product.business(ctx.websiteId)).timeZone ?? 'UTC');
 		const store = createStore(await ctx.data(), { merchantId: String(ctx.merchantId) });

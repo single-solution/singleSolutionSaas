@@ -216,7 +216,7 @@ export const createProductInstance = (options) => {
 		problemCodes: PROBLEM_CODES,
 		connections: {
 			// needed only by a manual payment method with proof upload on: the dashboard's Overview says so
-			storage: { label: 'Storage for payment proofs (S3-compatible)', kind: 'storage', neededBy: [] },
+			storage: { label: 'Storage for payment proofs (S3-compatible)', kind: 'storage', neededBy: ['manual_payments'] },
 			stripe: gateway('stripe', 'Stripe keys', 'stripe', 'secretKey'),
 			paypal: gateway('paypal', 'PayPal app', 'paypal', 'secret'),
 			payfast: gateway('payfast', 'PayFast (South Africa) account', 'payfast', 'merchantKey'),

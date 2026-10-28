@@ -387,8 +387,7 @@
 @utility ss-grid-wash {
 	background-color: var(--ss-surface);
 	background-image:
-		linear-gradient(var(--ss-grid-line) 1px, transparent 1px),
-		linear-gradient(90deg, var(--ss-grid-line) 1px, transparent 1px);
+		linear-gradient(var(--ss-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--ss-grid-line) 1px, transparent 1px);
 	background-size: 32px 32px;
 }
 

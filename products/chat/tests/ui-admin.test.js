@@ -408,7 +408,7 @@ describe('inbox', () => {
 	it('attaches files to replies', async () => {
 		let put = () => answer(500);
 		const { server, hosts } = await startAdmin({
-			features: ['inbox', 'attachments'],
+			features: ['inbox'],
 			// staff send the fixed staff types and size (C12), whatever visitors may send
 			settings: { attachments: { types: ['image/png'], maxBytes: 4096 } },
 			routes: {
@@ -601,7 +601,7 @@ describe('inbox', () => {
 		let conversation = full({ note: 'VIP customer' });
 		let noteAnswer = () => answer(200, { conversation });
 		const { server, hosts, time } = await startAdmin({
-			features: ['inbox', 'internal_notes', 'custom_fields'],
+			features: ['inbox'],
 			settings: { customFields: [{ key: 'size', label: 'Size', type: 'number', options: [] }] },
 			routes: {
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
@@ -784,7 +784,7 @@ describe('inbox', () => {
 		let list = () => problem(403, 'forbidden');
 		let summaryAnswer = () => problem(500, 'x');
 		const { hosts, time, server } = await startAdmin({
-			features: ['inbox', 'saved_replies', 'ai_summary', 'context_panel', 'transcripts', 'ratings', 'presence_queue'],
+			features: ['inbox'],
 			settings: { ratings: { askWhen: 'manual' } },
 			getTicket,
 			routes: {
@@ -884,7 +884,7 @@ describe('knowledge editor', () => {
 		let fetchAgain = () => problem(500, 'x');
 		let addPage = () => answer(201, { page: {} });
 		const { server, hosts } = await startAdmin({
-			features: ['knowledge_editor', 'knowledge_pages'],
+			features: [],
 			routes: {
 				'GET /v1/admin/knowledge/entries': (call) =>
 					answer(200, {
@@ -1004,7 +1004,7 @@ describe('knowledge editor', () => {
 		const getTicket = vi.fn().mockResolvedValueOnce(ticket()).mockResolvedValueOnce(null);
 		let pages = () => problem(403, 'forbidden');
 		const { hosts, time } = await startAdmin({
-			features: ['knowledge_editor', 'knowledge_pages'],
+			features: [],
 			getTicket,
 			routes: {
 				'GET /v1/admin/knowledge/entries': () => problem(403, 'forbidden'),
@@ -1139,7 +1139,7 @@ describe('reports', () => {
 describe('formatted answers in the inbox (C2)', () => {
 	it('shows AI and staff answers as the visitor sees them; the visitor’s text and notes stay plain', async () => {
 		const { hosts } = await startAdmin({
-			features: ['inbox', 'internal_notes'],
+			features: ['inbox'],
 			routes: {
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], hasMore: false, unread: 0 }),
 				'GET /v1/admin/conversations/c1': () =>
@@ -1177,7 +1177,7 @@ describe('context panel shop info', () => {
 	/** @param {unknown} shop */
 	const open = async (shop) => {
 		const { hosts } = await startAdmin({
-			features: ['inbox', 'context_panel'],
+			features: ['inbox'],
 			routes: {
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], hasMore: false, unread: 0 }),
 				'GET /v1/admin/conversations/c1': () =>

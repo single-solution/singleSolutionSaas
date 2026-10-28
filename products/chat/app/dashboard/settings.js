@@ -62,21 +62,16 @@ const useFeatures = (websiteId) => {
 /** The fallback answers, with the languages of Language lock offered. @param {{ websiteId: string }} props */
 function FallbackAnswers({ websiteId }) {
 	const { on, value } = useFeatures(websiteId);
-	const languages = on('language_lock') ? value('language_lock', 'allowedLanguages') : [];
-	return (
-		<FallbackAnswersEditor
-			websiteId={websiteId}
-			off={false}
-			languages={Array.isArray(languages) ? languages.map(String) : []}
-			on={on}
-		/>
-	);
+	const legacyLangs = on('language_lock') ? value('language_lock', 'allowedLanguages') : null;
+	const aiLangs = value('ai_replies', 'allowedLanguages');
+	const languages = Array.isArray(legacyLangs) ? legacyLangs : Array.isArray(aiLangs) ? aiLangs : [];
+	return <FallbackAnswersEditor websiteId={websiteId} off={false} languages={languages.map(String)} on={on} />;
 }
 
 /** The flows, with Custom fields offered as steps while it is on. @param {{ websiteId: string }} props */
 function Flows({ websiteId }) {
 	const { on } = useFeatures(websiteId);
-	return <FlowsEditor websiteId={websiteId} off={false} customFields={on('custom_fields')} />;
+	return <FlowsEditor websiteId={websiteId} off={false} customFields={on('custom_fields') || on('leads_flows')} />;
 }
 
 /**
@@ -85,6 +80,15 @@ function Flows({ websiteId }) {
  * @returns {Record<string, import('@ss/ui/dashboard').FeatureExtra>}
  */
 const extrasOf = (websiteId) => ({
+	ai_replies: {
+		items: [
+			{
+				id: 'fallback-answers',
+				label: TEXTS.lists.fallbackAnswers.title,
+				content: <FallbackAnswers websiteId={websiteId} />,
+			},
+		],
+	},
 	fallback_answers: <FallbackAnswers websiteId={websiteId} />,
 	webhook_tools: {
 		items: [
@@ -113,10 +117,33 @@ const extrasOf = (websiteId) => ({
 				label: TEXTS.lists.pageTypes.title,
 				content: <PageTypesEditor websiteId={websiteId} off={false} bare />,
 			},
+			{
+				id: 'upload-types',
+				label: TEXTS.lists.uploadTypes.title,
+				content: <UploadTypesEditor websiteId={websiteId} off={false} bare />,
+			},
+			{
+				id: 'page-rules',
+				label: TEXTS.lists.pageRules.title,
+				content: <PageRulesEditor websiteId={websiteId} off={false} bare />,
+			},
 		],
 	},
 	proactive_pages: <PageRulesEditor websiteId={websiteId} off={false} bare />,
-	leads_flows: <Flows websiteId={websiteId} />,
+	leads_flows: {
+		items: [
+			{
+				id: 'flows',
+				label: TEXTS.lists.flows.title,
+				content: <Flows websiteId={websiteId} />,
+			},
+			{
+				id: 'custom-fields',
+				label: TEXTS.lists.customFields.title,
+				content: <CustomFieldsEditor websiteId={websiteId} off={false} bare />,
+			},
+		],
+	},
 	custom_fields: <CustomFieldsEditor websiteId={websiteId} off={false} bare />,
 	handoff: {
 		items: [
@@ -133,11 +160,18 @@ const extrasOf = (websiteId) => ({
 		],
 	},
 	inbox: {
-		items: LABEL_LISTS.map((list) => ({
-			id: list,
-			label: TEXTS.lists.labels[list].title,
-			content: <LabelsEditor websiteId={websiteId} list={list} off={false} bare />,
-		})),
+		items: [
+			...LABEL_LISTS.map((list) => ({
+				id: list,
+				label: TEXTS.lists.labels[list].title,
+				content: <LabelsEditor websiteId={websiteId} list={list} off={false} bare />,
+			})),
+			{
+				id: 'teams',
+				label: TEXTS.lists.teams.title,
+				content: <TeamsEditor websiteId={websiteId} off={false} bare />,
+			},
+		],
 	},
 	assignment: <TeamsEditor websiteId={websiteId} off={false} />,
 	attachments: <UploadTypesEditor websiteId={websiteId} off={false} />,

@@ -266,4 +266,14 @@ describe('the store details through the API', () => {
 		const features = (await shop.api('GET', '/v1/features')).json;
 		expect(JSON.stringify(features)).toContain('store_details');
 	});
+
+	it('serves shop store details when catalog is on without store_details (Workstream E store_details un-gate)', async () => {
+		await shop.switchOn(['catalog']);
+		const store = await shop.visitor('GET', '/v1/shop/store');
+		expect(store.status).toBe(200);
+		expect(store.json.name).toBe('Example Store');
+		const biz = await shop.visitor('GET', '/v1/shop/store/business-json');
+		expect(biz.status).toBe(200);
+		await shop.switchOn();
+	});
 });

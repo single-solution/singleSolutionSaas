@@ -117,15 +117,15 @@ reads every screen under `platform/src`, `platform/app` and `products/*/app` and
 cool hover (`surface-2`); 10 % meaning, used sparingly — one `tone` per meaning. Hard radius 0.35rem. Faces: Figtree ·
 Space Grotesk · JetBrains Mono.
 
-| Tone        | Hue               | Means                                                       |
-| ----------- | ----------------- | ----------------------------------------------------------- |
-| `primary`   | teal #0F766E      | main buttons, links, the active item, focus                 |
-| `success`   | lime/ok #16A34A   | success, paid, active, done steps                           |
-| `danger`    | rose #BE123C      | errors and destructive actions only                         |
-| `warning`   | amber #F59E0B     | warnings, soft highlights (always with dark text)           |
-| `attention` | amber #B45309     | needs the person: setup steps, alerts, Needs you; no button |
-| `info`      | bright teal #14B8A6 | tips, help, empty-state hints                             |
-| `new`       | pink #EC4899      | new, featured, promotions                                   |
+| Tone        | Hue                 | Means                                                       |
+| ----------- | ------------------- | ----------------------------------------------------------- |
+| `primary`   | teal #0F766E        | main buttons, links, the active item, focus                 |
+| `success`   | lime/ok #16A34A     | success, paid, active, done steps                           |
+| `danger`    | rose #BE123C        | errors and destructive actions only                         |
+| `warning`   | amber #F59E0B       | warnings, soft highlights (always with dark text)           |
+| `attention` | amber #B45309       | needs the person: setup steps, alerts, Needs you; no button |
+| `info`      | bright teal #14B8A6 | tips, help, empty-state hints                               |
+| `new`       | pink #EC4899        | new, featured, promotions                                   |
 
 Every meaning has the brand hue for dots, bars and fills (`bg-success-solid`, `DOTS`), a 50 tint for backgrounds
 (`-soft`, `TINTS`) and an AA text shade (`text-success`, `on-success-soft`), darkened where the hue is too light for

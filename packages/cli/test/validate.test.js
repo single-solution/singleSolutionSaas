@@ -141,6 +141,9 @@ describe('ss app validate', () => {
 				'export const live = [',
 				"\tdefineRoute({ method: 'GET', path: '/v1/inbox', auth: 'dashboard', handler: () => 1 }),",
 				"\tdefineRoute({ method: 'GET', path: '/v1/dashboard/websites/:websiteId/orders', auth: 'dashboard', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/dashboard/websites/:websiteId/payments', auth: 'dashboard', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/dashboard/websites/:websiteId/users', auth: 'dashboard', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/dashboard/websites/:websiteId/delivery', auth: 'dashboard', handler: () => 1 }),",
 				'];',
 				'',
 			].join('\n'),
@@ -150,6 +153,9 @@ describe('ss app validate', () => {
 			'GET /v1/inbox: dashboard auth is configure only — path must start with /v1/dashboard/',
 			"GET /v1/inbox: 'inbox' is live ops — use ticket or server auth (admin widgets), not dashboard",
 			"GET /v1/dashboard/websites/:websiteId/orders: 'orders' is live ops — use ticket or server auth (admin widgets), not dashboard",
+			"GET /v1/dashboard/websites/:websiteId/payments: 'payments' is live ops — use ticket or server auth (admin widgets), not dashboard",
+			"GET /v1/dashboard/websites/:websiteId/users: 'users' is live ops — use ticket or server auth (admin widgets), not dashboard",
+			"GET /v1/dashboard/websites/:websiteId/delivery: 'delivery' is live ops — use ticket or server auth (admin widgets), not dashboard",
 		]);
 	});
 

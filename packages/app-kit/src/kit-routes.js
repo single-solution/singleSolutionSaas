@@ -226,13 +226,27 @@ export const createKitRoutes = (kit, hooks) => {
 			hooks.widgetConfig ? hooks.widgetConfig(ctx) : {},
 		]);
 		const { customCss, ...look } = theme;
+		// products may expand `features` (demoted peers as settings toggles) via widgetConfig
+		const expanded = Array.isArray(/** @type {{ features?: unknown }} */ (settings).features)
+			? /** @type {string[]} */ (/** @type {{ features: string[] }} */ (settings).features)
+			: on;
+		const { features: _features, ...widgetSettings } = /** @type {Record<string, unknown>} */ (settings);
 		// the widgets whose feature (one, or a list: any of them) is on, so a widget bundle needs no copy of the manifest
 		const widgets = manifest.widgets
 			.filter((/** @type {{ feature: string | string[] }} */ widget) =>
-				[widget.feature].flat().some((key) => on.includes(key)),
+				[widget.feature].flat().some((key) => expanded.includes(key) || on.includes(key)),
 			)
 			.map((/** @type {{ key: string }} */ widget) => widget.key);
-		return { texts, theme: look, customCss, format, timeZone: business.timeZone ?? 'UTC', features: on, widgets, settings };
+		return {
+			texts,
+			theme: look,
+			customCss,
+			format,
+			timeZone: business.timeZone ?? 'UTC',
+			features: expanded,
+			widgets,
+			settings: widgetSettings,
+		};
 	};
 
 	return [

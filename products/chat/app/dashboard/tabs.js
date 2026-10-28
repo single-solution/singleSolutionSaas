@@ -54,15 +54,12 @@ const useChatOverview = (overview, { websiteId, open }) => {
 };
 
 /**
- * Chat's rules between features (PLAN 0.8.3): no one can start a chat, or no one answers.
+ * Chat's rules between features (PLAN 0.8.3): no one answers (neither AI replies nor Inbox is on).
  * @param {string[]} on
  */
 const ruleWarnings = (on) =>
 	on.includes('visitor_chat')
-		? [
-				...(on.includes('guest_chat') || on.includes('signed_in_chat') ? [] : [TEXTS.features.noOneStarts]),
-				...(on.includes('ai_replies') || on.includes('inbox') ? [] : [TEXTS.features.noOneAnswers]),
-			]
+		? [...(on.includes('ai_replies') || on.includes('inbox') ? [] : [TEXTS.features.noOneAnswers])]
 		: [];
 
 /**

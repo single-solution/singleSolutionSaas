@@ -91,6 +91,7 @@ export const websiteRoutes = (service, identity) => {
 			id: /** @type {import('../../infra/auth.js').Session} */ (c.session).subject,
 			body,
 			meta: { requestId: c.requestId, ip: c.ip },
+			otpOnly: true,
 		});
 	/**
 	 * The connections of the website as the console shows them (never a value), with whether this person may change them.

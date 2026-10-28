@@ -124,7 +124,11 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 			const methodSet = block(doc, { title: t('roles.methods') });
 			/** @type {Map<string, HTMLInputElement>} */
 			const methodBoxes = new Map();
-			for (const method of SIGN_IN_METHODS.filter((key) => config.features.includes(key))) {
+			for (const method of SIGN_IN_METHODS.filter(
+				(key) =>
+					config.features.includes(key) ||
+					(config.features.includes('sign_in') && (config.settings?.methods ?? []).includes(key)),
+			)) {
 				const made = make.flip(t(`method.${method}`));
 				methodBoxes.set(method, made.input);
 				methodSet.append(made.wrap);

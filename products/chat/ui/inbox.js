@@ -346,7 +346,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				reply,
 				send,
 				...(on('internal_notes') ? [addNote] : []),
-				...(on('attachments') && types.length > 0 ? [file, attach] : []),
+				...((on('attachments') || on('inbox')) && types.length > 0 ? [file, attach] : []),
 			);
 			const transcript = make.field('input', t('inbox.transcriptEmail'), { type: 'email', maxlength: '254', required: '' });
 			const transcriptForm = formPart(doc, {
@@ -374,8 +374,8 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				...(fields.length > 0 ? [fieldsForm] : []),
 				...(hasLabels ? [labelsForm] : []),
 				...(on('context_panel') ? [context.part] : []),
-				...(on('transcripts') ? [transcriptForm] : []),
-				...(on('ratings') && s.ratings.askWhen === 'manual' ? [askRating] : []),
+				...(on('transcripts') || s.transcripts !== false ? [transcriptForm] : []),
+				...((on('ratings') || s.ratings?.enabled) && s.ratings?.askWhen === 'manual' ? [askRating] : []),
 				remove,
 				closeDetail,
 				detailNote,
@@ -484,7 +484,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				context.show(current);
 				for (const each of messages.querySelectorAll('.seen')) each.remove();
 				const seenSeq = current.visitorSeenSeq;
-				if (on('typing_receipts') && typeof seenSeq === 'number') {
+				if ((on('typing_receipts') || s.typing?.showSeen !== false) && typeof seenSeq === 'number') {
 					const last = [...messages.querySelectorAll('li.staff:not(.note)')]
 						.filter((node) => Number(/** @type {HTMLElement} */ (node).dataset.seq) <= seenSeq)
 						.at(-1);

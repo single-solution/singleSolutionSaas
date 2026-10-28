@@ -31,6 +31,10 @@ import { attachmentKind } from '../core/widgets.js';
 /**
  * The settings Chat adds to the widget config (`hooks.widgetConfig`); each part matters only while its feature is on.
  * @typedef {object} ChatSettings
+ * @property {boolean} [allowGuests]
+ * @property {boolean} [allowSignedIn]
+ * @property {{ showTyping?: boolean, showSeen?: boolean }} [typing]
+ * @property {boolean} [transcripts]
  * @property {{ avatarUrl: string, launcherPosition: string, launcherStyle: string, windowStyle: string,
  *   fullScreenOnMobile: boolean, hideOnPages: string[], showTimes: boolean }} look `showTimes`: each message's time and
  *   a divider for each day (C8)
@@ -39,7 +43,7 @@ import { attachmentKind } from '../core/widgets.js';
  * @property {{ showLabel: boolean }} ai
  * @property {{ showButton: boolean }} handoff whether the window offers Talk to a person (C4)
  * @property {{ idleMinutes: number, pageRules: Array<{ path: string, delay: number, message: string }>,
- *   oncePer: 'session' | 'product', hideOnMobile: boolean }} proactive whether the idle nudge shows once per session or
+ *   oncePer: 'session' | 'product', hideOnMobile: boolean, exitIntent?: boolean }} proactive whether the idle nudge shows once per session or
  *   once per product, and whether phones get none (C14)
  * @property {{ tags: Label[], topics: Label[], priorities: Label[] }} labels the inbox's tags, topics and priorities
  *   (C7; admin widgets only)
@@ -52,7 +56,7 @@ import { attachmentKind } from '../core/widgets.js';
  * @property {{ visitors: string, types: string[], limits?: Record<string, number>, maxBytes: number, storage: boolean
  *   }} attachments what visitors may send (`types`, each type's cap in `limits`, C11, the largest in `maxBytes`), as the
  *   server checks it
- * @property {{ kind: 'csat' | 'nps', labels: string[], askWhen: string, comment: boolean }} ratings csat: the
+ * @property {{ kind: 'csat' | 'nps', labels: string[], askWhen: string, comment: boolean, enabled?: boolean }} ratings csat: the
  *   merchant's labels, lowest first; nps: 0 to 10 (C13)
  */
 

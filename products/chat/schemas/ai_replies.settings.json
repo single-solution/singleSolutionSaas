@@ -92,6 +92,130 @@
 				"group": "Answers",
 				"order": 5
 			}
+		},
+		"instructions": {
+			"type": "string",
+			"title": "What the AI should know about your business",
+			"description": "Tell the AI about your business: what you sell, how you want it to sound and anything it must never say. Every answer follows it.",
+			"default": "",
+			"maxLength": 32000,
+			"x-ui": {
+				"widget": "textarea",
+				"group": "Instructions",
+				"order": 20
+			}
+		},
+		"budgetWords": {
+			"type": "array",
+			"title": "Budget words",
+			"default": ["k = 1000"],
+			"items": {
+				"type": "string",
+				"maxLength": 60
+			},
+			"description": "For {products_under}: words written after a number that multiply it (for example k = 1000, thousand = 1000).",
+			"x-ui": {
+				"group": "Fallback answers",
+				"order": 30
+			}
+		},
+		"dailyTokens": {
+			"type": "integer",
+			"title": "Daily cap (AI tokens)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000,
+			"description": "0 = no daily cap. Counted in the business time zone.",
+			"x-ui": {
+				"group": "Token caps and cost",
+				"order": 40
+			}
+		},
+		"monthlyTokens": {
+			"type": "integer",
+			"title": "Monthly cap (AI tokens)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 10000000000,
+			"description": "0 = no monthly cap.",
+			"x-ui": {
+				"group": "Token caps and cost",
+				"order": 41
+			}
+		},
+		"costAlerts": {
+			"type": "boolean",
+			"title": "Cost alerts when reaching monthly cap",
+			"default": true,
+			"description": "Sends staff alerts through Notifications when monthly token cap is reached.",
+			"x-ui": {
+				"group": "Token caps and cost",
+				"order": 42
+			}
+		},
+		"allowedLanguages": {
+			"type": "array",
+			"title": "Allowed languages",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 20
+			},
+			"description": "Language codes such as en, fr, ar or pt-BR. Empty: website languages, or any language.",
+			"x-ui": {
+				"group": "Language lock",
+				"order": 50,
+				"defaultFrom": "region.languages"
+			}
+		},
+		"markerWords": {
+			"type": "array",
+			"title": "Marker words",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 500
+			},
+			"x-ui": {
+				"group": "Language lock",
+				"order": 51
+			}
+		},
+		"acceptLatinFor": {
+			"type": "array",
+			"title": "Also accept in Latin letters",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 20
+			},
+			"x-ui": {
+				"group": "Language lock",
+				"order": 52
+			}
+		},
+		"unavailableTexts": {
+			"type": "array",
+			"title": "The unavailable message in other languages",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 500
+			},
+			"x-ui": {
+				"group": "Language lock",
+				"order": 53
+			}
+		},
+		"shopContext": {
+			"type": "boolean",
+			"title": "Include shop context in AI prompt",
+			"default": false,
+			"description": "Passes store policies and current product context from Ecommerce to the AI.",
+			"x-ui": {
+				"group": "Answers",
+				"order": 6
+			}
 		}
 	}
 }

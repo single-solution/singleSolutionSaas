@@ -109,7 +109,8 @@ export const createCatalogCharts = (service, common) => {
 		const uses = await usesOf(data, existing.id);
 		if (uses.products + uses.brands + uses.categories > 0)
 			throw problem('conflict', 'Products, brands or categories use this size chart: change them first.');
-		if ((await s.values('size_charts')).defaultChartId === existing.id)
+		const defaultChartId = (await s.values('size_charts'))?.defaultChartId || (await s.values('catalog'))?.defaultChartId;
+		if (defaultChartId === existing.id)
 			throw problem('conflict', 'This is the default size chart (Settings → Size charts): change it first.');
 		await data.collection(COLLECTIONS.sizeCharts).deleteOne({ websiteId: data.websiteId, id: existing.id });
 		await service.log(ctx, 'size_chart.deleted', existing.id, { label: existing.name });
@@ -122,7 +123,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/size-charts',
 			auth: 'server',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: list,
 		}),
@@ -131,7 +132,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/size-charts',
 			auth: 'server',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
 			handler: create,
@@ -141,7 +142,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/size-charts/:id',
 			auth: 'server',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: read,
 		}),
@@ -150,7 +151,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/size-charts/:id',
 			auth: 'server',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: update,
 		}),
@@ -159,7 +160,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/size-charts/:id',
 			auth: 'server',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),
@@ -168,7 +169,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/admin/size-charts',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: list,
 		}),
@@ -177,7 +178,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/admin/size-charts',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
 			handler: create,
@@ -187,7 +188,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/admin/size-charts/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: read,
 		}),
@@ -196,7 +197,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/admin/size-charts/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: update,
 		}),
@@ -205,7 +206,7 @@ export const createCatalogCharts = (service, common) => {
 			path: '/v1/admin/size-charts/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			feature: 'size_charts',
+			feature: 'catalog',
 			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),

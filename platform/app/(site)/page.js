@@ -11,7 +11,7 @@ export async function generateMetadata() {
 	return {
 		title: { absolute: name },
 		description:
-			'Prebuilt platform for merchants: build your frontend, place ready products (accounts, payments, chat, and more), run the Portal and mobile app, share one pack with your developer. Plans follow your account.',
+			'Prebuilt platform for merchants: build your frontend, place ready products (accounts, payments, chat, and more), run the Portal, share one pack with your developer, use public docs. Plans follow your account.',
 		robots: { index: true, follow: true },
 	};
 }

@@ -44,15 +44,24 @@ describe('the website Setup sheet', () => {
 		// one text per feature, in the manifest's order
 		expect(Object.keys(build)).toEqual(manifest.features.map((feature) => feature.key));
 		for (const text of Object.values(build)) expect(text.length).toBeLessThanOrEqual(1000);
-		expect(manifest.features.find((feature) => feature.key === 'shop_my_orders')?.recommendFor).toEqual([
-			'chat.ai+signIn.*+sells.physical',
-			'chat.ai+signIn.*+sells.digital',
+		expect(manifest.features.find((feature) => feature.key === 'shop_assistant')?.recommendFor).toEqual([
+			'chat.ai+sells.physical',
+			'chat.ai+sells.digital',
 		]);
 		expect(manifest.features.find((feature) => feature.key === 'reports')?.recommendFor).toBeUndefined();
-		// AI cost alerts go to the Staff alerts recipients, so they cannot be on without Staff alerts
-		expect(manifest.features.find((feature) => feature.key === 'ai_cost_alerts')?.dependsOn).toEqual([
-			'ai_caps',
-			'staff_alerts',
+		expect(manifest.features.map((feature) => feature.key)).toEqual([
+			'visitor_chat',
+			'ai_replies',
+			'knowledge_base',
+			'webhook_tools',
+			'book_slot',
+			'shop_assistant',
+			'leads_flows',
+			'inbox',
+			'handoff',
+			'moderation',
+			'reports',
+			'import',
 		]);
 		// every route a build text names is one Chat serves
 		const named = Object.values(build).flatMap((text) =>
@@ -63,7 +72,7 @@ describe('the website Setup sheet', () => {
 					.replace(/\.$/, ''),
 			})),
 		);
-		expect(named.length).toBeGreaterThan(30);
+		expect(named.length).toBeGreaterThan(15);
 		for (const route of named)
 			expect(
 				documented.some((operation) => operation.method === route.method && operation.pattern.test(route.path)),
@@ -80,8 +89,8 @@ describe('the website Setup sheet', () => {
 		expect(off.build).toEqual([]);
 		expect(off.features.find((/** @type {any} */ f) => f.key === 'handoff').recommendFor).toEqual(['chat.people+chat.ai']);
 
-		const on = ['visitor_chat', 'ai_replies', 'fallback_answers', 'webhook_tools', 'leads_flows', 'custom_fields'];
-		await env.switchOn([...on, 'proactive_pages']);
+		const on = ['visitor_chat', 'ai_replies', 'webhook_tools', 'leads_flows'];
+		await env.switchOn([...on]);
 		const empty = await partOf(env);
 		expect(listSummaries(empty)).toEqual({
 			tools: 'No tools yet.',
@@ -91,6 +100,8 @@ describe('the website Setup sheet', () => {
 			fallback_answers: 'No answers yet.',
 			// seeded (C6)
 			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
+			upload_types:
+				'5 file types visitors may send: image/jpeg (5 MB), image/png (5 MB), image/webp (5 MB), image/gif (5 MB), application/pdf (5 MB).',
 		});
 		expect(whoAnswers(empty)).toBe('The AI answers every visitor.');
 
@@ -129,22 +140,22 @@ describe('the website Setup sheet', () => {
 			page_rules: 'No page rules yet.',
 			fallback_answers: '2 answers.',
 			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
+			upload_types:
+				'5 file types visitors may send: image/jpeg (5 MB), image/png (5 MB), image/webp (5 MB), image/gif (5 MB), application/pdf (5 MB).',
 		});
 		// the kit still counts each list; tool addresses never show
 		expect(filled.features.find((/** @type {any} */ f) => f.key === 'leads_flows').lists).toEqual([
 			{ name: 'flows', title: 'Flows', summary: '3 flows: 2 start on a page, 1 on a keyword.', count: 3 },
+			{ name: 'custom_fields', title: 'Custom fields', summary: '2 fields: Company, Budget.', count: 2 },
 		]);
 		expect(JSON.stringify(filled)).not.toContain('tools.example.com');
 		expect(filled.build.map((/** @type {any} */ entry) => entry.feature)).toEqual([
 			'visitor_chat',
 			'ai_replies',
-			'fallback_answers',
 			'webhook_tools',
-			'proactive_pages',
 			'leads_flows',
-			'custom_fields',
 		]);
-		expect(filled.build[3]).toEqual({
+		expect(filled.build[2]).toEqual({
 			feature: 'webhook_tools',
 			what: build.webhook_tools,
 			docs: `${BASE}/docs#feature-webhook_tools`,
@@ -173,6 +184,8 @@ describe('the website Setup sheet', () => {
 			page_rules: '1 page rule.',
 			fallback_answers: '1 answer.',
 			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
+			upload_types:
+				'5 file types visitors may send: image/jpeg (5 MB), image/png (5 MB), image/webp (5 MB), image/gif (5 MB), application/pdf (5 MB).',
 		});
 		expect(one.custom_fields.length).toBeLessThanOrEqual(300);
 
@@ -187,10 +200,14 @@ describe('the website Setup sheet', () => {
 		// lists of features that are off are not read (page types are Visitor chat's)
 		expect(listSummaries(staff)).toEqual({
 			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
+			upload_types:
+				'5 file types visitors may send: image/jpeg (5 MB), image/png (5 MB), image/webp (5 MB), image/gif (5 MB), application/pdf (5 MB).',
+			page_rules: '1 page rule.',
 			// the inbox's lists (C7): priorities are seeded
 			tags: 'No tags yet.',
 			topics: 'No topics yet.',
 			priorities: '4 priorities: Urgent, High, Normal, Low.',
+			teams: 'No teams yet.',
 		});
 
 		// the OpenAPI document itself, public
@@ -209,13 +226,16 @@ describe('the website Setup sheet', () => {
 				},
 			}),
 		});
-		await env.switchOn(['visitor_chat', 'leads_flows', 'custom_fields']);
+		await env.switchOn(['visitor_chat', 'leads_flows']);
 		await env.list('custom_fields', [{ key: 'company', label: 'Company', type: 'text' }]);
 		failing = true;
 		expect(listSummaries(await partOf(env))).toEqual({
 			flows: 'Not available right now',
 			custom_fields: '1 field: Company.',
+			page_rules: 'No page rules yet.',
 			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
+			upload_types:
+				'5 file types visitors may send: image/jpeg (5 MB), image/png (5 MB), image/webp (5 MB), image/gif (5 MB), application/pdf (5 MB).',
 		});
 	});
 

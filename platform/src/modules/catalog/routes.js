@@ -52,7 +52,7 @@ const SHARED_HEADERS = Object.freeze({ 'x-robots-tag': 'noindex, nofollow', 'ref
 /**
  * @param {CatalogService} service
  * @param {() => any} commerce
- * @param {() => { confirmPerson: (input: { kind: 'admin' | 'merchant', id: string, body: Record<string, unknown>, meta: { requestId?: string | null, ip?: string | null } }) => Promise<unknown> }} identity
+ * @param {() => { confirmPerson: (input: { kind: 'admin' | 'merchant', id: string, body: Record<string, unknown>, meta: { requestId?: string | null, ip?: string | null }, otpOnly?: boolean }) => Promise<unknown> }} identity
  */
 export const catalogRoutes = (service, commerce, identity) => {
 	/**
@@ -66,6 +66,7 @@ export const catalogRoutes = (service, commerce, identity) => {
 			id: /** @type {Session} */ (c.session).subject,
 			body,
 			meta: { requestId: c.requestId, ip: c.ip },
+			otpOnly: true,
 		});
 
 	return [
@@ -219,9 +220,9 @@ export const catalogRoutes = (service, commerce, identity) => {
 					typeof c.body === 'object' && c.body !== null && !Array.isArray(c.body)
 						? /** @type {Record<string, unknown>} */ (c.body)
 						: {};
-				const { password, code, recoveryCode, ...rest } = body;
-				const { websiteId } = valid(parseAdminLaunch(rest));
-				await confirm(c, { password, code, recoveryCode });
+				const launchInput = 'websiteId' in body ? { websiteId: body.websiteId } : {};
+				const { websiteId } = valid(parseAdminLaunch(launchInput));
+				await confirm(c, { code: body.code, recoveryCode: body.recoveryCode });
 				// Open as admin with no website is Owner only (PLAN 0.2 rights table: Products row)
 				if (websiteId === null) c.authorize(P.productsManage, {});
 				return ok(

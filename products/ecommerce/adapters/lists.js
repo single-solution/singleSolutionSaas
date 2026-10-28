@@ -67,9 +67,9 @@ export const LISTS = Object.freeze({
 	},
 	delivery_zones: { feature: 'delivery_zones', title: 'Delivery zones', check: checkZones, fallback: defaultZones },
 	tax_rules: { feature: 'taxes', title: 'Tax rules', check: checkTaxRules, fallback: () => [] },
-	grades: { feature: 'grades_serials', title: 'Condition grades', check: checkGrades, fallback: () => [] },
+	grades: { feature: 'catalog', title: 'Condition grades', check: checkGrades, fallback: () => [] },
 	unit_states: {
-		feature: 'grades_serials',
+		feature: 'catalog',
 		title: 'Unit states',
 		check: checkUnitStates,
 		fallback: () => DEFAULT_UNIT_STATES.map((state) => ({ ...state })),
@@ -81,7 +81,7 @@ export const LISTS = Object.freeze({
 		check: checkBookingSchedules,
 		fallback: defaultSchedules,
 	},
-	role_prices: { feature: 'role_pricing', title: 'Role prices', check: checkRolePrices, fallback: () => [] },
+	role_prices: { feature: 'checkout', title: 'Role prices', check: checkRolePrices, fallback: () => [] },
 	cancel_reasons: {
 		feature: 'checkout',
 		title: 'Cancel reasons',

@@ -82,7 +82,7 @@ const keepGuest = () =>
  *   texts?: Record<string, string> }} [input]
  */
 const start = async ({
-	features = ['visitor_chat', 'guest_chat'],
+	features = ['visitor_chat'],
 	settings = {},
 	routes = {},
 	token = 'bt',
@@ -176,7 +176,7 @@ describe('talking', () => {
 	it('sends a first message with the page, keeps the guest key and paces the AI reply', async () => {
 		let polls = 0;
 		const { $, root, server, time, api, type } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'typing_receipts'],
+			features: ['visitor_chat', 'ai_replies'],
 			settings: {
 				ai: { showLabel: true },
 				guests: { messageLimit: 0 },
@@ -356,7 +356,7 @@ describe('talking', () => {
 describe('guest limit', () => {
 	it('links to sign-in with a return to this page', async () => {
 		const { $, root, type } = await start({
-			features: ['visitor_chat', 'guest_chat', 'signed_in_chat'],
+			features: ['visitor_chat'],
 			settings: { signInUrl: '/sign-in?from=chat' },
 			routes: { 'POST /v1/chat/messages': () => problem(403, 'guest_limit_reached', { next: 'sign_in' }) },
 		});
@@ -381,7 +381,7 @@ describe('guest limit', () => {
 	it('offers the lead form with custom fields and consent', async () => {
 		let lead = problem(422, 'validation_failed', { errors: [{ message: 'Bad email' }] });
 		const { $, root, server, type } = await start({
-			features: ['visitor_chat', 'guest_chat', 'leads_flows', 'custom_fields'],
+			features: ['visitor_chat', 'leads_flows'],
 			settings: {
 				leads: { fields: ['name', 'email', 'message', 'other'], customFields: ['size', 'gift'], consentText: 'I agree' },
 				customFields: [
@@ -478,7 +478,7 @@ describe('lead form outside office hours', () => {
 			'GET /v1/chat': () => answer(200, { ...view({ leadOffered: true }), messages: [] }),
 			'POST /v1/chat/leads': () => answer(201, { lead: { id: 'l1' } }),
 		};
-		const features = ['visitor_chat', 'guest_chat', 'leads_flows'];
+		const features = ['visitor_chat', 'leads_flows'];
 		const settings = { leads: { fields: ['name', 'email'], customFields: [], consentText: '' } };
 		const { $, root, server } = await start({ features, settings, routes });
 		await click($('.launcher'));
@@ -518,7 +518,7 @@ describe('flows', () => {
 		let invalid = true;
 		const chatAt = () => view({ conversation: conv({ flow: steps[at] ? { id: 'f1', step: steps[at] } : null }) });
 		const { $, root, server, time } = await start({
-			features: ['visitor_chat', 'guest_chat', 'leads_flows', 'custom_fields'],
+			features: ['visitor_chat', 'leads_flows'],
 			settings: {
 				flows: [{ id: 'f1', name: 'Phones', start: { kind: 'page', path: '/products/*', delay: 0 } }],
 				customFields: [{ key: 'gift', label: 'Gift wrap', type: 'yes_no', options: [] }],
@@ -564,7 +564,7 @@ describe('flows', () => {
 
 	it('starts a delayed page flow like a proactive message', async () => {
 		const { $, root, server, time } = await start({
-			features: ['visitor_chat', 'guest_chat', 'leads_flows'],
+			features: ['visitor_chat', 'leads_flows'],
 			settings: { flows: [{ id: 'f2', name: 'Hi', start: { kind: 'page', path: '/products/**', delay: 30 } }] },
 			routes: {
 				'POST /v1/chat/flows/f2/start': () => answer(201, { guestKey: 'g1', chat: view() }),
@@ -586,14 +586,14 @@ describe('flows', () => {
 	it('does not start a delayed flow that already ran or failed', async () => {
 		window.sessionStorage.setItem(PROACTIVE_STORAGE_KEY, JSON.stringify({ flows: ['f2'] }));
 		const { server, time } = await start({
-			features: ['visitor_chat', 'guest_chat', 'leads_flows'],
+			features: ['visitor_chat', 'leads_flows'],
 			settings: { flows: [{ id: 'f2', name: 'Hi', start: { kind: 'page', path: '/products/**', delay: 30 } }] },
 		});
 		await time.advance(30_000);
 		expect(server.all('POST /v1/chat/flows/f2/start')).toHaveLength(0);
 		resetPage();
 		const failed = await start({
-			features: ['visitor_chat', 'guest_chat', 'leads_flows'],
+			features: ['visitor_chat', 'leads_flows'],
 			settings: { flows: [{ id: 'f2', name: 'Hi', start: { kind: 'page', path: '/products/**', delay: 30 } }] },
 			routes: { 'POST /v1/chat/flows/f2/start': () => problem(403, 'sign_in_required') },
 		});
@@ -608,7 +608,7 @@ describe('conversation tools', () => {
 		let current = conv();
 		let transcript = problem(503, 'notifications_not_connected');
 		const { $, root, server } = await start({
-			features: ['visitor_chat', 'guest_chat', 'handoff', 'presence_queue', 'transcripts'],
+			features: ['visitor_chat', 'handoff'],
 			routes: {
 				'GET /v1/chat': () => answer(200, { ...view({ conversation: current, visitor: signedIn }), messages: [] }),
 				'POST /v1/chat/handoff': () => {
@@ -647,7 +647,7 @@ describe('conversation tools', () => {
 	it('offers no transcript to a guest, who has no verified email to send it to (SR-6-2)', async () => {
 		keepGuest();
 		const { $, root } = await start({
-			features: ['visitor_chat', 'guest_chat', 'transcripts'],
+			features: ['visitor_chat'],
 			routes: { 'GET /v1/chat': () => answer(200, { ...view({ conversation: conv() }), messages: [] }) },
 		});
 		await click($('.launcher'));
@@ -657,7 +657,7 @@ describe('conversation tools', () => {
 	it('says when handoff or end fail', async () => {
 		keepGuest();
 		const { $, root } = await start({
-			features: ['visitor_chat', 'guest_chat', 'handoff'],
+			features: ['visitor_chat', 'handoff'],
 			routes: {
 				'GET /v1/chat': () => answer(200, { ...view(), messages: [] }),
 				'POST /v1/chat/handoff': () => problem(500, 'x'),
@@ -674,7 +674,7 @@ describe('conversation tools', () => {
 	it('offers Talk to a person only with the setting, and shows the paused notice when the API says so (C4, C9)', async () => {
 		keepGuest();
 		const { $, root } = await start({
-			features: ['visitor_chat', 'guest_chat', 'handoff'],
+			features: ['visitor_chat', 'handoff'],
 			settings: { handoff: { showButton: false } },
 			routes: { 'GET /v1/chat': () => answer(200, { ...view({ conversation: conv({ paused: true }) }), messages: [] }) },
 		});
@@ -688,7 +688,7 @@ describe('conversation tools', () => {
 		const day1 = '2026-09-30T08:15:00Z';
 		const day2 = '2026-10-01T09:30:00Z';
 		const { $, root, server } = await start({
-			features: ['visitor_chat', 'guest_chat'],
+			features: ['visitor_chat'],
 			settings: { look: { showTimes: true } },
 			look: { format: { locale: 'en-US', times: 'business' }, timeZone: 'UTC' },
 			routes: {
@@ -731,7 +731,7 @@ describe('conversation tools', () => {
 	it('asks for a thumbs rating when resolved', async () => {
 		keepGuest();
 		const { $, root, server } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			features: ['visitor_chat'],
 			settings: { ratings: { kind: 'csat', labels: ['Bad', 'Good'], askWhen: 'on_resolve', comment: false } },
 			routes: {
 				'GET /v1/chat': () =>
@@ -752,7 +752,7 @@ describe('conversation tools', () => {
 		keepGuest();
 		let rating = problem(500, 'x');
 		const { $, root, server } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			features: ['visitor_chat'],
 			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'after_staff', comment: true } },
 			routes: {
 				'GET /v1/chat': () =>
@@ -779,7 +779,7 @@ describe('conversation tools', () => {
 	it('asks for a rating when staff request it, never after_staff without staff', async () => {
 		keepGuest();
 		const { $, root } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			features: ['visitor_chat'],
 			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3'], askWhen: 'after_staff', comment: false } },
 			routes: { 'GET /v1/chat': () => answer(200, { ...view({ conversation: conv({ status: 'resolved' }) }), messages: [] }) },
 		});
@@ -788,7 +788,7 @@ describe('conversation tools', () => {
 		resetPage();
 		keepGuest();
 		const asked = await start({
-			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			features: ['visitor_chat'],
 			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3'], askWhen: 'manual' } },
 			routes: {
 				'GET /v1/chat': () => answer(200, { ...view({ conversation: conv({ ratingRequested: true }) }), messages: [] }),
@@ -802,7 +802,7 @@ describe('conversation tools', () => {
 	it('asks the NPS question with 0 to 10 and its two ends (C13)', async () => {
 		keepGuest();
 		const { $, root, server } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			features: ['visitor_chat'],
 			settings: { ratings: { kind: 'nps', labels: [], askWhen: 'on_resolve', comment: false } },
 			routes: {
 				'GET /v1/chat': () =>
@@ -823,7 +823,7 @@ describe('conversation tools', () => {
 	it('asks only when the chat says so: a resolved chat that was not asked (an imported one) shows no rating', async () => {
 		keepGuest();
 		const { $, root } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			features: ['visitor_chat'],
 			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'on_resolve', comment: false } },
 			routes: {
 				'GET /v1/chat': () =>
@@ -839,7 +839,7 @@ describe('conversation tools', () => {
 });
 
 describe('attachments', () => {
-	const features = ['visitor_chat', 'guest_chat', 'signed_in_chat', 'attachments'];
+	const features = ['visitor_chat'];
 	const settings = {
 		attachments: {
 			visitors: 'signed_in',
@@ -920,7 +920,7 @@ describe('attachments', () => {
 
 	it('prefills the transcript email of a signed-in visitor and resets on sign-out', async () => {
 		const { $, root, server, api } = await start({
-			features: ['visitor_chat', 'signed_in_chat', 'transcripts'],
+			features: ['visitor_chat'],
 			routes: {
 				'GET /v1/chat': (call) =>
 					answer(200, {
@@ -951,7 +951,7 @@ describe('attachments', () => {
 describe('proactive', () => {
 	it('nudges after idle minutes, never while open, and remembers dismissals', async () => {
 		const { $, time, api } = await start({
-			features: ['visitor_chat', 'guest_chat', 'proactive_idle', 'proactive_pages'],
+			features: ['visitor_chat'],
 			settings: {
 				proactive: {
 					idleMinutes: 1,
@@ -977,7 +977,7 @@ describe('proactive', () => {
 
 	it('says the merchant’s text for the page setPage names, once per product (C14)', async () => {
 		const { $, time, api } = await start({
-			features: ['visitor_chat', 'guest_chat', 'proactive_idle'],
+			features: ['visitor_chat'],
 			settings: {
 				proactive: { idleMinutes: 1, oncePer: 'product' },
 				pageTypes: [{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}?' }],
@@ -1048,7 +1048,7 @@ describe('product cards', () => {
 		keepGuest();
 		document.documentElement.lang = 'en-US';
 		const { root, api } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards'],
+			features: ['visitor_chat', 'ai_replies'],
 			routes: ROUTES,
 		});
 		await api.open();
@@ -1093,7 +1093,7 @@ describe('product cards', () => {
 	it('follows the link to the product page when no cart on the page takes the item', async () => {
 		keepGuest();
 		const { root, api } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards'],
+			features: ['visitor_chat', 'ai_replies'],
 			routes: ROUTES,
 		});
 		await api.open();
@@ -1119,7 +1119,7 @@ describe('product cards', () => {
 		keepGuest();
 		const closed = conv({ waiting: true, officeHours: { open: false, backAt: '2026-10-02T07:00:00Z' } });
 		const { root, api } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards', 'handoff'],
+			features: ['visitor_chat', 'ai_replies', 'handoff'],
 			look: {
 				format: {
 					locale: 'en-GB',
@@ -1147,7 +1147,7 @@ describe('product cards', () => {
 
 	it('shows no cards while product cards is off', async () => {
 		keepGuest();
-		const { root, api } = await start({ features: ['visitor_chat', 'guest_chat', 'ai_replies'], routes: ROUTES });
+		const { root, api } = await start({ features: ['visitor_chat', 'ai_replies'], routes: ROUTES });
 		await api.open();
 		expect(textsIn(root, '.msg.ai p')).toEqual(['Here you go.']);
 		expect(root.querySelector('.card')).toBeNull();
@@ -1171,7 +1171,7 @@ describe('formatted answers (C2)', () => {
 	it('shows AI and staff answers formatted and the visitor’s own text exactly as typed', async () => {
 		keepGuest();
 		const { root, api } = await start({
-			features: ['visitor_chat', 'guest_chat', 'ai_replies'],
+			features: ['visitor_chat', 'ai_replies'],
 			routes: {
 				'GET /v1/chat': () =>
 					answer(200, {

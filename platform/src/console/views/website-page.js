@@ -33,7 +33,7 @@ import { api, routes } from '../paths.js';
 import { parseWebsitePart, SETTINGS_SECTIONS } from '../website-parts.js';
 import { productStatusLabel, productTone } from './billing.js';
 import { openDashboard } from './common.js';
-import { ConfirmChange } from './confirm-change.js';
+import { ConfirmOtp } from './confirm-change.js';
 import { SetupView, useSetupSheet } from './setup.js';
 import { SettingsSectionBody, contextOf, readinessLines, useWebsiteSettings } from './website-settings.js';
 import { AddProductDrawer, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from './website.js';
@@ -188,11 +188,7 @@ export function WebsitePageView({
 	else if (parsed.kind === 'settings')
 		error = !can.settings ? WEBSITE.noSuchPage : settings && !settings.ok ? describeProblem(settings.problem) : null;
 	else if (parsed.kind === 'setup') {
-		error = !can.tokens
-			? WEBSITE.noSuchPage
-			: setup && !setup.ok
-				? describeProblem(setup.problem)
-				: null;
+		error = !can.tokens ? WEBSITE.noSuchPage : setup && !setup.ok ? describeProblem(setup.problem) : null;
 	}
 
 	const onHome = own === null && !error && !gone;
@@ -411,11 +407,7 @@ export function WebsitePageView({
 		{
 			items: [
 				{ id: 'overview', label: WEBSITE.overview, icon: 'home' },
-				...(can.tokens
-					? [
-							{ id: 'setup', label: WEBSITE.setupSheet, icon: /** @type {const} */ ('layers') },
-						]
-					: []),
+				...(can.tokens ? [{ id: 'setup', label: WEBSITE.setupSheet, icon: /** @type {const} */ ('layers') }] : []),
 			],
 		},
 		...(hasSettings
@@ -559,24 +551,20 @@ export function WebsitePageView({
 					nav.go(hrefOf(`products/${card.productId}`));
 				}}
 			/>
-			<ConfirmChange
+			<ConfirmOtp
 				open={Boolean(launching)}
 				title={WEBSITE.openConfirmTitle(launching?.name ?? '')}
 				help={WEBSITE.openConfirmHelp}
 				confirmLabel={WEBSITE.openConfirmLabel}
-				twoStepOn={twoStepOn}
-				otpOnly={true}
 				send={sendLaunch}
 				onClose={() => setLaunching(null)}
 				onDone={() => setLaunching(null)}
 			/>
-			<ConfirmChange
+			<ConfirmOtp
 				open={sharingPack}
 				title={WEBSITE.developerPack}
 				help={WEBSITE.developerPackHelp}
 				confirmLabel={WEBSITE.downloadPack}
-				twoStepOn={twoStepOn}
-				otpOnly={true}
 				send={sendDeveloperPack}
 				onClose={() => setSharingPack(false)}
 				onDone={() => setSharingPack(false)}

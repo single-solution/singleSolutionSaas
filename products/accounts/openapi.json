@@ -1238,7 +1238,7 @@
 				"summary": "The custom fields",
 				"description": "Every custom field in your order, staff-only ones too, for the Users admin widget.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "custom_fields",
+				"x-ss-feature": "roles",
 				"x-ss-permission": "users.read",
 				"security": [
 					{
@@ -3544,7 +3544,7 @@
 				"summary": "A setup link for a user (Users admin widget)",
 				"description": "The user chooses a password with it (POST /v1/setup-links/accept), also without an email address; valid setupDays (default 7). The link is your setupPageUrl with {code} replaced, else that page (or your website’s home page) with ?ss_setup=<code>. A new one cancels the old. 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "staff_links",
+				"x-ss-feature": "roles",
 				"x-ss-permission": "users.manage",
 				"security": [
 					{
@@ -3590,7 +3590,7 @@
 				"summary": "A one-time sign-in code for a user (Users admin widget)",
 				"description": "6 digits for your staff to give the user (never sent), valid 15 minutes, single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "staff_links",
+				"x-ss-feature": "roles",
 				"x-ss-permission": "users.manage",
 				"security": [
 					{
@@ -4212,7 +4212,7 @@
 				"summary": "The custom fields",
 				"description": "Every custom field in your order, staff-only ones too (the visitor widgets get only the fields the user sees).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "custom_fields",
+				"x-ss-feature": "roles",
 				"x-ss-permission": "users.read",
 				"x-ss-access": "staff",
 				"security": [
@@ -4267,7 +4267,7 @@
 				"summary": "The custom fields a user sees",
 				"description": "The definitions sign-up and My account show, in your order: label, type, choices, help and whether the user edits the field (edit) or only sees it (view). Staff-only fields are not in it. Open to the browser and to your server, with no sign-in, like the widgets. The full list is `GET /v1/fields`, a staff route.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "custom_fields",
+				"x-ss-feature": "roles",
 				"security": [
 					{
 						"browserToken": []
@@ -5139,15 +5139,7 @@
 				"summary": "The signed-in user, for another product",
 				"description": "The same answer as GET /v1/me, for another product of the website that holds the signed-in person's Accounts sign-in (Ecommerce asks for the shopper's name and city). Called with the server token or with a link key that holds the scope me.read, and the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked).",
 				"x-ss-auth": "server",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"x-ss-access": "runtime",
 				"security": [
 					{
@@ -5188,15 +5180,7 @@
 				"summary": "The signed-in user",
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked).",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -5240,15 +5224,7 @@
 				"summary": "Change the signed-in user’s name, custom fields or addresses",
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). The email address and phone number change only by signing in with them. 422 validation_failed for the field; 403 feature_off for custom while Custom fields is off.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -5323,8 +5299,7 @@
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). For a user without a password: a 6-digit code goes to the proven email address (else the proven phone number), and the password and two-step changes take it as confirmCode. The usual code limits apply (429 code_cooldown with retryAt, or code_limit). 409 conflict when the user has a password (type it instead) or neither address nor number was proven.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": [
-					"email_password",
-					"phone_password",
+					"sign_in",
 					"two_step"
 				],
 				"security": [
@@ -5575,7 +5550,7 @@
 				"summary": "The signed-in user’s last 20 orders (Orders tab)",
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). From Ecommerce through the Portal's link to it, newest first, as Ecommerce answers them. 503 product_not_connected without Ecommerce or when it cannot answer.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "orders_tab",
+				"x-ss-feature": "roles",
 				"security": [
 					{
 						"browserToken": []
@@ -5666,10 +5641,7 @@
 				"summary": "Set or change the signed-in user’s password",
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Users with an email address while Email + password is on, else users with a phone number while Phone + password is on (422 validation_failed otherwise), with that method’s rules (422 weak_password). Every other device signs in again. 401 sign_in_failed when current is wrong. Without a password, the change needs a fresh code (confirmCode); 422 code_invalid for a missing, wrong or used code. 423 locked while wrong passwords hold the account.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"email_password",
-					"phone_password"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -5734,15 +5706,7 @@
 				"summary": "The signed-in user’s devices",
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Open sessions, most recently used first.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -5801,15 +5765,7 @@
 				"summary": "Sign one device out",
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). 404 not_found when the session is not the user’s or already ended.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -5856,15 +5812,7 @@
 				"summary": "Sign out of every device, this one too",
 				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Sign-ins already given end within 15 minutes.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -6224,7 +6172,7 @@
 				"summary": "Send a password reset link by email",
 				"description": "Answers 202 at once, the same for every address. The link (valid 60 minutes) opens returnTo with #ss_accounts_reset=<token>, and goes only to an account with a password whose address was proven or is the one it was made with; a link Notifications cannot send now is sent again on later requests while it is valid. 422 validation_failed for email or returnTo; 429 rate_limited after 3 requests for the address in 15 minutes.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "email_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -6288,7 +6236,7 @@
 				"summary": "Send a password reset code by SMS or WhatsApp",
 				"description": "Answers 202 at once, the same for every number; a code goes only to an account with a password whose number was proven (a number only typed counts as unknown), on the phone channel (template accounts.phone_code), within the phone code limits (Settings → Phone numbers and codes; a cooldown or cap sends nothing). 403 self_reset_off while Forgot password is off; 422 validation_failed for phone.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "phone_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -6345,7 +6293,7 @@
 				"summary": "Choose a new password with a reset code",
 				"description": "Proves the phone number, ends the lock and signs every device out. 422 code_invalid (5 wrong codes use the code up), weak_password; 403 self_reset_off.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "phone_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -6411,7 +6359,7 @@
 				"summary": "Choose a new password with a reset link",
 				"description": "The new password follows Email + password’s rules (422 weak_password). Proves the email address, ends the lock and signs every device out. 422 code_invalid when the link is not valid, used or expired.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "email_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -7468,15 +7416,7 @@
 				"summary": "Renew the sign-in",
 				"description": "Answers a new sign-in and a new refresh token. The token renewed less than 30 seconds ago gets the same new pair (parallel renewals, a retry); presented later, it ends the session. With the role’s sessionRolling, the session’s end moves to its length from now. 401 signed_out when the session ended or the user is blocked or not active.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -7541,15 +7481,7 @@
 				"summary": "Sign out (end the session)",
 				"description": "Answers 204 whatever the token: an unknown or ended session changes nothing.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password",
-					"email_password",
-					"email_code",
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -7855,7 +7787,7 @@
 				"description": "The link’s code comes from POST /v1/users/:id/setup-link or a role-request invite (?ss_setup=<code>). Proves the user’s phone number, activates an invited user, completes their invited role request (and gives its role now when Role requests → giveRoleAt is completion) and signs their other devices out; the link’s lookup says used from then on. 422 code_invalid (not valid, used or expired), weak_password; 403 blocked. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": [
-					"staff_links",
+					"roles",
 					"role_requests"
 				],
 				"security": [
@@ -7947,7 +7879,7 @@
 				"description": "For your setup page (and the sign-in widget’s): whether the link works, and while it does, whom to greet. The link’s code goes in the body, never in an address, so its secret stays out of request logs. Answers valid with the person’s display name, the last 4 digits of their phone number (null without one; never the whole number or the email address) and when the link ends; else expired (past its end), used (the password was set with it), canceled (a newer link replaced it, or staff declined its request) or invalid. Only a code whose secret matches learns anything: an unknown or wrong code always answers invalid, so the lookup tells nothing about other links or people. A link is known 30 days past its end; later it is invalid. Rate-limited per visitor like the accept route.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": [
-					"staff_links",
+					"roles",
 					"role_requests"
 				],
 				"security": [
@@ -8048,7 +7980,7 @@
 				"summary": "Start an Apple sign-in",
 				"description": "Open url in the browser. Apple sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Apple keys are not connected; 422 validation_failed for returnTo or binding.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "apple",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8140,7 +8072,7 @@
 				"summary": "Sign in (or up) with the email code or the magic link",
 				"description": "Send { email, code } or { link }. Proves the address; opens only an account whose address was proven before (an address only typed on another account counts as unknown, and its sign-up answers 409 already_exists). A sign-in code your staff made opens its user but proves nothing. 422 code_invalid. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "email_code",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8241,7 +8173,7 @@
 				"summary": "Send a sign-in code (and magic link) by email",
 				"description": "Through Notifications (template accounts.email_code); with returnTo the message also holds a link to returnTo#ss_accounts_link=<link>. Within the code limits: 30 seconds between codes (429 code_cooldown with retryAt), 6 per address per hour and Email code’s websitePerHour for the website (429 code_limit); a code takes 5 wrong tries. 403 sign_in_paused or method_refused; 422 validation_failed; 503 notifications_not_connected; 502 not_sent.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "email_code",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8322,11 +8254,7 @@
 				"summary": "Exchange a Google, Apple or Facebook hand-over code for the sign-in",
 				"description": "The provider proved the address: a known provider account, or an account whose address was proven before, is opened; else an account is made. 422 code_invalid when the code is not valid, used or older than 5 minutes. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"google",
-					"apple",
-					"facebook"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8409,7 +8337,7 @@
 				"summary": "Start a Facebook sign-in",
 				"description": "Open url in the browser. Facebook sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Facebook keys are not connected; 422 validation_failed for returnTo or binding.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "facebook",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8501,7 +8429,7 @@
 				"summary": "Start a Google sign-in",
 				"description": "Open url in the browser. Google sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Google keys are not connected; 422 validation_failed for returnTo or binding.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "google",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8593,7 +8521,7 @@
 				"summary": "Sign in with an email address and a password",
 				"description": "401 sign_in_failed for a wrong address or password (the same answer for both); 423 locked (with lockedUntil) after too many wrong passwords; 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "email_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8682,7 +8610,7 @@
 				"summary": "Sign in (or up) with the phone code",
 				"description": "Proves the number. It opens only an account whose number was proven (an account that holds the number unproven loses it to this proof, and the sign-in goes on as for a number without an account; a sign-in code from staff still opens its own user). A number without an account signs up with the sign-up members (a new user without a name gets your newUserName). 422 code_invalid (5 wrong codes use the code up). The right code is used up once the sign-in passed, so a consent or profile step can be retried with it. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "phone_code",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8782,7 +8710,7 @@
 				"summary": "Sign in with a phone number and a password",
 				"description": "password also takes a sign-in code your staff made (Staff sign-in codes and setup links). 401 sign_in_failed for a wrong number or password; 423 locked (with lockedUntil). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "phone_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -8871,10 +8799,7 @@
 				"summary": "Send a sign-in code by SMS or WhatsApp",
 				"description": "Works while Phone code or Phone + password is on. The code (6 digits) lasts 10 minutes and goes through Notifications (template accounts.phone_code). 429 code_cooldown (with retryAt) or code_limit; 422 country_not_allowed or validation_failed; 403 sign_in_paused or method_refused (the number’s role); 503 notifications_not_connected; 502 not_sent.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"phone_code",
-					"phone_password"
-				],
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -9023,7 +8948,7 @@
 				"summary": "Sign up with an email address and a password",
 				"description": "Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "email_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -9125,7 +9050,7 @@
 				"summary": "Sign up with a phone number and a password",
 				"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). Proves the number first: ask the code with POST /v1/sign-in/phone/code { phone } (it works while only Phone + password is on), then send it as code; it is used up once the account is made, the account holds the number proven, and an account that held the number unproven loses it. 422 code_invalid for a missing, wrong or used code (a sign-in code from staff proves nothing here). Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": "phone_password",
+				"x-ss-feature": "sign_in",
 				"security": [
 					{
 						"browserToken": []
@@ -11167,7 +11092,7 @@
 				"summary": "A setup link for a user",
 				"description": "The user chooses a password with it (POST /v1/setup-links/accept), also without an email address; valid setupDays (default 7). The link is your setupPageUrl with {code} replaced, else that page (or your website’s home page) with ?ss_setup=<code>. A new one cancels the old. 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "staff_links",
+				"x-ss-feature": "roles",
 				"x-ss-permission": "users.manage",
 				"x-ss-access": "staff",
 				"security": [
@@ -11217,7 +11142,7 @@
 				"summary": "A one-time sign-in code for a user",
 				"description": "6 digits for your staff to give the user (never sent), valid 15 minutes, single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "staff_links",
+				"x-ss-feature": "roles",
 				"x-ss-permission": "users.manage",
 				"x-ss-access": "staff",
 				"security": [

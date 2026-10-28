@@ -91,6 +91,194 @@
 				"group": "Window",
 				"order": 15
 			}
+		},
+		"allowGuests": {
+			"type": "boolean",
+			"title": "Allow guests to chat",
+			"description": "Visitors can chat without signing in, up to the guest message limit, remembered on their device.",
+			"default": true,
+			"x-ui": {
+				"group": "Who can chat",
+				"order": 20
+			}
+		},
+		"messageLimit": {
+			"type": "integer",
+			"title": "Guest message limit per conversation",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 1000,
+			"description": "0 = no limit. Uploads count too.",
+			"x-ui": {
+				"group": "Who can chat",
+				"order": 21
+			}
+		},
+		"contactCapture": {
+			"type": "string",
+			"title": "Ask guests for contact details",
+			"default": "never",
+			"enum": ["never", "before_first", "on_handoff"],
+			"description": "Never: guests are not asked. Before first: before the first message. On handoff: when the chat is handed to a person.",
+			"x-ui": {
+				"group": "Who can chat",
+				"order": 22
+			}
+		},
+		"allowSignedIn": {
+			"type": "boolean",
+			"title": "Allow signed-in visitors to chat",
+			"description": "Visitors signed in with Accounts chat as themselves; a guest chat moves to the account on sign-in.",
+			"default": true,
+			"x-ui": {
+				"group": "Who can chat",
+				"order": 23
+			}
+		},
+		"claimByPhone": {
+			"type": "boolean",
+			"title": "Move guest chats by phone",
+			"default": false,
+			"description": "On sign-in, guest chats whose captured phone equals the verified phone move to the account too.",
+			"x-ui": {
+				"group": "Who can chat",
+				"order": 24
+			}
+		},
+		"showTyping": {
+			"type": "boolean",
+			"title": "Show typing while the AI prepares a reply",
+			"default": true,
+			"x-ui": {
+				"group": "Typing and receipts",
+				"order": 30
+			}
+		},
+		"showSeen": {
+			"type": "boolean",
+			"title": "Show Seen",
+			"default": true,
+			"x-ui": {
+				"group": "Typing and receipts",
+				"order": 31
+			}
+		},
+		"visitorUploads": {
+			"type": "string",
+			"title": "Visitors may attach",
+			"default": "off",
+			"enum": ["off", "signed_in", "everyone"],
+			"description": "Staff can always attach. Which file types visitors may send, and how large each may be, is your list of upload types.",
+			"x-ui": {
+				"group": "Attachments",
+				"order": 40
+			}
+		},
+		"ratingsEnabled": {
+			"type": "boolean",
+			"title": "Ask for conversation ratings",
+			"default": false,
+			"x-ui": {
+				"group": "Ratings",
+				"order": 50
+			}
+		},
+		"ratingKind": {
+			"type": "string",
+			"title": "Rating kind",
+			"default": "csat",
+			"enum": ["csat", "nps"],
+			"description": "csat: the visitor picks one of your labels (satisfaction). nps: How likely are you to recommend us, from 0 to 10.",
+			"x-ui": {
+				"group": "Ratings",
+				"order": 51
+			}
+		},
+		"ratingLabels": {
+			"type": "array",
+			"title": "Labels, lowest first",
+			"default": ["1", "2", "3", "4", "5"],
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			},
+			"description": "For csat: one label per point, from the lowest to the highest, 2 to 10 of them.",
+			"x-ui": {
+				"group": "Ratings",
+				"order": 52
+			}
+		},
+		"ratingAskWhen": {
+			"type": "string",
+			"title": "Ask for a rating",
+			"default": "on_resolve",
+			"enum": ["on_resolve", "after_staff", "manual"],
+			"description": "On resolve: when the chat is resolved. After staff: only when a person took part. Manual: only when staff ask.",
+			"x-ui": {
+				"group": "Ratings",
+				"order": 53
+			}
+		},
+		"ratingAskComment": {
+			"type": "boolean",
+			"title": "Ask for a comment",
+			"default": true,
+			"x-ui": {
+				"group": "Ratings",
+				"order": 54
+			}
+		},
+		"emailTranscripts": {
+			"type": "boolean",
+			"title": "Allow email transcripts",
+			"default": true,
+			"description": "Visitors and staff can email a copy of the chat transcript.",
+			"x-ui": {
+				"group": "Transcripts",
+				"order": 60
+			}
+		},
+		"proactiveIdleMinutes": {
+			"type": "integer",
+			"title": "Idle minutes before the nudge",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 120,
+			"description": "0 = no idle nudge. Idle minutes before showing a nudge to visitors.",
+			"x-ui": {
+				"group": "Proactive nudges",
+				"order": 70
+			}
+		},
+		"proactiveOncePer": {
+			"type": "string",
+			"title": "Show the nudge once per",
+			"default": "session",
+			"enum": ["session", "product"],
+			"description": "Session: once per visit. Product: once for each product the visitor looks at.",
+			"x-ui": {
+				"group": "Proactive nudges",
+				"order": 71
+			}
+		},
+		"proactiveHideOnMobile": {
+			"type": "boolean",
+			"title": "No nudge on phones",
+			"default": false,
+			"x-ui": {
+				"group": "Proactive nudges",
+				"order": 72
+			}
+		},
+		"proactiveExit": {
+			"type": "boolean",
+			"title": "Exit intent nudge on desktop",
+			"default": false,
+			"description": "Nudges visitors when their cursor leaves the window at the top.",
+			"x-ui": {
+				"group": "Proactive nudges",
+				"order": 73
+			}
 		}
 	}
 }

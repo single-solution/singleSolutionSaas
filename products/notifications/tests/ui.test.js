@@ -23,7 +23,9 @@ const configOf = (features, pushPublicKey = KEY) => ({
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
 	features,
-	widgets: manifest.widgets.filter((widget) => features.includes(widget.feature)).map((widget) => widget.key),
+	widgets: manifest.widgets
+		.filter((widget) => [widget.feature].flat().some((f) => features.includes(f)))
+		.map((widget) => widget.key),
 	settings: { pushPublicKey },
 });
 
@@ -712,12 +714,22 @@ describe('admin widgets', () => {
 		expect(window.localStorage.getItem(SUBSCRIBER_STORAGE_KEY)).toBeNull();
 	});
 
-	it('widgets of switched-off features stay empty', async () => {
-		const host = place('delivery_log');
+	it('widgets of switched-off features stay empty, while un-gated delivery log and template editor mount with email only', async () => {
+		const host = place('send_message');
 		const staff = place('staff_push_permission');
-		await startAdmin({}, ['email']);
+		const log = place('delivery_log');
+		const editor = place('template_editor');
+		await startAdmin(
+			{
+				'GET /v1/admin/messages': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
+				'GET /v1/admin/templates': () => answer(200, { items: [] }),
+			},
+			['email'],
+		);
 		expect(host.shadowRoot).toBeNull();
 		expect(staff.shadowRoot).toBeNull();
+		expect(log.shadowRoot).not.toBeNull();
+		expect(editor.shadowRoot).not.toBeNull();
 	});
 });
 

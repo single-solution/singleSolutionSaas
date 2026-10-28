@@ -37,7 +37,7 @@ import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { creditDayBars, formatChartCredits, productPill } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
-import { ConfirmChange } from '../../views/confirm-change.js';
+import { ConfirmOtp } from '../../views/confirm-change.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -421,7 +421,7 @@ function ProductPageView({ detail, owner, list, admin = null, onAdd = null }) {
 				}
 				sections={sections}
 			/>
-			<ConfirmChange
+			<ConfirmOtp
 				open={askOpen}
 				title={WEBSITE.openConfirmTitle(product.name)}
 				help={WEBSITE.openConfirmHelp}

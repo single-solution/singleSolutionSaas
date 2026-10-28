@@ -198,7 +198,7 @@ export const DEFAULT_ACTIONS = Object.freeze([
 /** Every list Growth keeps. */
 const SPECS = /** @satisfies {Record<string, ListSpec>} */ ({
 	goals: {
-		feature: 'conversion_funnel',
+		feature: ['visitor_analytics', 'conversion_funnel'],
 		title: 'Goals',
 		max: 30,
 		unique: 'key',
@@ -215,7 +215,7 @@ const SPECS = /** @satisfies {Record<string, ListSpec>} */ ({
 		defaults: () => DEFAULT_GOALS.map((goal) => ({ ...goal })),
 	},
 	funnels: {
-		feature: 'conversion_funnel',
+		feature: ['visitor_analytics', 'conversion_funnel'],
 		title: 'Funnels',
 		max: 10,
 		unique: 'key',

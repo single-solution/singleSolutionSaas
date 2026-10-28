@@ -43,6 +43,7 @@ const ERROR_PARAM = LINK_PARAMS.error;
 
 /**
  * @typedef {object} WidgetSettings
+ * @property {string[]} [methods]
  * @property {{ mode: 'open' | 'invite' | 'approval', requiredFields: Array<'name' | 'email' | 'phone'> }} signUp
  * @property {import('./common.js').CustomField[]} customFields
  * @property {number | null} passwordMinLength Email + password's minimum length; null while it is off

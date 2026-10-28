@@ -52,7 +52,7 @@ const clearFiller = async () =>
 
 beforeAll(async () => {
 	env = await setup();
-	await env.switchOn(['browser_push', 'staff_push', 'send_api']);
+	await env.switchOn(['push', 'browser_push', 'staff_push', 'send_api']);
 	await env.connectDatabase();
 	await env.connect('push_keys', pushKeys());
 	await env.template({ key: 'alert', channel: 'push', subject: 'Back in stock', text: '{item} is back' });
@@ -135,5 +135,50 @@ describe('visitor push subscriptions (SR-7-1)', () => {
 		expect((await subscribeStaff(visitor)).status).toBe(201);
 		expect(await stored(visitor.subscription.endpoint)).toMatchObject({ kind: 'staff' });
 		expect(await stored(visitor.subscription.endpoint)).not.toHaveProperty('seenAt');
+	});
+
+	it('allows both visitor and staff push when only push is on, and honors audience toggles', async () => {
+		await env.switchOn(['push', 'send_api']);
+		const visitor = browserSubscription(`${PUSH_ORIGIN}/push/unified-visitor`);
+		const subRes = await subscribe(visitor);
+		expect(subRes.status).toBe(201);
+		const { subscriberId } = await subRes.json();
+
+		const staff = browserSubscription(`${PUSH_ORIGIN}/push/unified-staff`);
+		const staffSubRes = await subscribeStaff(staff);
+		expect(staffSubRes.status).toBe(201);
+
+		// Default: visitors and staff audience both allowed
+		const sentVisitor = await env.send('push', {
+			template: 'alert',
+			to: { subscriberId },
+			values: { item: 'Tablet' },
+		});
+		expect(sentVisitor.json.status).toBe('sent');
+
+		// Audience toggle: visitors: false refuses visitor push
+		await env.setting('push', 'visitors', false);
+		const sentVisitorRefused = await env.send('push', {
+			template: 'alert',
+			to: { subscriberId },
+			values: { item: 'Tablet' },
+		});
+		expect(sentVisitorRefused.json.status).toBe('failed');
+		expect(sentVisitorRefused.json.reason).toBe('feature_off');
+
+		// Audience toggle: staff: false refuses staff push
+		await env.template({ key: 'staff_alert', channel: 'staff_push', subject: 'Staff Alert', text: 'Note' });
+		await env.setting('push', 'staff', false);
+		const sentStaffRefused = await env.send('staff-push', {
+			template: 'staff_alert',
+			to: { staffId: 'usr_test_staff' },
+		});
+		expect(sentStaffRefused.json.status).toBe('failed');
+		expect(sentStaffRefused.json.reason).toBe('feature_off');
+
+		// Restore settings and switches
+		await env.setting('push', 'visitors', true);
+		await env.setting('push', 'staff', true);
+		await env.switchOn(['push', 'browser_push', 'staff_push', 'send_api']);
 	});
 });

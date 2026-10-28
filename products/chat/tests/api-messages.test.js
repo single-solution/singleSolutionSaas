@@ -55,7 +55,7 @@ describe('Chat’s messages and their defaults (parity P1)', () => {
 	});
 
 	it('all_staff alerts every unblocked Accounts user who may see the inbox, and every alert carries its defaults', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'staff_alerts', 'transcripts']);
+		const sys = await start(['visitor_chat', 'inbox']);
 		await sys.paste('notifications');
 		await sys.paste('accounts');
 		sys.accounts.setUsers([
@@ -65,7 +65,7 @@ describe('Chat’s messages and their defaults (parity P1)', () => {
 			{ id: 'usr_d', email: 'blocked@shop.example.com', blocked: true, permissions: ['chat:inbox.read'] },
 			{ id: 'usr_e', email: 'shop@shop.example.com', permissions: ['ecommerce:orders.read'] },
 		]);
-		await sys.setting('staff_alerts', 'staffPermission', 'all_staff');
+		await sys.setting('inbox', 'staffPermission', 'all_staff');
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'Is the blue lamp in stock?' });
 		const sent = sys.messages();
@@ -95,7 +95,7 @@ describe('Chat’s messages and their defaults (parity P1)', () => {
 
 describe('transcripts as one long value', () => {
 	it('send the whole chat within Notifications’ long value limit; a longer chat sends its latest messages and says so', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'transcripts']);
+		const sys = await start(['visitor_chat']);
 		await sys.paste('notifications');
 		const v = await verifiedVisitor(sys, { email: 'me@example.com' });
 		const texts = Array.from({ length: 13 }, (_, i) => `${String.fromCharCode(65 + i)}${'x'.repeat(3999)}`);

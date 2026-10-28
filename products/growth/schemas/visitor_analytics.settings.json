@@ -35,6 +35,17 @@
 				"order": 2
 			}
 		},
+		"searchParams": {
+			"type": "string",
+			"title": "Search query parameters",
+			"description": "Query parameters of your search results page, comma-separated (for example q, s). Empty: none.",
+			"default": "",
+			"maxLength": 200,
+			"x-ui": {
+				"group": "Counting",
+				"order": 3
+			}
+		},
 		"recordCountry": {
 			"type": "boolean",
 			"title": "Record the visitor's country (and city)",
@@ -43,6 +54,15 @@
 			"x-ui": {
 				"group": "Data kept",
 				"order": 11
+			}
+		},
+		"toGa4": {
+			"type": "boolean",
+			"title": "Also send Web Vitals to Google Analytics 4",
+			"description": "Each Web Vital also goes to Google Analytics 4 as an event, while Google Analytics is loaded.",
+			"default": false,
+			"x-ui": {
+				"advanced": true
 			}
 		}
 	}

@@ -25,12 +25,7 @@ const rowClass = (rail) =>
 export function FrameFooter({ rail, balance = null, help = null }) {
 	return (
 		<div className="space-y-0.5">
-			<a
-				href={routes.docs()}
-				title={WEBSITE.docs}
-				target="_blank"
-				rel="noopener noreferrer"
-				className={rowClass(rail)}>
+			<a href={routes.docs()} title={WEBSITE.docs} target="_blank" rel="noopener noreferrer" className={rowClass(rail)}>
 				<span aria-hidden="true" className="text-muted">
 					<Icon name="code" size={17} />
 				</span>

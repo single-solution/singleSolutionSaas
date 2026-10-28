@@ -203,7 +203,7 @@ describe('Settings → Role pricing', () => {
 		const props = {
 			websiteId: WEBSITE,
 			domain: 'shop.example.com',
-			who: /** @type {const} */ ({ kind: 'admin', id: 'a_1', name: 'Admin', role: 'owner' }),
+			who: /** @type {const} */ ({ kind: 'admin', id: 'a_1', name: 'Admin', role: 'portal_owner' }),
 			support: { channels: [] },
 			portal: 'https://portal.example.com',
 			open: () => undefined,

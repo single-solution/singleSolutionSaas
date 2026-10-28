@@ -1134,7 +1134,7 @@
 				"summary": "Refund a payment, all or part (Payments admin widget)",
 				"description": "Only a paid payment (409 not_refundable). Stripe, PayPal, PayFast (South Africa) and the generic adapter with a refund address refund at the gateway (502 gateway_failed when it refuses); the others are recorded (manual) and you return the money yourself. Send an Idempotency-Key.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "refunds",
+				"x-ss-feature": "payment_api",
 				"x-ss-permission": "payments.refund",
 				"security": [
 					{
@@ -3683,7 +3683,7 @@
 				"summary": "Refund a payment, all or part",
 				"description": "Only a paid payment (409 not_refundable). Stripe, PayPal, PayFast (South Africa) and the generic adapter with a refund address refund at the gateway (502 gateway_failed when it refuses); the others are recorded (manual) and you return the money yourself. Send an Idempotency-Key.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "refunds",
+				"x-ss-feature": "payment_api",
 				"x-ss-permission": "payments.refund",
 				"x-ss-access": "staff",
 				"security": [

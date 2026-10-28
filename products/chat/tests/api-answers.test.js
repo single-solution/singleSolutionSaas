@@ -92,7 +92,7 @@ const ORDER = {
 
 describe('instructions, never disclose and rich answers (C1, C2)', () => {
 	it('takes 32,000 characters of instructions; never says it is a bot; hides the label', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'ai_instructions']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.setting('ai_instructions', 'instructions', 'x'.repeat(30_000));
 		await sys.setting('ai_replies', 'neverDisclose', true);
 		sys.ai({ text: 'As an AI language model I cannot say.' }, { text: 'We ship in two days.' });
@@ -119,10 +119,10 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 	});
 
 	it('never says it is a bot in any language: the built-in phrases of many languages and the merchant’s own wording', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.setting('ai_replies', 'neverDisclose', true);
 		await sys.setting('ai_replies', 'extraBotPhrases', ['Lumi, your automated helper']);
-		await sys.setting('guest_chat', 'messageLimit', 0);
+		await sys.setting('visitor_chat', 'messageLimit', 0);
 		const v = sys.visitor();
 		/** @param {string} confession @param {string} answer */
 		const asked = async (confession, answer) => {
@@ -145,7 +145,7 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 	});
 
 	it('answers in markdown, split into bubbles, with links only on the website or as moderation allows', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'moderation']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'moderation']);
 		await sys.setting('ai_replies', 'bubbles', 2);
 		await sys.setting('moderation', 'linkPolicy', 'allow_list');
 		await sys.setting('moderation', 'allowedLinkHosts', ['docs.example.org']);
@@ -168,7 +168,7 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 	});
 
 	it('without moderation only website links stay links; a staff reply is markdown too', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'inbox']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox']);
 		sys.ai({ text: '[a](https://other.example.com) and [b](https://www.shop.example.com/b)' });
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'links?' });
@@ -186,20 +186,11 @@ describe('fallback answers (C3)', () => {
 	it('answers from the merchant’s list, filled from the shop, when the AI fails; else the on-failure message', async () => {
 		const sys = await start([
 			'visitor_chat',
-			'guest_chat',
-			'signed_in_chat',
-			'ai_replies',
-			'fallback_answers',
-			'shop_search',
-			'shop_deals',
-			'shop_top',
-			'shop_my_orders',
-			'language_lock',
-		]);
+			'ai_replies']);
 		await sys.paste('ecommerce');
 		await sys.paste('accounts');
 		await sys.setting('language_lock', 'allowedLanguages', ['en', 'ar']);
-		await sys.setting('guest_chat', 'messageLimit', 0);
+		await sys.setting('visitor_chat', 'messageLimit', 0);
 		// the words of the deals table and of the "was" price are the merchant's widget texts
 		for (const [key, value] of Object.entries({
 			'chat.dealName': 'Offer',
@@ -288,14 +279,8 @@ describe('fallback answers (C3)', () => {
 		await v('POST', '/v1/chat/messages', { text: 'how are you' });
 		await sys.switchOn([
 			'visitor_chat',
-			'guest_chat',
-			'signed_in_chat',
-			'ai_replies',
-			'fallback_answers',
-			'shop_top',
-			'ai_caps',
-		]);
-		await sys.setting('ai_caps', 'dailyTokens', 1);
+			'ai_replies']);
+		await sys.setting('ai_replies', 'dailyTokens', 1);
 		const calls = sys.aiCalls().length;
 		const best = await v('POST', '/v1/chat/messages', { text: 'what are your best lamps' });
 		expect(best.status, best.text).toBe(201);
@@ -306,9 +291,9 @@ describe('fallback answers (C3)', () => {
 
 describe('the comparison answer (C18)', () => {
 	it('puts the two products a message names side by side when the AI fails', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'fallback_answers', 'shop_search']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.paste('ecommerce');
-		await sys.setting('guest_chat', 'messageLimit', 0);
+		await sys.setting('visitor_chat', 'messageLimit', 0);
 		// {comparison} needs the words between the two products
 		const refused = await sys.dashboard(
 			await sys.adminSession(),
@@ -401,7 +386,7 @@ describe('the comparison answer (C18)', () => {
 
 describe('the AI reply in the same request (C10)', () => {
 	it('waits for the reply with ?wait=1 and answers it with the visitor’s message', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'typing_receipts']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		sys.ai({ text: 'One\n---\nTwo' });
 		await sys.setting('ai_replies', 'bubbles', 3);
 		const v = sys.visitor();
@@ -417,7 +402,7 @@ describe('the AI reply in the same request (C10)', () => {
 
 describe('fuller shop tools and the store context (C13, C1)', () => {
 	it('passes filters, the search size and quote options; answers grades, variants, stock, warranty and payment methods', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'shop_search', 'shop_deals']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.paste('ecommerce');
 		/** A variant as Ecommerce answers it (ChatVariant). */
 		const variant = {
@@ -617,7 +602,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 	});
 
 	it('adds the store context for the viewed product, cached 60 s per website and sign-in', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'shop_context']);
+		const sys = await start(['visitor_chat', 'ai_replies']);
 		await sys.paste('ecommerce');
 		sys.responders.set(`${ECOMMERCE}/v1/chat/context`, () => ({
 			status: 200,
@@ -666,7 +651,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 
 describe('the language check, the current page and the website’s own contact (C14, C15)', () => {
 	it('the language check follows the visitor’s marker words; later messages update the page', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'moderation']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'moderation']);
 		await sys.setting('language_lock', 'markerWords', ['es: hola sí tienen está esta hay precio gracias disponible']);
 		// an answer is checked as a whole, not by its share of marker words: this one is accepted at once
 		sys.ai({ text: 'Yes, it is available.' });

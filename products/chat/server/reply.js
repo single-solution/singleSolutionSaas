@@ -194,7 +194,9 @@ export const createReply = (product, service) => {
 	 * @param {string | null} signIn
 	 */
 	const storeContext = async (s, c, signIn) => {
-		if (!s.on.includes('shop_context')) return null;
+		const shopContextOn =
+			s.on.includes('shop_context') || (s.on.includes('ai_replies') && Boolean((await s.values('ai_replies')).shopContext));
+		if (!shopContextOn) return null;
 		const path = contextPath((c.currentPage ?? c.page)?.productId);
 		const who = signIn ? (c.visitor.kind === 'user' ? c.visitor.id : '') : '';
 		const key = `${s.websiteId}|${who}|${path}`;
@@ -249,7 +251,8 @@ export const createReply = (product, service) => {
 			current = (await service.botMessage(s, current, String(texts['chat.contactAsk']))).conversation;
 		current = await service.route(s, current, await conversationLanguage(s, current));
 		await service.staffAlert(s, current, 'needs_you');
-		if (s.on.includes('ai_summary')) s.ctx.after(() => summarize(s, current.id).catch(() => null));
+		if (s.on.includes('ai_summary') || s.on.includes('inbox'))
+			s.ctx.after(() => summarize(s, current.id).catch(() => null));
 		s.ctx.after(() => tagWithAi(s, current.id).catch(() => null));
 		return current;
 	};
@@ -370,14 +373,17 @@ export const createReply = (product, service) => {
 	 * @returns {Promise<string | null>}
 	 */
 	const languageOf = async (s, text) => {
-		if (!s.on.includes('language_lock') || !text) return null;
-		const lock = await s.values('language_lock');
+		const hasLegacyLock = s.on.includes('language_lock');
+		const ai = s.on.includes('ai_replies') ? await s.values('ai_replies') : {};
+		const lock = hasLegacyLock ? await s.values('language_lock') : ai;
+		const allowedLanguages = lock.allowedLanguages ?? [];
+		if ((!hasLegacyLock && allowedLanguages.length === 0) || !text) return null;
 		// the answer's language when a message shows none: the website's (set once in the Portal), else the first allowed
 		const { region } = await s.ctx.website();
 		return detectLanguage(text, {
-			fallback: String(region.language || lock.allowedLanguages[0] || 'en'),
-			allowed: lock.allowedLanguages,
-			markers: markerSetsOf(lock.markerWords),
+			fallback: String(region.language || allowedLanguages[0] || 'en'),
+			allowed: allowedLanguages,
+			markers: markerSetsOf(lock.markerWords ?? []),
 		}).language;
 	};
 
@@ -387,7 +393,10 @@ export const createReply = (product, service) => {
 	 * @param {ConversationRecord} c
 	 */
 	const conversationLanguage = async (s, c) => {
-		if (!s.on.includes('language_lock')) return null;
+		const hasLegacyLock = s.on.includes('language_lock');
+		const ai = s.on.includes('ai_replies') ? await s.values('ai_replies') : {};
+		const allowedLanguages = (hasLegacyLock ? await s.values('language_lock') : ai).allowedLanguages ?? [];
+		if (!hasLegacyLock && allowedLanguages.length === 0) return null;
 		const recent = await s.store.messages.list(c.id, { limit: 20, internal: false });
 		const last = [...recent].reverse().find((m) => m.author === 'visitor' && m.text);
 		return last ? languageOf(s, last.text) : null;
@@ -439,7 +448,7 @@ export const createReply = (product, service) => {
 	 * @param {{ backup: boolean }} options
 	 */
 	const connectionsOf = async (s, { backup }) => {
-		const names = backup && s.on.includes('ai_backup') ? ['ai', 'ai_backup'] : ['ai'];
+		const names = backup && (s.on.includes('ai_backup') || s.on.includes('ai_replies')) ? ['ai', 'ai_backup'] : ['ai'];
 		const out = [];
 		for (const name of names) {
 			const checked = checkAiConnection(await product.connections.value(s.websiteId, name));
@@ -477,7 +486,7 @@ export const createReply = (product, service) => {
 	 */
 	const knowledge = async (s, question, language = null) => {
 		const entries = s.on.includes('knowledge_base');
-		const pages = s.on.includes('knowledge_pages');
+		const pages = s.on.includes('knowledge_pages') || s.on.includes('knowledge_base');
 		if (!entries && !pages) return [];
 		const terms = queryTerms(question);
 		if (terms.length === 0) return [];
@@ -558,7 +567,7 @@ export const createReply = (product, service) => {
 			...shop,
 			...webhooks.map(webhookSchema),
 		];
-		const withCards = s.on.includes('product_cards');
+		const withCards = s.on.includes('product_cards') || s.on.includes('shop_assistant');
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		const cards = [];
 		/**
@@ -779,7 +788,10 @@ export const createReply = (product, service) => {
 		}
 		if (name === 'top_products') return products(await shopRead(s, 'get_top_products', { kind: 'top' }, null));
 		if (name === 'products_under') {
-			const budget = budgetOf(message, { keywords, words: (await s.values('fallback_answers')).budgetWords });
+			const budgetWords = s.on.includes('fallback_answers')
+				? (await s.values('fallback_answers')).budgetWords
+				: (await s.values('ai_replies')).budgetWords;
+			const budget = budgetOf(message, { keywords, words: budgetWords });
 			if (budget === null) return null;
 			return products(await shopRead(s, 'search_catalog', { query: '', maxPrice: budget, inStock: true }, null));
 		}
@@ -797,8 +809,10 @@ export const createReply = (product, service) => {
 	 * @returns {Promise<string | null>}
 	 */
 	const fallbackAnswer = async (s, { message, language, signIn }) => {
-		if (!s.on.includes('fallback_answers') || !message) return null;
+		const hasFallback = s.on.includes('fallback_answers') || s.on.includes('ai_replies');
+		if (!hasFallback || !message) return null;
 		const items = /** @type {import('../core/fallback.js').FallbackAnswer[]} */ (await s.list('fallback_answers'));
+		if (!s.on.includes('fallback_answers') && (!items || items.length === 0)) return null;
 		/** @type {Map<string, string | null>} */
 		const filled = new Map();
 		for (const item of matchingFallbacks(items, { message, language })) {
@@ -807,7 +821,8 @@ export const createReply = (product, service) => {
 			for (const name of placeholdersOf(item.text)) {
 				// a comparison depends on the answer's keywords (the words between the two products)
 				const key = name === 'comparison' ? `${name}\n${item.keywords.join('\n')}` : name;
-				if (!s.on.includes(PLACEHOLDER_FEATURES[name])) values[name] = null;
+				const needed = PLACEHOLDER_FEATURES[name];
+				if (!s.on.includes(needed) && !s.on.includes('shop_assistant')) values[name] = null;
 				else {
 					if (!filled.has(key))
 						filled.set(key, await placeholderText(s, name, { message, signIn, keywords: item.keywords }));
@@ -874,8 +889,10 @@ export const createReply = (product, service) => {
 		const last = [...history].reverse().find((m) => m.author === 'visitor');
 		const connections = giveUp ? [] : await connectionsOf(s, { backup: true });
 		const allowed = connections.length > 0 && (await withinReplyLimits(s, c)) && !(await service.capped(s));
-		const lock = s.on.includes('language_lock') ? await s.values('language_lock') : null;
-		const markers = lock ? markerSetsOf(lock.markerWords) : [];
+		const settings = await s.values('ai_replies');
+		const hasLegacyLock = s.on.includes('language_lock');
+		const lock = hasLegacyLock ? await s.values('language_lock') : settings.allowedLanguages?.length > 0 ? settings : null;
+		const markers = lock ? markerSetsOf(lock.markerWords ?? []) : [];
 		const language = last ? await languageOf(s, last.text) : null;
 		/** @type {import('../core/language.js').CheckOptions} */
 		const check = {
@@ -887,7 +904,6 @@ export const createReply = (product, service) => {
 		const signIn = await s.signIn();
 		const ownSignIn = signIn && visitor && signIn.user.id === visitor.id ? signIn : null;
 		const verified = ownSignIn ? ownSignIn.token : null;
-		const settings = await s.values('ai_replies');
 		/** @type {{ text: string, failure: string | null, escalation: { reason: string } | null }} */
 		let result = { text: '', failure: 'unavailable', escalation: null };
 		/** @type {import('../core/shop.js').ProductCard[]} */
@@ -900,7 +916,7 @@ export const createReply = (product, service) => {
 				business: await s.business(),
 				instructions: s.on.includes('ai_instructions')
 					? String((await s.values('ai_instructions')).instructions) || null
-					: null,
+					: String(settings.instructions || '') || null,
 				style: String(settings.style),
 				dontKnow: String(settings.dontKnow),
 				language,
@@ -909,7 +925,10 @@ export const createReply = (product, service) => {
 				visitor: { signedIn: visitor !== null, name: c.name },
 				page: await namedPage(s, c.currentPage ?? c.page),
 				handoff: !reassure && s.on.includes('handoff'),
-				shop: { tools: tools?.shop ?? false, cards: (tools?.shop ?? false) && s.on.includes('product_cards') },
+				shop: {
+					tools: tools?.shop ?? false,
+					cards: (tools?.shop ?? false) && (s.on.includes('product_cards') || s.on.includes('shop_assistant')),
+				},
 				neverDisclose: settings.neverDisclose === true,
 				bubbles: reassure ? 1 : Number(settings.bubbles),
 				context: reassure ? null : await storeContext(s, c, verified),
@@ -1042,7 +1061,16 @@ export const createReply = (product, service) => {
 		const transcript = messages.map((m) => `${m.author}: ${m.text}`).join('\n');
 		const result = await complete(s, connections, {
 			messages: [
-				{ role: 'system', content: summaryPrompt(String((await s.values('ai_summary')).instructions)) },
+				{
+					role: 'system',
+					content: summaryPrompt(
+						String(
+							s.on.includes('ai_summary')
+								? (await s.values('ai_summary')).instructions
+								: (await s.values('inbox')).summaryInstructions ?? '',
+						),
+					),
+				},
 				{ role: 'user', content: transcript.slice(-24_000) },
 			],
 			tools: [],

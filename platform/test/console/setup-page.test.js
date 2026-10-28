@@ -187,7 +187,11 @@ describe('Setup page (jsdom)', () => {
 			await until(() => shows('The JSON is in your clipboard.'));
 			expect(JSON.parse(String(/** @type {any} */ (writeText.mock.calls[0])?.[0])).schema).toBe('ss.blueprint/1');
 			await press('Refresh');
-			await b.waitCall('GET', `/v1/merchants/${merchantId}/websites/${websiteId}/setup?fresh=1`, (/** @type {any} */ s) => s === 200);
+			await b.waitCall(
+				'GET',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/setup?fresh=1`,
+				(/** @type {any} */ s) => s === 200,
+			);
 			await until(() => shows('Setup gathered again.'));
 
 			// share links: refused days, then a link without values, shown once and listed
@@ -202,7 +206,11 @@ describe('Setup page (jsdom)', () => {
 				/** @type {HTMLElement} */ (dialog().querySelector('[role="switch"]')).click();
 			});
 			await pressDialog('Create link');
-			const made = await b.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (/** @type {any} */ s) => s === 201);
+			const made = await b.waitCall(
+				'POST',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`,
+				(/** @type {any} */ s) => s === 201,
+			);
 			expect(made.body.link).toMatchObject({ values: false, install: true });
 			await until(() => dialog().textContent?.includes('Share link created'));
 			expect(dialog().textContent).toContain(made.body.url);
@@ -245,7 +253,11 @@ describe('Setup page (jsdom)', () => {
 			);
 			await press('Create share link');
 			await pressDialog('Create link');
-			await ownerBrowser.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (/** @type {any} */ s) => s === 201);
+			await ownerBrowser.waitCall(
+				'POST',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`,
+				(/** @type {any} */ s) => s === 201,
+			);
 			await until(() => dialog().textContent?.includes('Share link created'));
 			await closeDialog();
 			await until(() => shows('Made by an admin · Shows everything'));

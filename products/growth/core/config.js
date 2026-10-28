@@ -246,10 +246,14 @@ export const widgetSettings = ({ on, values, now, admin = null, lists = {}, time
 			searches: on.includes('searches_404s'),
 			// kept in the merchant's analytics only with Visitor analytics; to Google Analytics also without it (SG-27)
 			vitals: on.includes('web_vitals') && on.includes('visitor_analytics'),
-			vitalsToGa4: on.includes('web_vitals') && values.web_vitals?.toGa4 === true,
+			vitalsToGa4:
+				(on.includes('web_vitals') && values.web_vitals?.toGa4 === true) ||
+				(on.includes('google_tags') && (values.web_vitals?.toGa4 === true || analytics.toGa4 === true)),
 			requireConsent: analytics.requireConsent !== false,
 			sessions: on.includes('visitor_analytics') && analytics.detail === 'sessions',
-			searchParams: searchParamsOf(text(values, 'searches_404s', 'searchParams')),
+			searchParams: searchParamsOf(
+				text(values, 'visitor_analytics', 'searchParams') || text(values, 'searches_404s', 'searchParams'),
+			),
 		},
 		tags: tagsOf(on, values, categories, lists.conversion_actions ?? readList('conversion_actions', undefined)),
 		// G4: the announcements showing now, in the merchant's order (the page script picks the page's)

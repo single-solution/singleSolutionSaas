@@ -21,6 +21,135 @@
 			"title": "The AI tags conversations",
 			"default": false,
 			"description": "When a chat is handed to a person, and when it is resolved, the AI picks its topic, tags and priority from your lists (Settings → Inbox), never others, and leaves what your staff already set. Needs AI replies."
+		},
+		"autoAssign": {
+			"type": "string",
+			"title": "Assign automatically",
+			"default": "off",
+			"enum": ["off", "first_replier", "round_robin", "least_busy"],
+			"description": "First replier: an unassigned chat goes to the first member of staff who replies. Round robin: to online member who got one longest ago. Least busy: to member with fewest open chats.",
+			"x-ui": {
+				"group": "Assignment",
+				"order": 10
+			}
+		},
+		"maxChats": {
+			"type": "integer",
+			"title": "Default max concurrent chats per person",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 200,
+			"description": "0 = no limit.",
+			"x-ui": {
+				"group": "Queue and capacity",
+				"order": 20
+			}
+		},
+		"queuePosition": {
+			"type": "boolean",
+			"title": "Show visitors their place in line",
+			"default": true,
+			"x-ui": {
+				"group": "Queue and capacity",
+				"order": 21
+			}
+		},
+		"notesMode": {
+			"type": "string",
+			"title": "Internal notes",
+			"default": "timeline",
+			"enum": ["timeline", "single"],
+			"description": "Timeline: notes between messages. Single: one editable note per chat.",
+			"x-ui": {
+				"group": "Internal notes",
+				"order": 30
+			}
+		},
+		"summaryInstructions": {
+			"type": "string",
+			"title": "Summary instructions",
+			"default": "Summarize this support chat for a member of the team in at most five short lines: what the visitor wants, what was answered, and what is still open.",
+			"maxLength": 1000,
+			"description": "What the summary says, how long it is and its language, in your words.",
+			"x-ui": {
+				"widget": "textarea",
+				"group": "AI summary",
+				"order": 40
+			}
+		},
+		"adminUrl": {
+			"type": "string",
+			"title": "Conversation page address in your admin",
+			"default": "",
+			"maxLength": 500,
+			"description": "The page of your admin where staff open a conversation (e.g. https://admin.example.com/inbox?conversation={conversationId}).",
+			"x-ui": {
+				"group": "Staff alerts",
+				"order": 50
+			}
+		},
+		"frequency": {
+			"type": "string",
+			"title": "New message alerts",
+			"default": "first_unanswered",
+			"enum": ["first_unanswered", "every_message"],
+			"description": "First unanswered: once until staff reply or open the chat. Every message: on every visitor message.",
+			"x-ui": {
+				"group": "Staff alerts",
+				"order": 51
+			}
+		},
+		"staffPermission": {
+			"type": "string",
+			"title": "Also alert Accounts staff who can",
+			"default": "",
+			"enum": ["", "inbox.reply", "all_staff"],
+			"x-ui": {
+				"group": "Staff alerts",
+				"order": 52
+			}
+		},
+		"includePhone": {
+			"type": "boolean",
+			"title": "Alerts carry the visitor's phone",
+			"default": false,
+			"x-ui": {
+				"group": "Staff alerts",
+				"order": 53
+			}
+		},
+		"visitorAlertsFrequency": {
+			"type": "string",
+			"title": "How often to alert visitors",
+			"default": "once",
+			"enum": ["once", "every_reply"],
+			"x-ui": {
+				"group": "Visitor alerts",
+				"order": 60
+			}
+		},
+		"visitorAlertsChannels": {
+			"type": "array",
+			"title": "Visitor alert channels, in order",
+			"default": [],
+			"items": {
+				"type": "string",
+				"enum": ["email", "sms", "whatsapp"]
+			},
+			"x-ui": {
+				"group": "Visitor alerts",
+				"order": 61
+			}
+		},
+		"contextPanel": {
+			"type": "boolean",
+			"title": "Show visitor context panel",
+			"default": true,
+			"description": "Shows visitor details, past conversations and store history beside the chat.",
+			"x-ui": {
+				"group": "Context panel",
+				"order": 70
+			}
 		}
 	}
 }

@@ -43,7 +43,9 @@
 		"needs": [
 			{
 				"product": "accounts",
-				"scopes": ["activity.write"],
+				"scopes": [
+					"activity.write"
+				],
 				"features": []
 			}
 		]
@@ -54,7 +56,9 @@
 			"name": "WhatsApp",
 			"description": "Sends WhatsApp messages through the merchant's own provider: Meta WhatsApp Cloud API, Twilio, or any WhatsApp gateway with an HTTP API.",
 			"dependsOn": [],
-			"recommendFor": ["messages.whatsapp"],
+			"recommendFor": [
+				"messages.whatsapp"
+			],
 			"settings": {
 				"$ref": "schemas/whatsapp.settings.json"
 			}
@@ -64,7 +68,10 @@
 			"name": "Email",
 			"description": "Sends email through the merchant's own provider: SMTP, Resend, SendGrid, Mailgun or Amazon SES.",
 			"dependsOn": [],
-			"recommendFor": ["messages.email", "signIn.email"],
+			"recommendFor": [
+				"messages.email",
+				"signIn.email"
+			],
 			"settings": {
 				"$ref": "schemas/email.settings.json"
 			}
@@ -74,29 +81,23 @@
 			"name": "SMS",
 			"description": "Sends SMS through the merchant's own provider: Twilio, or any SMS gateway with an HTTP API.",
 			"dependsOn": [],
-			"recommendFor": ["messages.sms"],
+			"recommendFor": [
+				"messages.sms"
+			],
 			"settings": {
 				"$ref": "schemas/sms.settings.json"
 			}
 		},
 		{
-			"key": "browser_push",
-			"name": "Browser push",
-			"description": "Visitors who allow it get push notifications in their browser, with the merchant's own push keys.",
+			"key": "push",
+			"name": "Push notifications",
+			"description": "Web push notifications in browsers with the merchant's push keys (VAPID): for visitors who subscribe and for staff.",
 			"dependsOn": [],
-			"recommendFor": ["messages.push"],
+			"recommendFor": [
+				"messages.push"
+			],
 			"settings": {
-				"$ref": "schemas/browser_push.settings.json"
-			}
-		},
-		{
-			"key": "staff_push",
-			"name": "Staff push",
-			"description": "The merchant's staff get push notifications in their browsers, with the merchant's own push keys.",
-			"dependsOn": [],
-			"recommendFor": ["messages.push"],
-			"settings": {
-				"$ref": "schemas/staff_push.settings.json"
+				"$ref": "schemas/push.settings.json"
 			}
 		},
 		{
@@ -106,53 +107,6 @@
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/webhooks.settings.json"
-			}
-		},
-		{
-			"key": "fallback",
-			"name": "Fallback channel",
-			"description": "When a message fails on its channel after its retries, it moves to the next of its fallback channels, in order (for example WhatsApp, then SMS, then email; browser push too). A template can have its own order.",
-			"dependsOn": [],
-			"recommendFor": ["messages.whatsapp+messages.sms", "messages.whatsapp+messages.email", "messages.sms+messages.email"],
-			"settings": {
-				"$ref": "schemas/fallback.settings.json"
-			}
-		},
-		{
-			"key": "quiet_hours",
-			"name": "Quiet hours",
-			"description": "Messages that are not urgent wait for the end of the quiet hours in the recipient's time zone: windows per weekday, with minutes, for the channels each one names.",
-			"dependsOn": [],
-			"settings": {
-				"$ref": "schemas/quiet_hours.settings.json"
-			}
-		},
-		{
-			"key": "send_limits",
-			"name": "Send limits",
-			"description": "Caps the messages one recipient gets per hour and per day: optional messages only, or all of them.",
-			"dependsOn": [],
-			"settings": {
-				"$ref": "schemas/send_limits.settings.json"
-			}
-		},
-		{
-			"key": "delayed_send",
-			"name": "Delayed send",
-			"description": "A send can name a later time; the message goes out on the first use of the website after it, so it can be late on a quiet site.",
-			"dependsOn": [],
-			"settings": {
-				"$ref": "schemas/delayed_send.settings.json"
-			}
-		},
-		{
-			"key": "multi_language",
-			"name": "Multi-language templates",
-			"description": "Each template can have a version per language; recipients get their language, else the default version.",
-			"dependsOn": [],
-			"recommendFor": ["languages.many+messages.*"],
-			"settings": {
-				"$ref": "schemas/multi_language.settings.json"
 			}
 		},
 		{
@@ -184,28 +138,40 @@
 		{
 			"key": "push.subscribe",
 			"name": "Get staff push notifications",
-			"feature": "staff_push"
+			"feature": "push"
 		}
 	],
 	"widgets": [
 		{
 			"key": "push_permission",
-			"feature": "browser_push",
+			"feature": "push",
 			"kind": "visitor"
 		},
 		{
 			"key": "staff_push_permission",
-			"feature": "staff_push",
+			"feature": "push",
 			"kind": "admin"
 		},
 		{
 			"key": "delivery_log",
-			"feature": "send_api",
+			"feature": [
+				"send_api",
+				"email",
+				"sms",
+				"whatsapp",
+				"push"
+			],
 			"kind": "admin"
 		},
 		{
 			"key": "template_editor",
-			"feature": "send_api",
+			"feature": [
+				"send_api",
+				"email",
+				"sms",
+				"whatsapp",
+				"push"
+			],
 			"kind": "admin"
 		},
 		{

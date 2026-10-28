@@ -13,7 +13,7 @@ import { isId } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
 import { TEMPLATE_KEY, TEXT_LIMITS } from '@ss/contracts/templates';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
-import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normalizePhone } from '../core/channels.js';
+import { CHANNELS, CHANNEL_FEATURES, checkRecipient, isChannelActive, normalizePhone } from '../core/channels.js';
 import { gatewayRepliesOf, isOptOut, repliesOf } from '../core/inbound.js';
 import { isOwnLink } from '../core/links.js';
 import { logFilters } from '../core/log.js';
@@ -275,7 +275,7 @@ export const createRoutes = (product) => {
 		 * @param {Channel} channel
 		 */
 		const channelOn = async (ctx, channel) =>
-			via !== 'server' || (await product.featuresOn(ctx.websiteId)).includes(CHANNEL_FEATURES[channel]);
+			via !== 'server' || isChannelActive(channel, await product.featuresOn(ctx.websiteId));
 		/** @param {Channel} channel */
 		const channelOff = (channel) =>
 			problem('feature_off', `The ${CHANNEL_FEATURES[channel]} feature is off: its templates cannot be changed.`);
@@ -323,9 +323,7 @@ export const createRoutes = (product) => {
 				const items = await (await storeOf(ctx)).templates.list();
 				const on = via === 'server' ? await product.featuresOn(ctx.websiteId) : null;
 				return {
-					items: items
-						.filter((template) => on === null || on.includes(CHANNEL_FEATURES[template.channel]))
-						.map(templateView),
+					items: items.filter((template) => on === null || isChannelActive(template.channel, on)).map(templateView),
 				};
 			},
 			/** @param {any} ctx */
@@ -521,7 +519,7 @@ export const createRoutes = (product) => {
 			auth: 'server',
 			scope: 'messages.send',
 			runtime: true,
-			feature: 'browser_push',
+			feature: 'push',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
 			handler: sendHandler('push'),
@@ -532,7 +530,7 @@ export const createRoutes = (product) => {
 			auth: 'server',
 			scope: 'messages.send',
 			runtime: true,
-			feature: 'staff_push',
+			feature: 'push',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
 			handler: sendHandler('staff_push'),
@@ -597,7 +595,7 @@ export const createRoutes = (product) => {
 			path: '/v1/templates',
 			auth: 'server',
 			permission: 'templates.edit',
-			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
+			feature: ['email', 'sms', 'whatsapp', 'push'],
 			handler: serverTemplates.list,
 		}),
 		defineRoute({
@@ -605,7 +603,7 @@ export const createRoutes = (product) => {
 			path: '/v1/templates',
 			auth: 'server',
 			permission: 'templates.edit',
-			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
+			feature: ['email', 'sms', 'whatsapp', 'push'],
 			rateLimit: TEMPLATE_WRITE_LIMITS,
 			handler: serverTemplates.save,
 		}),
@@ -614,7 +612,7 @@ export const createRoutes = (product) => {
 			path: '/v1/templates/:key/:channel/:language',
 			auth: 'server',
 			permission: 'templates.edit',
-			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
+			feature: ['email', 'sms', 'whatsapp', 'push'],
 			rateLimit: TEMPLATE_WRITE_LIMITS,
 			handler: serverTemplates.remove,
 		}),
@@ -624,7 +622,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/push/subscriptions',
 			auth: 'browser',
-			feature: 'browser_push',
+			feature: 'push',
 			rateLimit: VISITOR_LIMITS,
 			handler: async (ctx) => {
 				const subscription = checkSubscription(ctx.body?.subscription);
@@ -649,7 +647,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/push/subscriptions/remove',
 			auth: 'browser',
-			feature: 'browser_push',
+			feature: 'push',
 			rateLimit: VISITOR_LIMITS,
 			handler: async (ctx) => {
 				const { subscriberId, endpoint } = ctx.body ?? {};
@@ -661,12 +659,20 @@ export const createRoutes = (product) => {
 		}),
 
 		// ------------------------------------------------------------------------- admin widgets (tickets)
-		defineRoute({ method: 'GET', path: '/v1/admin/messages', auth: 'ticket', permission: 'log.read', handler: listMessages }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/messages',
+			auth: 'ticket',
+			permission: 'log.read',
+			feature: ['send_api', 'email', 'sms', 'whatsapp', 'push'],
+			handler: listMessages,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/admin/messages/count',
 			auth: 'ticket',
 			permission: 'log.read',
+			feature: ['send_api', 'email', 'sms', 'whatsapp', 'push'],
 			handler: messageCounts.count,
 		}),
 		defineRoute({
@@ -674,6 +680,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/messages/counts',
 			auth: 'ticket',
 			permission: 'log.read',
+			feature: ['send_api', 'email', 'sms', 'whatsapp', 'push'],
 			handler: messageCounts.counts,
 		}),
 		defineRoute({
@@ -681,6 +688,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/messages',
 			auth: 'ticket',
 			permission: 'messages.send',
+			feature: 'send_api',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
 			handler: async (ctx) => {
@@ -791,6 +799,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/templates',
 			auth: 'ticket',
 			permission: 'templates.edit',
+			feature: ['email', 'sms', 'whatsapp', 'push'],
 			handler: widgetTemplates.list,
 		}),
 		defineRoute({
@@ -798,6 +807,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/templates',
 			auth: 'ticket',
 			permission: 'templates.edit',
+			feature: ['email', 'sms', 'whatsapp', 'push'],
 			handler: widgetTemplates.save,
 		}),
 		defineRoute({
@@ -805,6 +815,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/templates/:key/:channel/:language',
 			auth: 'ticket',
 			permission: 'templates.edit',
+			feature: ['email', 'sms', 'whatsapp', 'push'],
 			handler: widgetTemplates.remove,
 		}),
 		// staff push: the ticket's user gets pushes in this browser
@@ -813,6 +824,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/push/subscriptions',
 			auth: 'ticket',
 			permission: 'push.subscribe',
+			feature: 'push',
 			handler: async (ctx) => {
 				const subscription = checkSubscription(ctx.body?.subscription);
 				if (!subscription) return invalid('subscription', 'Send the browser push subscription (PushSubscription.toJSON()).');

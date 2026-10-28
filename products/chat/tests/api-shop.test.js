@@ -244,7 +244,7 @@ const signedIn = async (sys) => {
 
 describe('shop tools', () => {
 	it('offers each tool only while its feature is on, and the sign-in tools only to a verified sign-in', async () => {
-		const sys = await start([...SHOP, 'shop_search', 'shop_my_orders']);
+		const sys = await start([...SHOP]);
 		const guest = sys.visitor();
 		await guest('POST', '/v1/chat/messages', { text: 'Hi' });
 		expect(offered(sys.aiCalls()[0])).toEqual(['search_catalog', 'get_product_details']);
@@ -253,7 +253,7 @@ describe('shop tools', () => {
 		await v('POST', '/v1/chat/messages', { text: 'Hi again' });
 		expect(offered(sys.aiCalls()[1])).toEqual(['search_catalog', 'get_product_details', 'get_my_orders', 'get_my_account']);
 
-		const all = await start([...SHOP, 'shop_search', 'shop_deals', 'shop_top', 'shop_my_orders', 'track_shipment']);
+		const all = await start([...SHOP]);
 		const user = await signedIn(all);
 		await user.v('POST', '/v1/chat/messages', { text: 'Hi' });
 		expect(offered(all.aiCalls()[0])).toEqual([
@@ -273,7 +273,7 @@ describe('shop tools', () => {
 	});
 
 	it('searches, reads details, quotes, lists deals and top products with the pasted server token', async () => {
-		const sys = await start([...SHOP, 'shop_search', 'shop_deals', 'shop_top']);
+		const sys = await start([...SHOP]);
 		sys.ai(
 			{
 				tools: [
@@ -367,7 +367,7 @@ describe('shop tools', () => {
 	});
 
 	it('forwards the verified sign-in for my orders, account and shipments, ignoring a user the model names', async () => {
-		const sys = await start([...SHOP, 'shop_my_orders', 'track_shipment']);
+		const sys = await start([...SHOP]);
 		const { signIn, v } = await signedIn(sys);
 		sys.ai(
 			{
@@ -407,7 +407,7 @@ describe('shop tools', () => {
 	});
 
 	it('never runs a sign-in tool for a guest, even when the model asks for it', async () => {
-		const sys = await start([...SHOP, 'shop_search', 'shop_my_orders']);
+		const sys = await start([...SHOP]);
 		sys.ai({ tools: [{ name: 'get_my_orders', arguments: {} }] }, { text: 'Please sign in.' });
 		await sys.visitor()('POST', '/v1/chat/messages', { text: 'My orders?' });
 		expect(sys.shopCalls()).toEqual([]);
@@ -415,12 +415,12 @@ describe('shop tools', () => {
 	});
 
 	it('answers that it cannot look this up now when Ecommerce is not connected, refuses or is stopped', async () => {
-		const missing = await start([...SHOP, 'shop_search'], { ecommerce: false });
+		const missing = await start([...SHOP], { ecommerce: false });
 		missing.ai({ tools: [{ name: 'search_catalog', arguments: { query: 'lamp' } }] }, { text: 'Sorry.' });
 		await missing.visitor()('POST', '/v1/chat/messages', { text: 'Lamps?' });
 		expect(toolAnswers(missing.aiCalls()[1])).toEqual([SHOP_UNAVAILABLE]);
 
-		const sys = await start([...SHOP, 'shop_search', 'shop_deals']);
+		const sys = await start([...SHOP]);
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products`, () => ({ status: 401, body: { type: 'x/invalid_token' } }));
 		sys.responders.set(`${ECOMMERCE}/v1/chat/deals`, () => ({
 			status: 403,
@@ -449,7 +449,7 @@ describe('shop tools', () => {
 	});
 
 	it('explains empty answers so the AI invents nothing', async () => {
-		const sys = await start([...SHOP, 'shop_search', 'shop_deals', 'shop_top', 'shop_my_orders', 'track_shipment']);
+		const sys = await start([...SHOP]);
 		sys.responders.set(ECOMMERCE, () => ({ status: 200, body: {} }));
 		const { v } = await signedIn(sys);
 		sys.ai(
@@ -531,19 +531,19 @@ describe('product cards', () => {
 	});
 
 	it('adds no cards without the feature', async () => {
-		const sys = await start([...SHOP, 'shop_search']);
+		const sys = await start([...SHOP]);
 		sys.ai({ tools: [{ name: 'search_catalog', arguments: { query: 'lamp' } }] }, { text: 'Desk lamp.' });
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'Lamps?' });
 		expect(sys.aiCalls()[0].messages[0].content).not.toContain('Add to cart');
-		await sys.switchOn([...SHOP, 'shop_search', 'product_cards']);
+		await sys.switchOn([...SHOP]);
 		expect((await v('GET', '/v1/chat')).json.messages[1].cards).toBeUndefined();
 	});
 });
 
 describe('context panel shop info', () => {
 	it('shows a signed-in visitor’s last orders and loyalty points; nothing for guests or without the token', async () => {
-		const sys = await start([...SHOP, 'inbox', 'context_panel']);
+		const sys = await start([...SHOP, 'inbox']);
 		const { v } = await signedIn(sys);
 		await v('POST', '/v1/chat/messages', { text: 'Hello' });
 		await sys.visitor()('POST', '/v1/chat/messages', { text: 'Guest here' });
@@ -570,7 +570,7 @@ describe('context panel shop info', () => {
 
 describe('dashboard', () => {
 	it('lists the link to Ecommerce in the checklist when a shop feature is on', async () => {
-		const sys = await start([...SHOP, 'shop_top'], { ecommerce: false });
+		const sys = await start([...SHOP], { ecommerce: false });
 		const overview = await sys.dashboard(await sys.adminSession(), 'GET', `/v1/dashboard/websites/${sys.websiteId}/overview`);
 		const ecommerce = overview.json.checklist.connections.find((/** @type {any} */ c) => c.name === 'link_ecommerce');
 		expect(ecommerce).toMatchObject({ status: 'not_connected', neededBy: expect.arrayContaining(['shop_top']) });

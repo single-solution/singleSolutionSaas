@@ -51,6 +51,7 @@ const ctx = () => ({
 	status: { domain: DOMAIN },
 	headers: new Headers(),
 	ticket: null,
+	staff: { can: () => true },
 	after: () => {},
 });
 

@@ -427,7 +427,7 @@
 				"summary": "The products report (analytics dashboard widget)",
 				"description": "As GET /v1/analytics/products; the analytics.read permission.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "conversion_funnel",
+				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
 				"security": [
 					{
@@ -537,7 +537,7 @@
 				"summary": "The products report as CSV (analytics dashboard widget)",
 				"description": "As GET /v1/analytics/products/csv; the analytics.read permission.",
 				"x-ss-auth": "ticket",
-				"x-ss-feature": "conversion_funnel",
+				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
 				"security": [
 					{
@@ -1718,7 +1718,7 @@
 				"summary": "How each product does in the shop funnel",
 				"description": "Each product of the shop events (ss:view_item, ss:add_to_cart, ss:begin_checkout, ss:purchase, from Ecommerce's widgets or your own pages) over a range of days of your business time zone: the events that named it (views, add-to-carts, checkouts, purchases: orders naming it), the units bought, the revenue per currency (price × quantity of its purchased items that had a price), add-to-carts and purchases per 100 views, and the name the events gave it most. Counted in the daily totals as the events arrive (raw events keep only ids and quantities). While the conversion funnel is on. 422 validation_failed for a range as GET /v1/analytics refuses, an unknown sort or order, or a limit out of range.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "conversion_funnel",
+				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
 				"x-ss-access": "staff",
 				"security": [
@@ -1832,7 +1832,7 @@
 				"summary": "The products report as CSV",
 				"description": "Answers text/csv (an attachment named products-<from>-<to>.csv), not JSON: comma-separated UTF-8 with a byte order mark, the columns product_id, name, views, add_to_carts, checkouts, purchases, units, cart_rate_percent, conversion_percent and revenue_<currency> per currency (major units, 60.00), every product of the range sorted as asked (limit is ignored); text that starts with =, +, -, @ gets a leading ' so spreadsheets never run it. The query and refusals of GET /v1/analytics/products.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "conversion_funnel",
+				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
 				"x-ss-access": "staff",
 				"security": [
@@ -1939,12 +1939,7 @@
 				"summary": "Record the page script's events",
 				"description": "The page script sends these itself. Your server may send a visitor's events too: the server token without an Origin, naming the visitor's IP address in SS-Visitor-IP. Nothing answers an error for a bad event: invalid events, events of features that are off and any after the first 25 are dropped, and nothing is kept while Visitor analytics is off; accepted says how many were kept. At most 64 KB; 3,000 calls a minute per website and 120 per visitor. Safety ceilings per website and day: a figure (pages, search terms, sources, event names …) holds at most 5,000 different values, and later new ones are counted together as (other); at most 100,000 raw events are stored, and later events are still counted in the totals.",
 				"x-ss-auth": "browser",
-				"x-ss-feature": [
-					"visitor_analytics",
-					"conversion_funnel",
-					"searches_404s",
-					"web_vitals"
-				],
+				"x-ss-feature": "visitor_analytics",
 				"security": [
 					{
 						"browserToken": []

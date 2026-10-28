@@ -162,7 +162,55 @@ export const createService = (product) => {
 	});
 
 	/** @param {Site} s @param {string} feature */
-	const settings = (s, feature) => product.settings.values(s.websiteId, feature);
+	const settings = async (s, feature) => {
+		if (s.on.includes(feature)) return product.settings.values(s.websiteId, feature);
+		if (s.on.includes('sign_in')) {
+			const signIn = await product.settings.values(s.websiteId, 'sign_in');
+			if (feature === 'phone_code') {
+				const direct = await product.settings.values(s.websiteId, 'phone_code');
+				return { ...direct, newUserName: signIn.newUserName ?? direct.newUserName };
+			}
+			if (feature === 'phone_password') {
+				const direct = await product.settings.values(s.websiteId, 'phone_password');
+				return {
+					...direct,
+					signUp: signIn.signUp ?? direct.signUp,
+					minLength: signIn.minLength ?? direct.minLength,
+					letterAndDigit: signIn.letterAndDigit ?? direct.letterAndDigit,
+					selfReset: signIn.selfReset ?? direct.selfReset,
+					forgotUrl: signIn.forgotUrl ?? direct.forgotUrl,
+				};
+			}
+			if (feature === 'email_password') {
+				const direct = await product.settings.values(s.websiteId, 'email_password');
+				return {
+					...direct,
+					minLength: signIn.minLength ?? direct.minLength,
+					letterAndDigit: signIn.letterAndDigit ?? direct.letterAndDigit,
+				};
+			}
+		}
+		return product.settings.values(s.websiteId, feature);
+	};
+
+	/** The effective sign-in methods of a website. @param {Site} s */
+	const methodsOf = async (s) => {
+		const set = new Set(s.on.filter((k) => /** @type {readonly string[]} */ (SIGN_IN_METHODS).includes(k)));
+		if (s.on.includes('sign_in')) {
+			const signIn = await product.settings.values(s.websiteId, 'sign_in');
+			const active = Array.isArray(signIn?.methods) ? signIn.methods : SIGN_IN_METHODS;
+			for (const m of active) set.add(m);
+		}
+		return set;
+	};
+
+	/** Whether a sign-in method is on. @param {Site} s @param {string} method */
+	const isMethodOn = async (s, method) => (await methodsOf(s)).has(method);
+
+	/** Throws 403 feature_off when a method is off. @param {Site} s @param {string} method */
+	const ensureMethod = async (s, method) => {
+		if (!(await isMethodOn(s, method))) throw problem('feature_off', `The feature ${method} is off.`);
+	};
 
 	/** The website's sign-up rules (open without the Approval / invite sign-up feature). @param {Site} s */
 	const signUpRules = async (s) =>
@@ -526,8 +574,8 @@ export const createService = (product) => {
 	 * @returns {'email_password' | 'phone_password' | null}
 	 */
 	const passwordMethodOf = (s, user) => {
-		if (user.email && s.on.includes('email_password')) return 'email_password';
-		if (user.phone && s.on.includes('phone_password')) return 'phone_password';
+		if (user.email && (s.on.includes('email_password') || s.on.includes('sign_in'))) return 'email_password';
+		if (user.phone && (s.on.includes('phone_password') || s.on.includes('sign_in'))) return 'phone_password';
 		return null;
 	};
 
@@ -555,7 +603,7 @@ export const createService = (product) => {
 	};
 
 	/** Whether any sign-in method is on. @param {Site} s */
-	const anyMethod = (s) => SIGN_IN_METHODS.some((key) => s.on.includes(key));
+	const anyMethod = (s) => s.on.includes('sign_in') || SIGN_IN_METHODS.some((key) => s.on.includes(key));
 
 	// ------------------------------------------------------------------------------------------------- messages
 
@@ -805,6 +853,8 @@ export const createService = (product) => {
 		allowCode,
 		logSignIn,
 		anyMethod,
+		isMethodOn,
+		ensureMethod,
 		notify,
 		deliver,
 		removeHere,

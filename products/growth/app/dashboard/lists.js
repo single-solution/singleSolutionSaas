@@ -531,9 +531,9 @@ function StorePresetCard({ websiteId }) {
 }
 
 /** The feature or shared group each list belongs under (where its cards are listed in Settings). */
-const HOME = /** @type {Record<ListName, string>} */ ({
-	goals: 'conversion_funnel',
-	funnels: 'conversion_funnel',
+const HOME = /** @type {Record<ListName, string | string[]>} */ ({
+	goals: ['visitor_analytics', 'conversion_funnel'],
+	funnels: ['visitor_analytics', 'conversion_funnel'],
 	consent_categories: 'tags',
 	announcements: 'notice_bar',
 	conversion_actions: 'pixels',
@@ -554,12 +554,16 @@ export const listExtras = (websiteId) => {
 	const put = (home, item) => {
 		out[home] = { items: [...(out[home]?.items ?? []), item] };
 	};
-	for (const name of /** @type {ListName[]} */ (Object.keys(LISTS)))
-		put(HOME[name], {
-			id: name,
-			label: /** @type {{ title: string }} */ (/** @type {Record<string, unknown>} */ (L)[name]).title,
-			content: <ListCard websiteId={websiteId} name={name} bare />,
-		});
+	for (const name of /** @type {ListName[]} */ (Object.keys(LISTS))) {
+		const homes = Array.isArray(HOME[name]) ? HOME[name] : [HOME[name]];
+		for (const home of homes) {
+			put(home, {
+				id: name,
+				label: /** @type {{ title: string }} */ (/** @type {Record<string, unknown>} */ (L)[name]).title,
+				content: <ListCard websiteId={websiteId} name={name} bare />,
+			});
+		}
+	}
 	put('robots_verification', { id: 'preset', label: L.preset.title, content: <StorePresetCard websiteId={websiteId} /> });
 	return out;
 };

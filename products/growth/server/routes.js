@@ -248,7 +248,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/collect',
 			auth: 'browser',
-			feature: ['visitor_analytics', 'conversion_funnel', 'searches_404s', 'web_vitals'],
+			feature: 'visitor_analytics',
 			maxBodyBytes: 65_536,
 			rateLimit: COLLECT_LIMITS,
 			handler: async (ctx) => {
@@ -335,7 +335,7 @@ export const createRoutes = (product) => {
 			path: '/v1/analytics/products',
 			auth: 'server',
 			permission: 'analytics.read',
-			feature: 'conversion_funnel',
+			feature: 'visitor_analytics',
 			handler: products,
 		}),
 		defineRoute({
@@ -343,7 +343,7 @@ export const createRoutes = (product) => {
 			path: '/v1/analytics/products/csv',
 			auth: 'server',
 			permission: 'analytics.read',
-			feature: 'conversion_funnel',
+			feature: 'visitor_analytics',
 			handler: productsFile,
 		}),
 		defineRoute({
@@ -351,7 +351,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/analytics/products',
 			auth: 'ticket',
 			permission: 'analytics.read',
-			feature: 'conversion_funnel',
+			feature: 'visitor_analytics',
 			handler: products,
 		}),
 		defineRoute({
@@ -359,7 +359,7 @@ export const createRoutes = (product) => {
 			path: '/v1/admin/analytics/products/csv',
 			auth: 'ticket',
 			permission: 'analytics.read',
-			feature: 'conversion_funnel',
+			feature: 'visitor_analytics',
 			handler: productsFile,
 		}),
 		defineRoute({

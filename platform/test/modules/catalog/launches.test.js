@@ -4,7 +4,17 @@ import { closeMongoClients } from '../../../src/testing.js';
 import { startMongo } from '../../helpers.js';
 import { PASSWORD, bootPortal, codeOf } from './boot.js';
 
-const CONFIRM = { password: PASSWORD };
+/**
+ * @param {Awaited<ReturnType<typeof bootPortal>>} h
+ * @param {any} client
+ * @param {string} email
+ * @param {string} path
+ * @param {Record<string, unknown>} [body]
+ */
+const openWithOtp = async (h, client, email, path, body = {}) => {
+	const code = await h.stepUpOtp(client, email);
+	return client.post(path, { code, ...body });
+};
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 180_000 });
 
@@ -58,7 +68,8 @@ describe('launches (PLAN 0.4.3)', () => {
 		const path = (/** @type {string} */ websiteId) =>
 			`/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes/launch`;
 		expect(codeOf(await m.client.post(path(w1), {}))).toEqual([422, 'validation_failed']);
-		const opened = await m.client.post(path(w1), CONFIRM);
+		expect(codeOf(await m.client.post(path(w1), { password: PASSWORD }))).toEqual([422, 'validation_failed']);
+		const opened = await openWithOtp(h, m.client, m.email, path(w1));
 		expect(opened.status).toBe(200);
 		expect(opened.json.url.startsWith(`${product.url}/sso?launch=`)).toBe(true);
 		expect(opened.json.expiresAt).toBe('2026-10-01T10:01:00.000Z');
@@ -81,12 +92,12 @@ describe('launches (PLAN 0.4.3)', () => {
 		});
 		expect(claims.admin).toBeUndefined();
 		// removed products and websites without the product cannot be opened; nor can another merchant's
-		expect(codeOf(await m.client.post(path(w2), CONFIRM))).toEqual([404, 'not_found']);
-		expect(codeOf(await m.client.post(path(w3), CONFIRM))).toEqual([404, 'not_found']);
+		expect(codeOf(await openWithOtp(h, m.client, m.email, path(w2)))).toEqual([404, 'not_found']);
+		expect(codeOf(await openWithOtp(h, m.client, m.email, path(w3)))).toEqual([404, 'not_found']);
 		const other = await h.merchant('o@shop.test', ['other.example.com']);
-		expect(codeOf(await other.client.post(path(w1), CONFIRM))).toEqual([403, 'forbidden']);
+		expect(codeOf(await openWithOtp(h, other.client, other.email, path(w1)))).toEqual([403, 'forbidden']);
 		// admins open through the admin route, never the merchant one
-		expect((await (await h.owner()).post(path(w1), CONFIRM)).status).toBe(401);
+		expect((await openWithOtp(h, await h.owner(), 'owner@portal.test', path(w1))).status).toBe(401);
 		expect((await h.activity('product.dashboard_opened'))[0]).toMatchObject({
 			actor: { type: 'merchant', id: m.merchantId },
 			merchantId: m.merchantId,
@@ -95,7 +106,7 @@ describe('launches (PLAN 0.4.3)', () => {
 		});
 		// a suspended merchant cannot open any product (the session ends; the service refuses too)
 		await (await h.owner()).post(`/v1/admin/merchants/${m.merchantId}/suspend`, { reason: 'unpaid' });
-		expect((await m.client.post(path(w1), CONFIRM)).status).toBe(401);
+		expect((await openWithOtp(h, m.client, m.email, path(w1))).status).toBe(401);
 		const catalog = /** @type {any} */ (h.portal.modules.service('catalog'));
 		const session = { expiresAt: new Date(Date.UTC(2026, 9, 1, 22)) };
 		await expect(
@@ -113,30 +124,33 @@ describe('launches (PLAN 0.4.3)', () => {
 		const { h, owner, m, w1, w2 } = await setUp('launch_admin');
 		const support = await h.admin('support');
 		const finance = await h.admin('finance');
-		const open = (/** @type {any} */ client, /** @type {Record<string, unknown>} */ body) =>
-			client.post('/v1/admin/products/notes/launch', { ...CONFIRM, ...body });
-		const forSite = await open(support.client, { websiteId: w1 });
+		const open = async (/** @type {any} */ client, /** @type {string} */ email, /** @type {Record<string, unknown>} */ body) =>
+			openWithOtp(h, client, email, '/v1/admin/products/notes/launch', body);
+		const forSite = await open(support.client, support.email, { websiteId: w1 });
 		expect(forSite.status).toBe(200);
 		expect(await h.verify(forSite.json.url, 'notes')).toMatchObject({
 			kind: 'admin',
 			sub: support.adminId,
 			admin: { id: support.adminId, name: 'support admin', role: 'support', websiteId: w1 },
 		});
-		expect(codeOf(await open(support.client, {}))).toEqual([403, 'forbidden']); // no website: Owner only
-		const defaults = await open(owner, {});
+		expect(codeOf(await open(support.client, support.email, {}))).toEqual([403, 'forbidden']); // no website: Owner only
+		const defaults = await open(owner, 'owner@portal.test', {});
 		expect((await h.verify(defaults.json.url, 'notes')).admin).toMatchObject({
 			role: 'owner',
 			websiteId: null,
 			name: 'Olivia Owner',
 		});
-		expect(codeOf(await open(finance.client, { websiteId: w1 }))).toEqual([403, 'forbidden']);
-		expect(codeOf(await open(owner, { websiteId: w2 }))).toEqual([404, 'not_found']); // removed
-		expect(codeOf(await open(owner, { websiteId: 'nope' }))).toEqual([422, 'validation_failed']);
-		expect(codeOf(await owner.post('/v1/admin/products/ghost/launch', CONFIRM))).toEqual([404, 'not_found']);
-		expect((await m.client.post('/v1/admin/products/notes/launch', { websiteId: w1, ...CONFIRM })).status).toBe(401);
+		expect(codeOf(await open(finance.client, finance.email, { websiteId: w1 }))).toEqual([403, 'forbidden']);
+		expect(codeOf(await open(owner, 'owner@portal.test', { websiteId: w2 }))).toEqual([404, 'not_found']); // removed
+		expect(codeOf(await open(owner, 'owner@portal.test', { websiteId: 'nope' }))).toEqual([422, 'validation_failed']);
+		expect(codeOf(await openWithOtp(h, owner, 'owner@portal.test', '/v1/admin/products/ghost/launch'))).toEqual([
+			404,
+			'not_found',
+		]);
+		expect((await openWithOtp(h, m.client, m.email, '/v1/admin/products/notes/launch', { websiteId: w1 })).status).toBe(401);
 		// admins can still open a suspended merchant's products
 		await owner.post(`/v1/admin/merchants/${m.merchantId}/suspend`, { reason: 'unpaid' });
-		expect((await open(owner, { websiteId: w1 })).status).toBe(200);
+		expect((await open(owner, 'owner@portal.test', { websiteId: w1 })).status).toBe(200);
 		// the service refuses a Finance actor whatever the route
 		const catalog = /** @type {any} */ (h.portal.modules.service('catalog'));
 		await expect(
@@ -151,7 +165,12 @@ describe('launches (PLAN 0.4.3)', () => {
 
 	it('the product consumes each launch once; the launch ends with the launching session', async () => {
 		const { h, product, m, w1, owner } = await setUp('launch_consume');
-		const opened = await m.client.post(`/v1/merchants/${m.merchantId}/websites/${w1}/products/notes/launch`, CONFIRM);
+		const opened = await openWithOtp(
+			h,
+			m.client,
+			m.email,
+			`/v1/merchants/${m.merchantId}/websites/${w1}/products/notes/launch`,
+		);
 		const { jti } = await h.verify(opened.json.url, 'notes');
 		expect((await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti })).json).toEqual({ consumed: true });
 		expect((await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti })).json).toEqual({ consumed: false });
@@ -163,7 +182,7 @@ describe('launches (PLAN 0.4.3)', () => {
 			'validation_failed',
 		]);
 		// an expired launch is not consumed
-		const late = await owner.post('/v1/admin/products/notes/launch', { websiteId: w1, ...CONFIRM });
+		const late = await openWithOtp(h, owner, 'owner@portal.test', '/v1/admin/products/notes/launch', { websiteId: w1 });
 		const lateClaims = await h.verify(late.json.url, 'notes');
 		h.clock.advance(120_000);
 		expect((await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti: lateClaims.jti })).json).toEqual({
