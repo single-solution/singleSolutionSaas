@@ -6,7 +6,12 @@
  * ratio of at least 4.5:1 (WCAG AA) in both themes; `line-strong` (checkboxes, a hovered control) keeps 3:1 against
  * surfaces. `subtle` text (placeholders, meta that is also said elsewhere) is decorative only.
  *
- * Visual system (Unite dialect — one kit for Portal marketing + console + product dashboards):
+ * Theme pack: **Unite** — the single Shelfway / Single Solution visual kit.
+ * One pack for Portal marketing (`/`), Docs hub, Portal console, and every product dashboard.
+ * Do not invent a second palette for marketing or a product. Marketing `site.css` is layout + motion only;
+ * it must alias to `--ss-*` / `@theme` tokens from this file.
+ *
+ * Visual system (Unite dialect):
  * - 60 % base: cool gray canvas #F0F3F7 (dark: ink #0B1220). 30 % structure: white surfaces, ink #0B1220 text,
  *   cool hover (`surface-2`), hard 1px lines at ~10 % ink.
  * - 10 % meaning: teal #0F766E (`primary`: buttons, links, active, focus), lime/ok green (`success`), rose (`danger`),
@@ -570,6 +575,10 @@
 	--ss-scrollbar: rgb(11 18 32 / 0.18);
 	--ss-scrollbar-hover: rgb(11 18 32 / 0.32);
 	--ss-selection: rgb(15 118 110 / 0.16);
+	/* Unite glass: floating navs, translucent cards, sticky chrome */
+	--ss-glass: color-mix(in srgb, var(--ss-surface) 64%, transparent);
+	--ss-glass-strong: color-mix(in srgb, var(--ss-surface) 88%, transparent);
+	--ss-glass-blur: blur(14px);
 }
 
 /* dark, on the ink canvas: from the OS setting unless light was chosen, or chosen (the two blocks hold the same
@@ -632,6 +641,9 @@
 		--ss-scrollbar: rgb(255 255 255 / 0.16);
 		--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
 		--ss-selection: rgb(45 212 191 / 0.28);
+		--ss-glass: color-mix(in srgb, var(--ss-surface) 72%, transparent);
+		--ss-glass-strong: color-mix(in srgb, var(--ss-surface) 90%, transparent);
+		--ss-glass-blur: blur(14px);
 	}
 }
 
@@ -692,6 +704,9 @@
 	--ss-scrollbar: rgb(255 255 255 / 0.16);
 	--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
 	--ss-selection: rgb(45 212 191 / 0.28);
+	--ss-glass: color-mix(in srgb, var(--ss-surface) 72%, transparent);
+	--ss-glass-strong: color-mix(in srgb, var(--ss-surface) 90%, transparent);
+	--ss-glass-blur: blur(14px);
 }
 
 /*

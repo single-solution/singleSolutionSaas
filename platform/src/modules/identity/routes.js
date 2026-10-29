@@ -418,7 +418,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/me/step-up-otp',
 			auth: ['merchant', 'admin'],
-			rateLimit: { limit: 10, windowMs: 60_000 },
+			rateLimit: { limit: 120, windowMs: 60_000 },
 			handler: async (c) => {
 				const kind = kindOf(c);
 				const id = sessionOf(c).subject;

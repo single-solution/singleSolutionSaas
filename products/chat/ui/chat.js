@@ -225,7 +225,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		}
 		if (message.text) item.append(messageBody(doc, message));
 		if (message.attachment) item.append(attachmentNode(doc, message.attachment));
-		if (message.cards && message.cards.length > 0 && on('product_cards'))
+		if (message.cards && message.cards.length > 0 && (on('product_cards') || on('shop_assistant')))
 			item.append(cardsPart({ doc, win, t, config, cards: message.cards }));
 		if (s.look.showTimes && when(message.createdAt, 'time') !== '')
 			item.append(element(doc, 'time', { class: 'meta', datetime: message.createdAt }, when(message.createdAt, 'time')));
@@ -412,7 +412,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		leadPart({
 			...kit,
 			leads: s.leads,
-			customFields: on('custom_fields') ? s.customFields : [],
+			customFields: on('custom_fields') || on('leads_flows') ? s.customFields : [],
 			send: async (fields, consent) => {
 				const answer = await call('POST', '/v1/chat/leads', { fields, ...(consent ? { consent } : {}) });
 				if (!answer.ok) return failure(answer, 'chat.leadInvalid');

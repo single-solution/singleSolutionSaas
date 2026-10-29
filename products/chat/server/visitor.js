@@ -324,7 +324,15 @@ export const createVisitorApi = (product, service, reply) => {
 	/** @param {any} ctx */
 	const end = async (ctx) => {
 		const { s, visitor, c } = await existing(ctx);
-		const ratings = s.on.includes('ratings') ? await s.values('ratings') : null;
+		const look = await s.values('visitor_chat');
+		const ratings = s.on.includes('ratings')
+			? await s.values('ratings')
+			: look.ratingsEnabled
+				? {
+						askWhen: look.ratingAskWhen ?? 'on_resolve',
+						afterStaff: look.ratingAskWhen === 'after_staff',
+					}
+				: null;
 		const ask =
 			ratings && !c.rating && (ratings.askWhen === 'on_resolve' || (ratings.askWhen === 'after_staff' && c.staffReplied));
 		const updated = await s.store.conversations.update(c.id, {
@@ -386,10 +394,11 @@ export const createVisitorApi = (product, service, reply) => {
 	const lead = async (ctx) => {
 		const { s, visitor: known } = await who(ctx);
 		const settings = await s.values('leads_flows');
+		const customOn = s.on.includes('custom_fields') || s.on.includes('leads_flows');
 		const checked = checkLead(ctx.body, {
 			fields: settings.leadFields,
-			customKeys: s.on.includes('custom_fields') ? settings.customLeadFields : [],
-			customFields: s.on.includes('custom_fields') ? await s.list('custom_fields') : [],
+			customKeys: customOn ? settings.customLeadFields : [],
+			customFields: customOn ? await s.list('custom_fields') : [],
 			consentRequired: String(settings.consentText).trim().length > 0,
 			callingCode: await phoneCodeOf(s),
 		});

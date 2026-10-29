@@ -108,7 +108,8 @@ describe('statuses of the product on a website', () => {
 		expect(removed.json).toEqual({ websiteId, productId: 'notes', status: 'removed' });
 		expect(await api()).toEqual([403, 'product_unavailable', 'removed']);
 		expect((await portalStatus()).status).toBe('removed');
-		const launch = await owner.post('/v1/admin/products/notes/launch', { websiteId, password: PASSWORD });
+		const otp = await sys.stepUp(owner, 'owner@portal.test');
+		const launch = await owner.post('/v1/admin/products/notes/launch', { websiteId, ...otp });
 		expect(launch.status).toBe(404);
 		const cards = await owner.get(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products`);
 		expect(cards.json.items).toEqual([]);

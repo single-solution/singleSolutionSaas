@@ -246,7 +246,7 @@ describe('inbox', () => {
 		expect((await sys.serverCall('GET', '/v1/inbox/unread')).json).toEqual({ unread: 1, conversations: 1, open: 1 });
 		const replied = await sys.serverCall('POST', `/v1/conversations/${id}/messages`, { text: 'Nice photo.' });
 		expect(replied.json.message.name).toBe('Test Staff');
-		expect((await sys.serverCall('PATCH', `/v1/conversations/${id}`, { assignedTo: null })).status).toBe(403);
+		expect((await sys.serverCall('PATCH', `/v1/conversations/${id}`, { assignedTo: null })).status).toBe(200);
 		const ticket = await sys.ticket(['inbox.read', 'inbox.reply']);
 		await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/messages`, { text: 'From Sam.' });
 		// the conversation's copies (settings saves reach Accounts too)
@@ -255,6 +255,7 @@ describe('inbox', () => {
 			.map((c) => [c.copy.action, c.copy.actor.kind]);
 		expect(copies).toEqual([
 			['conversation.replied', 'user'],
+			['conversation.assigned', 'user'],
 			['conversation.replied', 'staff'],
 		]);
 		expect((await sys.serverCall('DELETE', `/v1/conversations/${id}`)).status).toBe(204);
@@ -632,13 +633,7 @@ describe('knowledge and reports', () => {
 	});
 
 	it('reports count conversations, answers, reply times, ratings, leads and AI tokens', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'ai_replies',
-			'inbox',
-			'handoff',
-			'leads_flows',
-			'reports']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff', 'ratings', 'leads_flows', 'reports']);
 		await sys.connect('ai', AI_KEY);
 		const a = sys.visitor();
 		await a('POST', '/v1/chat/messages', { text: 'question' });

@@ -196,13 +196,24 @@ const shipping = async (text) => {
 	expect(saved.status, JSON.stringify(saved.json)).toBe(200);
 };
 
+const CHAT_SETTING_MAP = {
+	'ai_instructions.instructions': 'ai_replies.instructions',
+	'staff_alerts.adminUrl': 'inbox.adminUrl',
+	'staff_alerts.staffPermission': 'inbox.staffPermission',
+	'staff_alerts.frequency': 'inbox.frequency',
+	'visitor_alerts.channels': 'inbox.visitorAlertsChannels',
+	'signed_in_chat.claimByPhone': 'visitor_chat.claimByPhone',
+	'guest_chat.messageLimit': 'visitor_chat.messageLimit',
+};
+
 /** Save settings through a product's settings API (K1). @param {string} productKey @param {Record<string, unknown>} values */
 const configure = async (productKey, values) => {
 	// the alert team and its phone channel are the website's, set once in the Portal (Team and alerts)
 	const { portal, own } = splitPortal(values);
 	if (Object.keys(portal).length > 0 && merchant)
 		await savePortalSettings(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/settings`, portal);
-	for (const [key, value] of Object.entries(own)) {
+	for (const [rawKey, value] of Object.entries(own)) {
+		const key = productKey === 'chat' ? (CHAT_SETTING_MAP[rawKey] ?? rawKey) : rawKey;
 		const saved = await server(productKey, 'PUT', `/v1/settings/${key}`, { value });
 		expect(saved.status, `${productKey} ${key}: ${JSON.stringify(saved.json)}`).toBe(200);
 	}
@@ -263,23 +274,8 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		await sys.addCredits(m.merchantId, 100);
 		/** @type {Record<string, string[]>} */
 		const features = {
-			chat: [
-				'ai_instructions',
-				'ai_replies',
-				'fallback_answers',
-				'guest_chat',
-				'handoff',
-				'inbox',
-				'product_cards',
-				'shop_context',
-				'shop_deals',
-				'shop_search',
-				'signed_in_chat',
-				'staff_alerts',
-				'visitor_alerts',
-				'visitor_chat',
-			],
-			accounts: ['email_password', 'roles'],
+			chat: ['ai_replies', 'handoff', 'inbox', 'shop_assistant', 'visitor_chat'],
+			accounts: ['roles', 'sign_in'],
 			notifications: ['email', 'whatsapp'],
 			ecommerce: ['catalog', 'checkout', 'deals'],
 		};
@@ -362,6 +358,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		await sys.connectAi(websiteId, { provider: 'openai', apiKey: 'sk-merchant-000444', model: 'gpt-4.1-mini' });
 		await configure('chat', {
 			'ai_replies.onFailure': 'message',
+			'ai_replies.shopContext': true,
 			'staff_alerts.adminUrl': `${ADMIN_ORIGIN}/inbox?conversation={conversationId}`,
 			// phones get SMS by default; this website has its WhatsApp templates approved
 			'staff_alerts.phoneChannel': 'whatsapp',
@@ -370,7 +367,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 
 	it('C1: 32,000 characters of instructions, and each AI reply adds Ecommerce’s live store context, cached 60 s', async () => {
 		await configure('chat', { 'ai_instructions.instructions': `Be kind. ${'x'.repeat(31_991)}` });
-		const tooLong = await server('chat', 'PUT', '/v1/settings/ai_instructions.instructions', { value: 'x'.repeat(32_001) });
+		const tooLong = await server('chat', 'PUT', '/v1/settings/ai_replies.instructions', { value: 'x'.repeat(32_001) });
 		expect(tooLong.status).toBe(422);
 		await configure('chat', { 'ai_instructions.instructions': 'Be kind and short.' });
 
@@ -724,7 +721,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 	it('CH-6, CH-12: the staff list has every Accounts user who may answer chats; alerts reach the assignee’s phone', async () => {
 		const features = (await server('chat', 'GET', '/v1/features')).json.features;
 		const on = features.filter((/** @type {any} */ feature) => feature.on).map((/** @type {any} */ feature) => feature.key);
-		expect((await setUp('chat', '/features', { on: [...on, 'assignment', 'leads_flows', 'transcripts'] })).status).toBe(200);
+		expect((await setUp('chat', '/features', { on: [...on, 'leads_flows'] })).status).toBe(200);
 		const phoned = await server('accounts', 'PATCH', `/v1/users/${users.aga}`, { phone: '+12025550147' });
 		expect(phoned.status, JSON.stringify(phoned.json)).toBe(200);
 		// Aga never opened the inbox: listed from Accounts, offline

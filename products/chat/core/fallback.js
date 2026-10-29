@@ -14,11 +14,11 @@ import { aroundPhrase, containsPhrase, normalize, tokenize } from './text.js';
 
 /** The placeholders and the shop feature each one needs. */
 export const PLACEHOLDERS = Object.freeze({
-	deals_table: 'shop_assistant',
-	top_products: 'shop_assistant',
-	products_under: 'shop_assistant',
-	my_orders: 'shop_assistant',
-	comparison: 'shop_assistant',
+	deals_table: 'shop_deals',
+	top_products: 'shop_top',
+	products_under: 'shop_budget',
+	my_orders: 'shop_orders',
+	comparison: 'shop_compare',
 });
 /** The list's limits, the same in Settings and in the server's check. */
 export const FALLBACK_LIMITS = Object.freeze({ answers: 50, keywords: 30, keywordLength: 100, text: 2000 });

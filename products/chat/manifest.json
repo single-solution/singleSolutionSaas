@@ -34,56 +34,33 @@
 		"needs": [
 			{
 				"product": "accounts",
-				"scopes": [
-					"activity.write"
-				],
+				"scopes": ["activity.write"],
 				"features": []
 			},
 			{
 				"product": "accounts",
-				"scopes": [
-					"users.read",
-					"roles.read"
-				],
+				"scopes": ["users.read", "roles.read"],
 				"features": []
 			},
 			{
 				"product": "notifications",
-				"scopes": [
-					"messages.send"
-				],
-				"features": [
-					"ai_replies",
-					"inbox",
-					"visitor_chat"
-				]
+				"scopes": ["messages.send"],
+				"features": ["ai_replies", "inbox", "visitor_chat"]
 			},
 			{
 				"product": "ecommerce",
-				"scopes": [
-					"catalog.read"
-				],
-				"features": [
-					"shop_assistant"
-				]
+				"scopes": ["catalog.read"],
+				"features": ["shop_assistant"]
 			},
 			{
 				"product": "ecommerce",
-				"scopes": [
-					"orders.read.customer"
-				],
-				"features": [
-					"shop_assistant"
-				]
+				"scopes": ["orders.read.customer"],
+				"features": ["shop_assistant"]
 			},
 			{
 				"product": "ecommerce",
-				"scopes": [
-					"shop.context.read"
-				],
-				"features": [
-					"shop_assistant"
-				]
+				"scopes": ["shop.context.read"],
+				"features": ["shop_assistant"]
 			}
 		]
 	},
@@ -93,9 +70,7 @@
 			"name": "Visitor chat",
 			"description": "The ready chat widget and the visitor API for your own chat screens, with window.SSChat.",
 			"dependsOn": [],
-			"recommendFor": [
-				"chat.*"
-			],
+			"recommendFor": ["chat.*"],
 			"settings": {
 				"$ref": "schemas/visitor_chat.settings.json"
 			}
@@ -104,12 +79,8 @@
 			"key": "ai_replies",
 			"name": "AI replies",
 			"description": "The AI answers visitors with your own AI provider key (OpenAI, Anthropic, Google Gemini or any OpenAI-compatible service).",
-			"dependsOn": [
-				"visitor_chat"
-			],
-			"recommendFor": [
-				"chat.ai"
-			],
+			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/ai_replies.settings.json"
 			}
@@ -118,12 +89,8 @@
 			"key": "knowledge_base",
 			"name": "Knowledge base",
 			"description": "FAQ entries and articles the AI answers from.",
-			"dependsOn": [
-				"ai_replies"
-			],
-			"recommendFor": [
-				"chat.ai"
-			],
+			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/knowledge_base.settings.json"
 			}
@@ -132,9 +99,7 @@
 			"key": "webhook_tools",
 			"name": "Custom webhook tools",
 			"description": "Tools the AI can call on your own server, signed with your tool signing secret.",
-			"dependsOn": [
-				"ai_replies"
-			],
+			"dependsOn": ["ai_replies"],
 			"settings": {
 				"$ref": "schemas/webhook_tools.settings.json"
 			}
@@ -143,12 +108,8 @@
 			"key": "book_slot",
 			"name": "Book-a-slot tool",
 			"description": "The AI offers free time slots and books one through your own booking endpoint.",
-			"dependsOn": [
-				"ai_replies"
-			],
-			"recommendFor": [
-				"chat.ai+sells.services"
-			],
+			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai+sells.services"],
 			"settings": {
 				"$ref": "schemas/book_slot.settings.json"
 			}
@@ -157,13 +118,8 @@
 			"key": "shop_assistant",
 			"name": "Shop assistant",
 			"description": "The AI answers from your store's catalog, deals, customer orders and package tracking, with product cards in the widget.",
-			"dependsOn": [
-				"ai_replies"
-			],
-			"recommendFor": [
-				"chat.ai+sells.physical",
-				"chat.ai+sells.digital"
-			],
+			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai+sells.physical", "chat.ai+sells.digital"],
 			"settings": {
 				"$ref": "schemas/shop_assistant.settings.json"
 			}
@@ -172,12 +128,8 @@
 			"key": "leads_flows",
 			"name": "Lead capture and flows",
 			"description": "Collects contact details as leads, and runs short scripted flows started by a page or a keyword.",
-			"dependsOn": [
-				"visitor_chat"
-			],
-			"recommendFor": [
-				"chat.*+sells.services"
-			],
+			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.*+sells.services"],
 			"settings": {
 				"$ref": "schemas/leads_flows.settings.json"
 			}
@@ -186,12 +138,8 @@
 			"key": "inbox",
 			"name": "Inbox",
 			"description": "The inbox widget where your staff read and answer conversations.",
-			"dependsOn": [
-				"visitor_chat"
-			],
-			"recommendFor": [
-				"chat.people"
-			],
+			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.people"],
 			"settings": {
 				"$ref": "schemas/inbox.settings.json"
 			}
@@ -200,12 +148,8 @@
 			"key": "handoff",
 			"name": "Human handoff",
 			"description": "Hands a conversation to a person: the AI stops and your staff take over, with office hours.",
-			"dependsOn": [
-				"inbox"
-			],
-			"recommendFor": [
-				"chat.people+chat.ai"
-			],
+			"dependsOn": ["inbox"],
+			"recommendFor": ["chat.people+chat.ai"],
 			"settings": {
 				"$ref": "schemas/handoff.settings.json"
 			}
@@ -215,9 +159,7 @@
 			"name": "Moderation",
 			"description": "Hides personal data, filters leaks from AI answers, applies a link policy and your blocked terms.",
 			"dependsOn": [],
-			"recommendFor": [
-				"chat.ai"
-			],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/moderation.settings.json"
 			}
@@ -236,9 +178,7 @@
 			"name": "Import",
 			"description": "Staff, guests and conversations with their messages moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
 			"dependsOn": [],
-			"recommendFor": [
-				"moving.yes"
-			],
+			"recommendFor": ["moving.yes"],
 			"settings": {
 				"$ref": "schemas/import.settings.json"
 			}

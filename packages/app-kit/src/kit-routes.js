@@ -230,7 +230,8 @@ export const createKitRoutes = (kit, hooks) => {
 		const expanded = Array.isArray(/** @type {{ features?: unknown }} */ (settings).features)
 			? /** @type {string[]} */ (/** @type {{ features: string[] }} */ (settings).features)
 			: on;
-		const { features: _features, ...widgetSettings } = /** @type {Record<string, unknown>} */ (settings);
+		const widgetSettings = { .../** @type {Record<string, unknown>} */ (settings) };
+		delete widgetSettings.features;
 		// the widgets whose feature (one, or a list: any of them) is on, so a widget bundle needs no copy of the manifest
 		const widgets = manifest.widgets
 			.filter((/** @type {{ feature: string | string[] }} */ widget) =>

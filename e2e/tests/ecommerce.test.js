@@ -221,11 +221,13 @@ describe('Ecommerce on the real Portal', () => {
 	});
 
 	it('sets up the shop: its database entered once in the Portal, and its links to Accounts, Payments and Notifications made by the Portal', async () => {
+		sys.clock.advance(HOUR);
 		// Accounts: email and password sign-in
-		expect((await setUp(ACCOUNTS, 'accounts', '/features', { on: ['email_password'] })).status).toBe(200);
+		expect((await setUp(ACCOUNTS, 'accounts', '/features', { on: ['sign_in'] })).status).toBe(200);
 		await sys.connectDatabase(websiteId, ACCOUNTS);
+		expect((await setUp(ACCOUNTS, 'accounts', '/settings/sign_in.methods', { value: ['email_password'] })).status).toBe(204);
 		// Payments: Stripe with the merchant's keys, the payment API and refunds
-		expect((await setUp(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'refunds', 'stripe'] })).status).toBe(200);
+		expect((await setUp(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'stripe'] })).status).toBe(200);
 		await sys.connectDatabase(websiteId, PAYMENTS);
 		expect((await setUp(PAYMENTS, 'payments', '/connections/stripe', { value: STRIPE_KEYS })).json).toMatchObject({
 			status: 'connected',
@@ -485,7 +487,7 @@ describe('Ecommerce on the real Portal', () => {
 	});
 
 	it('Chat’s shop search looks the product up in the real Ecommerce and shows a product card', async () => {
-		const on = ['ai_replies', 'guest_chat', 'product_cards', 'shop_search', 'visitor_chat'];
+		const on = ['ai_replies', 'shop_assistant', 'visitor_chat'];
 		expect((await setUp(CHAT, 'chat', '/features', { on })).status).toBe(200);
 		await sys.connectDatabase(websiteId, CHAT);
 		await sys.connectAi(websiteId, { provider: 'openai', apiKey: 'sk-merchant-000456', model: 'gpt-4.1-mini' });

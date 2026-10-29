@@ -90,10 +90,10 @@ describe('Accounts on the real Portal', () => {
 	});
 
 	it('an Owner prices features and a Support admin switches them on: both reports are accepted', async () => {
-		expect(await sys.setPrices({ email_password: 1000, data_rights: 250, activity_copies: 250 })).toMatchObject({ version: 2 });
+		expect(await sys.setPrices({ sign_in: 1000, data_rights: 250, activity_copies: 250 })).toMatchObject({ version: 2 });
 		const support = await sys.admin('support');
 		const cookie = await sys.adminSession(support.client, websiteId);
-		const on = ['activity_copies', 'data_rights', 'email_password', 'roles'];
+		const on = ['activity_copies', 'data_rights', 'roles', 'sign_in'];
 		const report = await sys.switchFeatures(cookie, websiteId, on);
 		expect(report.version).toBe(1);
 		expect([...report.on].sort()).toEqual(on);
@@ -248,7 +248,7 @@ describe('Accounts on the real Portal', () => {
 			expect.arrayContaining([
 				expect.objectContaining({
 					productId: 'accounts',
-					featuresOn: ['activity_copies', 'data_rights', 'email_password', 'roles'],
+					featuresOn: ['activity_copies', 'data_rights', 'roles', 'sign_in'],
 					hourlyCost: 1500,
 					dailyCost: 36_000,
 				}),

@@ -114,6 +114,9 @@ export const settingsOf = ({ settings = {} }) => {
 		if (value && typeof value === 'object' && !Array.isArray(value))
 			out[key] = { ...value, .../** @type {object} */ (/** @type {Record<string, unknown>} */ (settings)[key] ?? {}) };
 	}
+	if (settings.ratings && /** @type {any} */ (settings.ratings).enabled === undefined) {
+		/** @type {any} */ (out.ratings).enabled = true;
+	}
 	return /** @type {ChatSettings} */ (out);
 };
 
@@ -147,6 +150,7 @@ export const isInvalid = (answer) => problemCode(answer.data) === 'validation_fa
  * @returns {string | null}
  */
 export const webAddress = (value, base) => {
+	if (!value || typeof value !== 'string' || value.trim() === '') return null;
 	try {
 		const url = new URL(String(value), base);
 		return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;

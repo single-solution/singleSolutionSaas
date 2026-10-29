@@ -3,7 +3,7 @@
  * while the product is stopped, and ended by regenerating the server token in the Portal.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DAY, PASSWORD, codeOf, startSystem } from './helpers.js';
+import { DAY, codeOf, startSystem } from './helpers.js';
 
 const ADMIN_ORIGIN = 'https://admin.tickets.example.com';
 const USER = { id: 'u_1', name: 'Sam Staff', email: 'sam@tickets.example.com' };
@@ -95,11 +95,11 @@ describe('tickets', () => {
 		const { json } = await ask(tokens.server);
 		expect((await inbox(json.ticket)).status).toBe(200);
 		// (the suspension above ended the merchant's Portal sessions: an Owner regenerates)
-		const regenerated = await (
-			await sys.owner()
-		).post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/tokens/notes/regenerate`, {
+		const owner = await sys.owner();
+		const otp = await sys.stepUp(owner, 'owner@portal.test');
+		const regenerated = await owner.post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/tokens/notes/regenerate`, {
 			kind: 'server',
-			password: PASSWORD,
+			...otp,
 		});
 		expect(regenerated.status).toBe(200);
 		const ended = await inbox(json.ticket);

@@ -115,8 +115,8 @@ describe('default templates: no template written, messages still go (parity P1)'
 		await sys.addCredits(m.merchantId, 100);
 		/** @type {Record<string, string[]>} */
 		const features = {
-			chat: ['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts'],
-			accounts: ['email_password'],
+			chat: ['visitor_chat', 'inbox'],
+			accounts: ['sign_in'],
 			notifications: ['email'],
 		};
 		for (const [id, on] of Object.entries(features)) {
@@ -176,7 +176,8 @@ describe('default templates: no template written, messages still go (parity P1)'
 	it('an order email and an Ecommerce staff alert go with Ecommerce’s default words; a per-status message falls back to the general one', async () => {
 		await sys.addProduct(merchantId, websiteId, 'ecommerce');
 		tokens.ecommerce = await sys.tokens(merchantId, websiteId, 'ecommerce');
-		expect((await dash('ecommerce', 'PUT', '/features', { on: ['catalog', 'checkout', 'staff_alerts'] })).status).toBe(200);
+		expect((await dash('ecommerce', 'PUT', '/features', { on: ['catalog', 'checkout'] })).status).toBe(200);
+		expect((await dash('ecommerce', 'PUT', '/settings/checkout.enableStaffAlerts', { value: true })).status).toBe(204);
 		await sys.connectDatabase(websiteId, SHOP);
 		await alertTeam(['ops@defaults.example.com']);
 		/** @param {string} method @param {string} path @param {unknown} [body] */

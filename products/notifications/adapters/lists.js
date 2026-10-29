@@ -26,15 +26,15 @@ import { checkWebhookUrls } from '../core/webhooks.js';
 /** @typedef {{ ok: true, value: unknown } | { ok: false, errors: Array<{ path: string, message: string }> }} Saved */
 
 /** The features that send to the website's customers (their topics and template settings apply). */
-const SENDING_FEATURES = Object.freeze(['email', 'sms', 'whatsapp', 'browser_push', 'staff_push', 'send_api']);
+const SENDING_FEATURES = Object.freeze(['email', 'sms', 'whatsapp', 'push', 'send_api']);
 
 /** Each list: the feature(s) it belongs to (any of them on) and its name on screens. */
 export const LISTS = Object.freeze({
 	webhook_urls: Object.freeze({ feature: 'webhooks', title: 'Webhook URLs' }),
-	topics: Object.freeze({ feature: ['email', 'sms', 'whatsapp', 'browser_push'], title: 'Unsubscribe topics' }),
+	topics: Object.freeze({ feature: ['email', 'sms', 'whatsapp', 'push'], title: 'Unsubscribe topics' }),
 	template_settings: Object.freeze({ feature: SENDING_FEATURES, title: 'Template settings' }),
-	fallback_chains: Object.freeze({ feature: 'fallback', title: 'Fallback channels' }),
-	quiet_hours: Object.freeze({ feature: 'quiet_hours', title: 'Quiet hours' }),
+	fallback_chains: Object.freeze({ feature: SENDING_FEATURES, title: 'Fallback channels' }),
+	quiet_hours: Object.freeze({ feature: SENDING_FEATURES, title: 'Quiet hours' }),
 	stop_keywords: Object.freeze({ feature: ['sms', 'whatsapp'], title: 'Unsubscribe keywords' }),
 });
 

@@ -1048,7 +1048,7 @@ describe('product cards', () => {
 		keepGuest();
 		document.documentElement.lang = 'en-US';
 		const { root, api } = await start({
-			features: ['visitor_chat', 'ai_replies'],
+			features: ['visitor_chat', 'ai_replies', 'shop_assistant'],
 			routes: ROUTES,
 		});
 		await api.open();
@@ -1093,7 +1093,7 @@ describe('product cards', () => {
 	it('follows the link to the product page when no cart on the page takes the item', async () => {
 		keepGuest();
 		const { root, api } = await start({
-			features: ['visitor_chat', 'ai_replies'],
+			features: ['visitor_chat', 'ai_replies', 'shop_assistant'],
 			routes: ROUTES,
 		});
 		await api.open();
@@ -1119,7 +1119,7 @@ describe('product cards', () => {
 		keepGuest();
 		const closed = conv({ waiting: true, officeHours: { open: false, backAt: '2026-10-02T07:00:00Z' } });
 		const { root, api } = await start({
-			features: ['visitor_chat', 'ai_replies', 'handoff'],
+			features: ['visitor_chat', 'ai_replies', 'handoff', 'shop_assistant'],
 			look: {
 				format: {
 					locale: 'en-GB',

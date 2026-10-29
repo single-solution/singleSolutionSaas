@@ -97,6 +97,20 @@ const pressNth = async (label, at = 0) => {
 	await settle(1);
 };
 
+/**
+ * @param {Awaited<ReturnType<typeof world>>} x
+ * @param {boolean} [bad]
+ */
+const fillOtp = async (x, bad = false) => {
+	await x.b.api.post('/v1/me/step-up-otp', {});
+	if (bad) {
+		fillDialog('Two-step or recovery code', '000000');
+		return;
+	}
+	const code = x.w.lastOtp('owner@shop.test');
+	fillDialog('Two-step or recovery code', String(code));
+};
+
 /** The label's input. @param {string} label @returns {any} */
 const field = (label) => byLabel(document, label);
 
@@ -112,17 +126,17 @@ describe('Data and files (jsdom)', () => {
 			expect(shows('Database ss_ecommerce')).toBe(true);
 			expect(shows('Database ss_payments')).toBe(true);
 			expect(shows('Folder payments/')).toBe(true);
-			// the value goes in a password field; nothing is saved without the person's password
+			// the value goes in a password field; nothing is saved without the person's OTP
 			type(field('Connection string'), URI);
 			await pressNth('Save');
 			expect(dialog().textContent).toContain('Save Database (MongoDB)');
-			fillDialog('Your password', 'not my password');
+			await fillOtp(x, true);
 			await pressDialog('Save');
-			await until(() => dialog().textContent?.includes('That password is not right'));
+			await until(() => dialog().textContent?.includes('That code is not right'));
 			x.b.use();
 			const unchanged = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
 			expect(unchanged.ok && /** @type {any} */ (unchanged).data.database.set).toBe(false);
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(() => shows('Saved. Your products pick it up within moments.'));
@@ -143,14 +157,14 @@ describe('Data and files (jsdom)', () => {
 		}
 	});
 
-	it('a value the Portal does not accept is shown under the form, after the password was right', async () => {
+	it('a value the Portal does not accept is shown under the form, after the OTP was right', async () => {
 		const restore = quiet();
 		try {
 			const x = await world('dcp_bad');
 			await openPage(x, 'settings/connections');
 			type(field('Connection string'), 'postgres://nope');
 			await pressNth('Save');
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(() => shows('A MongoDB connection string starts with'));
@@ -160,7 +174,7 @@ describe('Data and files (jsdom)', () => {
 		}
 	});
 
-	it('the storage: four parts needed, saved with the password, removed with the password', async () => {
+	it('the storage: four parts needed, saved with the OTP, removed with the OTP', async () => {
 		const restore = quiet();
 		try {
 			const x = await world('dcp_storage');
@@ -175,7 +189,7 @@ describe('Data and files (jsdom)', () => {
 			type(field('Public address of your files (optional)'), ' https://cdn.example.com/files/ ');
 			// (the first Save button is the database's, the second the storage's)
 			await pressNth('Save', 1);
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			x.b.use();
@@ -188,9 +202,9 @@ describe('Data and files (jsdom)', () => {
 			// the public address is not a secret: the field shows what was saved, the secrets are empty again
 			expect(field('Public address of your files (optional)').value).toBe('https://cdn.example.com/files');
 			expect(field('Secret access key').value).toBe('');
-			// Remove asks for the password too (the database is not set: the storage's Remove is the only one)
+			// Remove asks for the OTP too (the database is not set: the storage's Remove is the only one)
 			await pressNth('Remove');
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Remove');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			const gone = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
@@ -216,14 +230,14 @@ describe('the AI provider key (jsdom)', () => {
 			type(field('API key'), 'short');
 			type(field('Model'), 'gpt-4.1-mini');
 			await pressNth('Save', 2);
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(() => shows('Enter the API key.'));
 			// saved: the key is nowhere on the page again; the provider and the model stay
 			type(field('API key'), 'sk-test-AiSecret0123456789');
 			await pressNth('Save', 2);
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(() => shows('Saved. Your products pick it up within moments.'));
@@ -249,16 +263,16 @@ describe('the AI provider key (jsdom)', () => {
 			expect(/** @type {HTMLButtonElement} */ (buttons('Replace', document.body)[0]).disabled).toBe(true);
 			type(field('Service address'), 'https://llm.example.com/v1/');
 			await pressNth('Replace');
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(async () => {
 				const next = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
 				return next.ok && /** @type {any} */ (next).data.ai.baseUrl === 'https://llm.example.com/v1';
 			});
-			// Remove asks for the password too
+			// Remove asks for the OTP too
 			await pressNth('Remove');
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Remove');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			const gone = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
@@ -313,23 +327,23 @@ describe('Between your products (jsdom)', () => {
 			// switch off
 			await menuAction('Switch off');
 			expect(dialog().textContent).toContain('Switch off “Ecommerce may use Payments”');
-			fillDialog('Your password', 'not it');
+			await fillOtp(x, true);
 			await pressDialog('Switch off');
-			await until(() => dialog().textContent?.includes('That password is not right'));
-			fillDialog('Your password', 'correct horse battery');
+			await until(() => dialog().textContent?.includes('That code is not right'));
+			await fillOtp(x);
 			await pressDialog('Switch off');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(() => shows('Switched off'));
 			expect(shows('Create payments')).toBe(false);
 			// and on again
 			await menuAction('Switch on');
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Switch on');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(() => shows('Create payments'));
 			// a new key
 			await menuAction('Regenerate the key');
-			fillDialog('Your password', 'correct horse battery');
+			await fillOtp(x);
 			await pressDialog('Regenerate the key');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			x.b.use();

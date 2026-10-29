@@ -64,6 +64,12 @@ beforeAll(async () => {
 			accessKeyId: 'AKIACATALOGS',
 			secretAccessKey: 'catalogs-secret-0123456789',
 		});
+		await configure(domain, {
+			'catalog.enableSizeCharts': true,
+			'catalog.enableGradesSerials': true,
+			'catalog.enableMeasuredSales': true,
+			'seo.enableLandingPages': true,
+		});
 	}
 });
 afterAll(async () => {
@@ -297,7 +303,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 				},
 				{ key: 'b', label: 'B', condition: 'used', warrantyTime: { amount: 30, unit: 'days' } },
 			],
-			'landing_pages.gradeUrl': '/grades/{key}',
+			'seo.gradeUrl': '/grades/{key}',
 		});
 		// the IMEI is this shop's own unit field: 15 digits with a Luhn check digit, two per dual-SIM phone
 		const imei = await write(DEVICES, 'POST', '/v1/attributes', {

@@ -601,7 +601,7 @@ describe('inbox', () => {
 		let conversation = full({ note: 'VIP customer' });
 		let noteAnswer = () => answer(200, { conversation });
 		const { server, hosts, time } = await startAdmin({
-			features: ['inbox'],
+			features: ['inbox', 'leads_flows'],
 			settings: { customFields: [{ key: 'size', label: 'Size', type: 'number', options: [] }] },
 			routes: {
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
@@ -884,7 +884,7 @@ describe('knowledge editor', () => {
 		let fetchAgain = () => problem(500, 'x');
 		let addPage = () => answer(201, { page: {} });
 		const { server, hosts } = await startAdmin({
-			features: [],
+			features: ['knowledge_base'],
 			routes: {
 				'GET /v1/admin/knowledge/entries': (call) =>
 					answer(200, {
@@ -1004,7 +1004,7 @@ describe('knowledge editor', () => {
 		const getTicket = vi.fn().mockResolvedValueOnce(ticket()).mockResolvedValueOnce(null);
 		let pages = () => problem(403, 'forbidden');
 		const { hosts, time } = await startAdmin({
-			features: [],
+			features: ['knowledge_base'],
 			getTicket,
 			routes: {
 				'GET /v1/admin/knowledge/entries': () => problem(403, 'forbidden'),

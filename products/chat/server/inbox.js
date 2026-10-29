@@ -112,7 +112,7 @@ export const createInbox = (product, service, reply) => {
 		if (STATUSES.includes(ctx.query.status)) filter.status = ctx.query.status;
 		if (ctx.query.waiting === '1') filter.waiting = true;
 		if (ctx.query.visitor === 'guest' || ctx.query.visitor === 'user') filter['visitor.kind'] = ctx.query.visitor;
-		const hasAssignment = s.on.includes('assignment');
+		const hasAssignment = s.on.includes('assignment') || s.on.includes('inbox');
 		if (hasAssignment && ctx.query.assigned === 'unassigned') filter.assignedTo = null;
 		if (hasAssignment && ctx.query.assigned === 'me') filter.assignedTo = actorOf(ctx).id;
 		if (hasAssignment && typeof ctx.query.assignee === 'string' && USER_ID.test(ctx.query.assignee))
@@ -219,8 +219,8 @@ export const createInbox = (product, service, reply) => {
 		const autoAssign = s.on.includes('assignment')
 			? (await s.values('assignment')).autoAssign
 			: (await s.values('inbox')).autoAssign;
-		const takes =
-			s.on.includes('assignment') && c.assignedTo === null && actor.kind !== SERVER.kind && autoAssign === 'first_replier';
+		const hasAssignment = s.on.includes('assignment') || s.on.includes('inbox');
+		const takes = hasAssignment && c.assignedTo === null && actor.kind !== SERVER.kind && autoAssign === 'first_replier';
 		if (takes) await s.store.staff.checkIn(/** @type {any} */ (actor));
 		const assign = takes && (await hasRoom(s, actor.id)) ? { assignedTo: actor.id } : {};
 		const { message, conversation } = await service.append(
@@ -393,7 +393,7 @@ export const createInbox = (product, service, reply) => {
 			actions.push({ action: 'conversation.status_changed', detail: `Status: ${c.status} → ${body.status}` });
 		}
 		if (body.assignedTo !== undefined) {
-			needs(s, 'assignment');
+			needs(s, ['assignment', 'inbox']);
 			/** @type {string | null} */
 			let assignee = null;
 			if (body.assignedTo !== null) {
@@ -408,7 +408,7 @@ export const createInbox = (product, service, reply) => {
 			actions.push({ action: 'conversation.assigned', detail: assignee ? `Assigned to ${assignee}` : 'Unassigned' });
 		}
 		if (body.fields !== undefined) {
-			needs(s, 'custom_fields');
+			needs(s, ['custom_fields', 'leads_flows']);
 			const definitions = await s.list('custom_fields');
 			/** @type {string[]} */
 			const changed = [];

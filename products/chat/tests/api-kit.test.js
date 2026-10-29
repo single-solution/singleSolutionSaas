@@ -86,20 +86,18 @@ describe('widgets and docs', () => {
 			(await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN })).json.settings.look.avatarUrl;
 		expect(await look()).toBe('https://cdn.example.com/icon.png');
 		const allowed = async () =>
-			(await sys.serverCall('GET', '/v1/settings')).json.features.find((/** @type {any} */ f) => f.key === 'language_lock')
-				.values.allowedLanguages;
+			(await sys.serverCall('GET', '/v1/settings')).json.features.find((/** @type {any} */ f) => f.key === 'ai_replies').values
+				.allowedLanguages;
 		expect(await allowed()).toEqual({ value: ['en-GB', 'fr'], source: 'portal', from: 'region.languages' });
 		// the merchant's own value wins; the dashboard names the Portal while the website's is in use
 		await sys.setting('visitor_chat', 'avatarUrl', 'https://cdn.example.com/bot.png');
-		await sys.setting('language_lock', 'allowedLanguages', ['de']);
+		await sys.setting('ai_replies', 'allowedLanguages', ['de']);
 		expect(await look()).toBe('https://cdn.example.com/bot.png');
 		expect((await allowed()).value).toEqual(['de']);
 	});
 
 	it('answers the widget settings with lists and no secrets', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'leads_flows']);
+		const sys = await start(['visitor_chat', 'leads_flows']);
 		await sys.setting('visitor_chat', 'avatarUrl', 'http://not-https.example.com/a.png');
 		await sys.list('page_types', [
 			{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}?' },

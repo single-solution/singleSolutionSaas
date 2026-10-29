@@ -186,7 +186,13 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		{ token, origin, body, cookie, headers = {}, network: ip, after = true, bare = false, staff } = {},
 	) => {
 		requests += 1;
-		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
+		if (
+			token === server &&
+			!bare &&
+			headers['ss-sign-in'] === undefined &&
+			headers['ss-visitor-ip'] === undefined &&
+			headers['ss-guest'] === undefined
+		)
 			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
 			headers = await staffHeaders({ headers, staff });
 		const response = await handler(
@@ -266,10 +272,124 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	const dashboard = (cookie, method, path, body) =>
 		call(method, path, { cookie, ...(body === undefined ? {} : { body }), ...(method === 'GET' ? {} : { origin: BASE }) });
 
+	const CANONICAL_FEATURES = new Set([
+		'visitor_chat',
+		'ai_replies',
+		'knowledge_base',
+		'webhook_tools',
+		'book_slot',
+		'shop_assistant',
+		'leads_flows',
+		'inbox',
+		'handoff',
+		'moderation',
+		'reports',
+		'import',
+	]);
+
+	/** @type {Record<string, string>} */
+	const LEGACY_FEATURE_MAP = {
+		guest_chat: 'visitor_chat',
+		signed_in_chat: 'visitor_chat',
+		typing_receipts: 'visitor_chat',
+		attachments: 'visitor_chat',
+		ratings: 'visitor_chat',
+		transcripts: 'visitor_chat',
+		proactive_idle: 'visitor_chat',
+		proactive_pages: 'visitor_chat',
+		proactive_exit: 'visitor_chat',
+		ai_backup: 'ai_replies',
+		ai_instructions: 'ai_replies',
+		fallback_answers: 'ai_replies',
+		ai_caps: 'ai_replies',
+		ai_cost_alerts: 'ai_replies',
+		language_lock: 'ai_replies',
+		shop_context: 'ai_replies',
+		knowledge_pages: 'knowledge_base',
+		knowledge_editor: 'knowledge_base',
+		product_cards: 'shop_assistant',
+		shop_search: 'shop_assistant',
+		shop_deals: 'shop_assistant',
+		shop_top: 'shop_assistant',
+		shop_my_orders: 'shop_assistant',
+		track_shipment: 'shop_assistant',
+		assignment: 'inbox',
+		presence_queue: 'inbox',
+		internal_notes: 'inbox',
+		saved_replies: 'inbox',
+		context_panel: 'inbox',
+		ai_summary: 'inbox',
+		staff_alerts: 'inbox',
+		visitor_alerts: 'inbox',
+		custom_fields: 'leads_flows',
+	};
+
+	/** @type {Record<string, [string, string]>} */
+	const LEGACY_SETTINGS_MAP = {
+		'language_lock.allowedLanguages': ['ai_replies', 'allowedLanguages'],
+		'language_lock.markerWords': ['ai_replies', 'markerWords'],
+		'language_lock.acceptLatinFor': ['ai_replies', 'acceptLatinFor'],
+		'language_lock.unavailableTexts': ['ai_replies', 'unavailableTexts'],
+		'ai_instructions.instructions': ['ai_replies', 'instructions'],
+		'fallback_answers.budgetWords': ['ai_replies', 'budgetWords'],
+		'ai_caps.dailyTokens': ['ai_replies', 'dailyTokens'],
+		'ai_caps.monthlyTokens': ['ai_replies', 'monthlyTokens'],
+		'guest_chat.messageLimit': ['visitor_chat', 'messageLimit'],
+		'guest_chat.contactCapture': ['visitor_chat', 'contactCapture'],
+		'signed_in_chat.claimByPhone': ['visitor_chat', 'claimByPhone'],
+		'typing_receipts.showTyping': ['visitor_chat', 'showTyping'],
+		'typing_receipts.showSeen': ['visitor_chat', 'showSeen'],
+		'attachments.visitorUploads': ['visitor_chat', 'visitorUploads'],
+		'ratings.kind': ['visitor_chat', 'ratingKind'],
+		'ratings.labels': ['visitor_chat', 'ratingLabels'],
+		'ratings.askWhen': ['visitor_chat', 'ratingAskWhen'],
+		'ratings.comment': ['visitor_chat', 'ratingAskComment'],
+		'transcripts.emailTranscripts': ['visitor_chat', 'emailTranscripts'],
+		'proactive_idle.idleMinutes': ['visitor_chat', 'proactiveIdleMinutes'],
+		'proactive_idle.oncePer': ['visitor_chat', 'proactiveOncePer'],
+		'proactive_idle.hideOnMobile': ['visitor_chat', 'proactiveHideOnMobile'],
+		'proactive_exit.exitIntent': ['visitor_chat', 'proactiveExit'],
+		'assignment.autoAssign': ['inbox', 'autoAssign'],
+		'presence_queue.maxChats': ['inbox', 'maxChats'],
+		'presence_queue.queuePosition': ['inbox', 'queuePosition'],
+		'internal_notes.mode': ['inbox', 'notesMode'],
+		'ai_summary.instructions': ['inbox', 'summaryInstructions'],
+		'staff_alerts.adminUrl': ['inbox', 'adminUrl'],
+		'staff_alerts.frequency': ['inbox', 'frequency'],
+		'staff_alerts.includePhone': ['inbox', 'includePhone'],
+		'visitor_alerts.channels': ['inbox', 'visitorAlertsChannels'],
+		'visitor_alerts.frequency': ['inbox', 'visitorAlertsFrequency'],
+		'inbox.visitorChannels': ['inbox', 'visitorAlertsChannels'],
+		'inbox.visitorFrequency': ['inbox', 'visitorAlertsFrequency'],
+	};
+
 	/** Switch features on (admin Features screen → feature report to the Portal). @param {string[]} on */
 	const switchOn = async (on) => {
-		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/features`, { on });
+		const canonical = [
+			...new Set(on.map((key) => LEGACY_FEATURE_MAP[key] ?? key).filter((key) => CANONICAL_FEATURES.has(key))),
+		];
+		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/features`, {
+			on: canonical,
+		});
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${response.text}`);
+		if (on.includes('ratings')) {
+			await dashboard(
+				await adminSession(),
+				'PUT',
+				`/v1/dashboard/websites/${websiteId}/settings/visitor_chat.ratingsEnabled`,
+				{ value: true },
+			);
+		}
+		if (on.includes('ai_summary')) {
+			await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/settings/inbox.autoSummary`, {
+				value: true,
+			});
+		}
+		if (on.includes('shop_context')) {
+			await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/settings/ai_replies.shopContext`, {
+				value: true,
+			});
+		}
 	};
 
 	/** What the merchant does in the Portal (the database, the storage, the AI key, the links to other products). */
@@ -334,20 +454,44 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 				),
 			},
 		}),
+		'inbox.recipients': (value) => ({
+			team: {
+				...site.team,
+				recipients: /** @type {string[]} */ (value).map((entry) =>
+					entry.includes('@') ? { name: '', email: entry, phone: '' } : { name: '', email: '', phone: entry },
+				),
+			},
+		}),
 		'staff_alerts.phoneChannel': (value) => ({ team: { ...site.team, phoneChannel: value } }),
+		'inbox.phoneChannel': (value) => ({ team: { ...site.team, phoneChannel: value } }),
 		'staff_alerts.staffPush': (value) => ({ team: { ...site.team, staffPush: value } }),
+		'inbox.staffPush': (value) => ({ team: { ...site.team, staffPush: value } }),
 		'signed_in_chat.signInUrl': (value) => ({ pages: { ...site.pages, signIn: value } }),
+		'visitor_chat.signInUrl': (value) => ({ pages: { ...site.pages, signIn: value } }),
 		'language_lock.defaultLanguage': (value) => ({ region: { ...site.region, language: value } }),
+		'ai_replies.defaultLanguage': (value) => ({ region: { ...site.region, language: value } }),
 	};
 
 	/** @param {string} feature @param {string} name @param {unknown} value */
 	const setting = async (feature, name, value) => {
 		const portalSetting = PORTAL_SETTINGS[`${feature}.${name}`];
 		if (portalSetting) return setWebsite(portalSetting(value));
+		const [targetFeature, targetName] = LEGACY_SETTINGS_MAP[`${feature}.${name}`] ?? [feature, name];
+		if (
+			(feature === 'ratings' || (targetFeature === 'visitor_chat' && targetName.startsWith('rating'))) &&
+			targetName !== 'ratingsEnabled'
+		) {
+			await dashboard(
+				await adminSession(),
+				'PUT',
+				`/v1/dashboard/websites/${websiteId}/settings/visitor_chat.ratingsEnabled`,
+				{ value: true },
+			);
+		}
 		const response = await dashboard(
 			await adminSession(),
 			'PUT',
-			`/v1/dashboard/websites/${websiteId}/settings/${feature}.${name}`,
+			`/v1/dashboard/websites/${websiteId}/settings/${targetFeature}.${targetName}`,
 			{
 				value,
 			},

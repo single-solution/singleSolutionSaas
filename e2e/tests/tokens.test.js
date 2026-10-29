@@ -156,9 +156,7 @@ describe('tokens of a product on a website', () => {
 		const old = await sys.call('GET', '/v1/notes', { token: before.server });
 		expect([old.status, codeOf(old)]).toEqual([401, 'invalid_token']);
 		expect((await sys.call('GET', '/v1/notes', { token: res.json.token })).status).toBe(200);
-		expect((await m.client.post(`${base}/reveal`, await sys.stepUp(m.client, m.email))).json.serverToken).toBe(
-			res.json.token,
-		);
+		expect((await m.client.post(`${base}/reveal`, await sys.stepUp(m.client, m.email))).json.serverToken).toBe(res.json.token);
 		// the browser token is untouched
 		expect((await sys.tokens(m.merchantId, websiteId)).browser).toBe(before.browser);
 	});

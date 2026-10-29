@@ -1,0 +1,49 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import NextLink from 'next/link.js';
+import { usePathname } from 'next/navigation.js';
+import { PRODUCT_BRAND } from './brand-constants.js';
+
+const Link = /** @type {any} */ (NextLink);
+
+/**
+ * Shared floating glass header for the public Portal surface (Website + Docs).
+ * @param {{ brandName?: string, isHome?: boolean }} props
+ */
+export function SiteHeader({ brandName = PRODUCT_BRAND, isHome = false }) {
+	const rawPath = usePathname();
+	const pathname = rawPath || (isHome ? '/' : '');
+	const [scrolled, setScrolled] = useState(false);
+
+	useEffect(() => {
+		const onScroll = () => setScrolled(window.scrollY > 12);
+		onScroll();
+		window.addEventListener('scroll', onScroll, { passive: true });
+		return () => window.removeEventListener('scroll', onScroll);
+	}, []);
+
+	const isCurrentHome = isHome || pathname === '/';
+	const isDocs = pathname === '/docs' || pathname.startsWith('/docs/');
+
+	return (
+		<div className={`nav-shell${scrolled ? ' is-scrolled' : ''}`}>
+			<header className="nav glass">
+				<Link className="brand" href={isCurrentHome ? '#top' : '/'}>
+					{brandName}
+				</Link>
+				<nav aria-label="Main">
+					<a href={isCurrentHome ? '#products' : '/#products'}>Features</a>
+					<Link
+						href="/docs"
+						style={isDocs ? { color: 'var(--ss-primary)', fontWeight: 600 } : undefined}>
+						Docs
+					</Link>
+				</nav>
+				<Link className="cta" href="/login">
+					Sign in
+				</Link>
+			</header>
+		</div>
+	);
+}

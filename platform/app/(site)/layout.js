@@ -2,8 +2,8 @@ import './site.css';
 
 /**
  * Public marketing site on the Portal (same origin as /login and the console). Unframed.
- * One Unite kit with console + products: `@ss/ui/theme.css` via root `globals.css`.
- * `site.css` is marketing composition only — no parallel colors/radii/faces.
+ * Theme pack: Unite (`@ss/ui/theme.css` via root `globals.css`) — same pack as Docs, console, products.
+ * See `packages/ui/THEME-PACK.md`. `site.css` is home composition only — no parallel palette.
  * @param {{ children: import('react').ReactNode }} props
  */
 export default function SiteLayout({ children }) {

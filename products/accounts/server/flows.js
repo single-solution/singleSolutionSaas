@@ -333,7 +333,7 @@ export const createFlows = (product, service) => {
 	 * @param {Site} s @param {UserRecord} user @param {unknown} typed
 	 */
 	const staffCodeOf = async (s, user, typed) => {
-		if (!s.on.includes('staff_links')) return null;
+		if (!s.on.includes('staff_links') && !s.on.includes('roles')) return null;
 		const record = await s.store.codes.latest('staff_code', user.id);
 		const code = record ? normalizeCode(typed, STAFF_CODE_LENGTH) : null;
 		return record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)) ? record.id : null;
@@ -402,7 +402,10 @@ export const createFlows = (product, service) => {
 		// a sign-in code staff made for the user works in the same screen (A3)
 		const user =
 			kind === 'phone' ? await s.store.users.byPhone(target) : kind === 'email' ? await s.store.users.byEmail(target) : null;
-		const staff = user && s.on.includes('staff_links') ? await s.store.codes.latest('staff_code', user.id) : null;
+		const staff =
+			user && (s.on.includes('staff_links') || s.on.includes('roles'))
+				? await s.store.codes.latest('staff_code', user.id)
+				: null;
 		for (const record of [sent, staff]) {
 			const code = record ? normalizeCode(typed, Number(record.data.length)) : null;
 			if (record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)))

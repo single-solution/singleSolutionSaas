@@ -203,6 +203,13 @@ const write = async (method, path, body) => {
 	return answer.json;
 };
 
+const ECOMMERCE_SETTING_MAP = {
+	'staff_alerts.staffPermission': 'checkout.staffPermission',
+	'staff_alerts.events': 'checkout.events',
+	'staff_alerts.adminUrl': 'checkout.adminUrl',
+	'staff_alerts.includePhone': 'checkout.includePhone',
+};
+
 /**
  * Save settings and lists through a product's settings API (K1) with its server token.
  * @param {string} base @param {string} productId @param {Record<string, unknown>} values
@@ -212,7 +219,8 @@ const configureOn = async (base, productId, values) => {
 	const { portal, own } = splitPortal(values);
 	if (Object.keys(portal).length > 0 && merchant)
 		await savePortalSettings(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/settings`, portal);
-	for (const [key, value] of Object.entries(own)) {
+	for (const [rawKey, value] of Object.entries(own)) {
+		const key = productId === 'ecommerce' ? (ECOMMERCE_SETTING_MAP[rawKey] ?? rawKey) : rawKey;
 		const path = key.startsWith('list.') ? `/v1/lists/${key.slice(5)}` : `/v1/settings/${key}`;
 		const saved = await sys.call('PUT', path, {
 			base,
@@ -338,9 +346,10 @@ beforeAll(async () => {
 	await sys.addCredits(m.merchantId, 100);
 
 	// Accounts: phone + password sign-in with roles; a member role; a manager whose role grants ecommerce:orders.read
-	await dashboardOf(ACCOUNTS, 'accounts', '/features', { on: ['phone_password', 'roles'] });
+	await dashboardOf(ACCOUNTS, 'accounts', '/features', { on: ['roles', 'sign_in'] });
 	await sys.connectDatabase(websiteId, ACCOUNTS);
 	await configureOn(ACCOUNTS, 'accounts', {
+		'sign_in.methods': ['email_password', 'phone_password'],
 		'phone.defaultCallingCode': '+44',
 		'phone.trunkPrefix': '0',
 	});
@@ -409,19 +418,13 @@ beforeAll(async () => {
 	const support = await sys.admin('support');
 	await sys.switchFeatures(await sys.adminSession(support.client, websiteId), websiteId, [
 		'catalog',
-		'variants',
-		'grades_serials',
 		'checkout',
 		'delivery_zones',
 		'deals',
 		'loyalty',
-		'role_pricing',
 		'returns',
 		'invoices',
 		'reports',
-		'events',
-		'staff_alerts',
-		'alerts',
 	]);
 	await sys.connectDatabase(websiteId);
 	await sys.connectStorage(websiteId, {
@@ -432,6 +435,13 @@ beforeAll(async () => {
 		secretAccessKey: 'orders-secret-0123456789',
 	});
 	await configure({
+		'catalog.enableVariants': true,
+		'catalog.enableGradesSerials': true,
+		'catalog.enableMeasuredSales': true,
+		'catalog.enableAlerts': true,
+		'catalog.enableEvents': true,
+		'checkout.enableRolePricing': true,
+		'checkout.enableStaffAlerts': true,
 		// the website's facts, region and Format (Website settings in the Portal)
 		'business.name': 'Example Shop',
 		'business.email': 'hello@shop.example.com',
@@ -830,7 +840,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		// the money arrives anyway and the store's staff confirm it in Payments: it is to be refunded
 		const late = await payments('POST', `/v1/payments/${paymentId}/confirm`, { reference: 'TRX-9', note: 'Late' });
 		expect(late.json).toMatchObject({ status: 'paid', refundDue: true });
-		await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'manual_payments', 'refunds'] });
+		await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'manual_payments'] });
 		sys.clock.advance(31_000);
 		const read = await orderOf(order.id);
 		expect(read).toMatchObject({ status: 'canceled', payment: { paid: total, refundDue: total } });

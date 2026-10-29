@@ -260,7 +260,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			const resume = buttonOf(doc, t('inbox.resumeAi'), { class: 'secondary' });
 			const handBack = buttonOf(doc, t('inbox.handBack'), { class: 'secondary' });
 			aiPart.append(pausedLine, reason.wrap, pause, resume, handBack);
-			const fields = (on('custom_fields') ? s.customFields : []).map((definition) => ({
+			const fields = (on('custom_fields') || on('leads_flows') ? s.customFields : []).map((definition) => ({
 				definition,
 				...customInput(doc, make, t, definition),
 			}));
@@ -328,7 +328,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					return t('inbox.saved');
 				},
 			});
-			const context = contextPart({ ...kit, summary: on('ai_summary') });
+			const context = contextPart({ ...kit, summary: on('ai_summary') || on('inbox') });
 			const reply = /** @type {HTMLTextAreaElement} */ (
 				element(doc, 'textarea', { rows: '3', maxlength: String(MAX_MESSAGE_LENGTH), 'aria-label': t('inbox.reply') })
 			);
@@ -370,12 +370,14 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				older,
 				messages,
 				replyForm,
-				...(on('internal_notes') ? [noteForm] : []),
+				...(on('internal_notes') || on('inbox') ? [noteForm] : []),
 				...(fields.length > 0 ? [fieldsForm] : []),
 				...(hasLabels ? [labelsForm] : []),
-				...(on('context_panel') ? [context.part] : []),
-				...(on('transcripts') || s.transcripts !== false ? [transcriptForm] : []),
-				...((on('ratings') || s.ratings?.enabled) && s.ratings?.askWhen === 'manual' ? [askRating] : []),
+				...(on('context_panel') || on('inbox') ? [context.part] : []),
+				...(on('transcripts') || on('inbox') || s.transcripts !== false ? [transcriptForm] : []),
+				...((on('ratings') || on('visitor_chat') || s.ratings?.enabled) && s.ratings?.askWhen === 'manual'
+					? [askRating]
+					: []),
 				remove,
 				closeDetail,
 				detailNote,

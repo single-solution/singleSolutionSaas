@@ -62,12 +62,12 @@ const SETTINGS = {
 const SHARED_SETTINGS = {
 	delivery_log: {
 		name: 'Delivery log',
-		features: ['whatsapp', 'email', 'sms', 'push', 'browser_push', 'staff_push', 'webhooks', 'send_api'],
+		features: ['whatsapp', 'email', 'sms', 'push', 'webhooks', 'send_api'],
 		settings: deliveryLog,
 	},
 	sending_policy: {
 		name: 'Sending policy',
-		features: ['whatsapp', 'email', 'sms', 'push', 'browser_push', 'staff_push', 'send_api'],
+		features: ['whatsapp', 'email', 'sms', 'push', 'send_api'],
 		settings: sendingPolicy,
 	},
 };
@@ -232,7 +232,7 @@ export const createProductInstance = (options) => {
 			push_keys: {
 				label: 'Push keys (VAPID)',
 				kind: 'secret',
-				neededBy: ['push', 'browser_push', 'staff_push'],
+				neededBy: ['push'],
 				secretField: 'privateKey',
 				test: async (value) => {
 					const keys = pushKeysOf(value);

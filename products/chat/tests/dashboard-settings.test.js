@@ -52,23 +52,22 @@ describe('Chat settings in the dashboard', () => {
 				/>,
 			),
 		);
-		// the feature is the heading; its groups are cards in `x-ui.order`, and Advanced is open after them
+		// the feature is the heading; its groups are tabs in `x-ui.order`, and Advanced is after them
 		expect(container.querySelector('h3')?.textContent).toBe('AI replies');
-		// two groups are two titled cards; the tab strip starts at three groups
-		expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
-		const fields = () => [...container.querySelectorAll('[data-field]')].map((f) => f.getAttribute('data-field'));
-		expect(fields()).toEqual([
-			'style',
-			'dontKnow',
-			'onFailure',
-			'bubbles',
-			'tableBubble',
-			'showAiLabel',
-			'neverDisclose',
-			'extraBotPhrases',
+		const tabs = [...container.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
+		expect(tabs).toEqual([
+			'Answers',
+			'AI disclosure',
+			'Instructions',
+			'Fallback answers',
+			'Token caps and cost',
+			'Language lock',
+			'Advanced',
 		]);
+		const fields = () => [...container.querySelectorAll('[data-field]')].map((f) => f.getAttribute('data-field'));
+		expect(fields()).toEqual(['style', 'dontKnow', 'onFailure', 'bubbles', 'tableBubble', 'shopContext']);
 		// on/off settings are toggles, not checkboxes
-		expect(container.querySelectorAll('[role="switch"]')).toHaveLength(3);
+		expect(container.querySelectorAll('[role="switch"]')).toHaveLength(2);
 		expect(container.querySelector('input[type="checkbox"]')).toBeNull();
 		// three choices with long words are a radio list
 		expect(container.querySelectorAll('[role="radiogroup"] input[type="radio"]')).toHaveLength(3);

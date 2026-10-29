@@ -251,8 +251,9 @@ export const createReply = (product, service) => {
 			current = (await service.botMessage(s, current, String(texts['chat.contactAsk']))).conversation;
 		current = await service.route(s, current, await conversationLanguage(s, current));
 		await service.staffAlert(s, current, 'needs_you');
-		if (s.on.includes('ai_summary') || s.on.includes('inbox'))
-			s.ctx.after(() => summarize(s, current.id).catch(() => null));
+		const hasSummary =
+			s.on.includes('ai_summary') || (s.on.includes('inbox') && Boolean((await s.values('inbox')).autoSummary));
+		if (hasSummary) s.ctx.after(() => summarize(s, current.id).catch(() => null));
 		s.ctx.after(() => tagWithAi(s, current.id).catch(() => null));
 		return current;
 	};
@@ -377,7 +378,8 @@ export const createReply = (product, service) => {
 		const ai = s.on.includes('ai_replies') ? await s.values('ai_replies') : {};
 		const lock = hasLegacyLock ? await s.values('language_lock') : ai;
 		const allowedLanguages = lock.allowedLanguages ?? [];
-		if ((!hasLegacyLock && allowedLanguages.length === 0) || !text) return null;
+		const hasLock = hasLegacyLock || allowedLanguages.length > 0 || (lock.markerWords && lock.markerWords.length > 0);
+		if (!hasLock || !text) return null;
 		// the answer's language when a message shows none: the website's (set once in the Portal), else the first allowed
 		const { region } = await s.ctx.website();
 		return detectLanguage(text, {
@@ -561,13 +563,15 @@ export const createReply = (product, service) => {
 			? { questions: await s.list('booking_questions'), services: await s.list('booking_services') }
 			: null;
 		const webhooks = s.on.includes('webhook_tools') ? await s.list('tools') : [];
-		const shop = shopSchemas(s.on, { signedIn: signIn !== null });
+		const shopSettings = s.on.includes('shop_assistant') ? await s.values('shop_assistant') : {};
+		const shop = shopSchemas(s.on, { signedIn: signIn !== null }, shopSettings);
 		const schemas = [
 			...builtinSchemas({ handoff: s.on.includes('handoff'), booking: asks }),
 			...shop,
 			...webhooks.map(webhookSchema),
 		];
-		const withCards = s.on.includes('product_cards') || s.on.includes('shop_assistant');
+		const withCards =
+			s.on.includes('product_cards') || (s.on.includes('shop_assistant') && shopSettings.productCards !== false);
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		const cards = [];
 		/**
@@ -891,7 +895,8 @@ export const createReply = (product, service) => {
 		const allowed = connections.length > 0 && (await withinReplyLimits(s, c)) && !(await service.capped(s));
 		const settings = await s.values('ai_replies');
 		const hasLegacyLock = s.on.includes('language_lock');
-		const lock = hasLegacyLock ? await s.values('language_lock') : settings.allowedLanguages?.length > 0 ? settings : null;
+		const hasLock = hasLegacyLock || settings.allowedLanguages?.length > 0 || settings.markerWords?.length > 0;
+		const lock = hasLegacyLock ? await s.values('language_lock') : hasLock ? settings : null;
 		const markers = lock ? markerSetsOf(lock.markerWords ?? []) : [];
 		const language = last ? await languageOf(s, last.text) : null;
 		/** @type {import('../core/language.js').CheckOptions} */
@@ -1067,7 +1072,7 @@ export const createReply = (product, service) => {
 						String(
 							s.on.includes('ai_summary')
 								? (await s.values('ai_summary')).instructions
-								: (await s.values('inbox')).summaryInstructions ?? '',
+								: ((await s.values('inbox')).summaryInstructions ?? ''),
 						),
 					),
 				},

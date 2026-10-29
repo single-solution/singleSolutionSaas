@@ -167,7 +167,7 @@ describe('admin Products (jsdom)', () => {
 			await press('Open as admin');
 			await ownerBrowser.api.post('/v1/me/step-up-otp', {});
 			const openCode = world.lastOtp('olivia@ss.test');
-			fillDialog('Authenticator code', openCode);
+			fillDialog('Two-step or recovery code', openCode);
 			await pressDialog('Open configure');
 			const launched = await ownerBrowser.waitCall(
 				'POST',

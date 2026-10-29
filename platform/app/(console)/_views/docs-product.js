@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { DocsProductView } from '../../../src/console/views/docs-product.js';
 import { loadDocsProduct } from '../../../src/console/loaders.js';
 import { consoleApi, consoleBranding } from '../_lib/server.js';
+import '../../(site)/site.css';
 
 export const metadata = {
 	title: 'Product Documentation',

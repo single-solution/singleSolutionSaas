@@ -126,7 +126,7 @@ describe('Chat on the real Portal', () => {
 		expect(await sys.setPrices({ visitor_chat: 1000, ai_replies: 500 })).toMatchObject({ version: 2 });
 		const support = await sys.admin('support');
 		const cookie = await sys.adminSession(support.client, websiteId);
-		const on = ['ai_replies', 'guest_chat', 'handoff', 'inbox', 'signed_in_chat', 'staff_alerts', 'visitor_chat'];
+		const on = ['ai_replies', 'handoff', 'inbox', 'visitor_chat'];
 		const report = await sys.switchFeatures(cookie, websiteId, on);
 		expect(report.version).toBe(1);
 		expect([...report.on].sort()).toEqual(on);
@@ -165,7 +165,7 @@ describe('Chat on the real Portal', () => {
 			accountsCookie,
 			'PUT',
 			`/v1/dashboard/websites/${websiteId}/features`,
-			{ on: ['email_password'] },
+			{ on: ['sign_in'] },
 			ACCOUNTS,
 		);
 		expect(switched.status).toBe(200);
@@ -278,7 +278,7 @@ describe('Chat on the real Portal', () => {
 		await savePortalSettings(m, `/v1/merchants/${m.merchantId}/websites/${websiteId}/settings`, {
 			'staff_alerts.recipients': ['team@talk.example.com'],
 		});
-		await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/staff_alerts.adminUrl`, {
+		await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/inbox.adminUrl`, {
 			value: `${ADMIN_ORIGIN}/inbox?conversation={conversationId}`,
 		});
 		const before = mails.length;
@@ -295,7 +295,7 @@ describe('Chat on the real Portal', () => {
 			accountsCookie,
 			'PUT',
 			`/v1/dashboard/websites/${websiteId}/features`,
-			{ on: ['data_rights', 'email_password'] },
+			{ on: ['data_rights', 'sign_in'] },
 			ACCOUNTS,
 		);
 		expect(switched.status).toBe(200);
@@ -317,7 +317,7 @@ describe('Chat on the real Portal', () => {
 			accountsCookie,
 			'PUT',
 			`/v1/dashboard/websites/${websiteId}/features`,
-			{ on: ['data_rights', 'email_password', 'roles'] },
+			{ on: ['data_rights', 'roles', 'sign_in'] },
 			ACCOUNTS,
 		);
 		expect(switched.status).toBe(200);
@@ -343,7 +343,7 @@ describe('Chat on the real Portal', () => {
 		const customer = (await accounts('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'customer');
 		expect((await accounts('PUT', '/v1/roles/customer', { ...customer, signIn: 'paused' })).status).toBe(200);
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		const saved = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/guest_chat.messageLimit`, {
+		const saved = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/visitor_chat.messageLimit`, {
 			value: 1,
 		});
 		expect(saved.status).toBe(204);

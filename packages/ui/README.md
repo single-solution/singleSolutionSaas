@@ -111,6 +111,11 @@ export function Merchants({ merchants, onAdd, onToggle }) {
 `Card`, `FiguresTable` for figures, and the kit fields (`Select`, `Input`, `TextArea`). The test `test/kit-only.test.js`
 reads every screen under `platform/src`, `platform/app` and `products/*/app` and fails when one does. All screens are 100% clean.
 
+## Theme pack (Unite — Shelfway)
+
+One pack for marketing, Docs, Portal, and product dashboards. Binding notes: [`THEME-PACK.md`](./THEME-PACK.md).
+Tokens: `theme.css`. Do not invent a second palette for a page or product.
+
 ## Color rule (Unite dialect: 60-30-10, colors carry meaning)
 
 60 % cool gray canvas (`canvas` #F0F3F7; dark: ink #0B1220), 30 % white surfaces and ink text (`fg` #0B1220),

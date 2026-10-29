@@ -15,7 +15,9 @@
 	},
 	"files": [
 		"src",
-		"types"
+		"types",
+		"THEME-PACK.md",
+		"README.md"
 	],
 	"sideEffects": [
 		"*.css"

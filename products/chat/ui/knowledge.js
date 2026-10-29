@@ -183,7 +183,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 			more.addEventListener('click', () => void load(false));
 
 			// website pages
-			if (config.features.includes('knowledge_pages')) {
+			if (config.features.includes('knowledge_pages') || config.features.includes('knowledge_base')) {
 				const pages = element(doc, 'section', { class: 'part', hidden: '' });
 				const pageList = element(doc, 'ul');
 				const pageNote = element(doc, 'p', { class: 'status', role: 'status' });

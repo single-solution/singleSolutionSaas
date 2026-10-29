@@ -71,9 +71,11 @@ const SETTINGS = {
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 const SHARED_SETTINGS = {
-	phone: { name: 'Phone numbers and codes', features: ['sign_in', 'phone_code', 'phone_password'], settings: phoneShared },
-	passwords: { name: 'Passwords', features: ['sign_in', 'email_password', 'phone_password'], settings: passwordsShared },
-	profile: { name: 'Profile', features: ['sign_in', ...SIGN_IN_METHODS], settings: profileShared },
+	phone: { name: 'Phone numbers and codes', features: ['sign_in'], settings: phoneShared },
+	passwords: { name: 'Passwords', features: ['sign_in'], settings: passwordsShared },
+	profile: { name: 'Profile', features: ['sign_in'], settings: profileShared },
+	risk_checks: { name: 'Risk checks', features: ['sign_in'], settings: riskChecks },
+	staff_links: { name: 'Staff links', features: ['roles'], settings: staffLinks },
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -241,21 +243,21 @@ export const createProductInstance = (options) => {
 			google: {
 				label: 'Google OAuth client',
 				kind: 'secret',
-				neededBy: ['google', 'sign_in'],
+				neededBy: ['sign_in'],
 				secretField: 'clientSecret',
 				...provider('google'),
 			},
 			apple: {
 				label: 'Apple Sign in key',
 				kind: 'secret',
-				neededBy: ['apple', 'sign_in'],
+				neededBy: ['sign_in'],
 				secretField: 'keyId',
 				...provider('apple'),
 			},
 			facebook: {
 				label: 'Facebook app',
 				kind: 'secret',
-				neededBy: ['facebook', 'sign_in'],
+				neededBy: ['sign_in'],
 				secretField: 'appSecret',
 				...provider('facebook'),
 			},

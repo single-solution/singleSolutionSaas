@@ -414,7 +414,7 @@ describe('attachment links (CH-8)', () => {
 		// not Chat's link, or attachments off: not found
 		expect((await sys.open(`${doc.url.slice(0, -4)}AAAA`)).status).toBe(404);
 		expect((await sys.open('https://chat.example.dev/v1/files/not-a-link')).status).toBe(404);
-		await sys.switchOn(['visitor_chat']);
+		await sys.setting('visitor_chat', 'visitorUploads', 'off');
 		expect((await sys.open(doc.url)).status).toBe(404);
 	});
 });

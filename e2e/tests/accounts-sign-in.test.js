@@ -165,13 +165,18 @@ beforeAll(async () => {
 	tokens = await sys.tokens(m.merchantId, websiteId, 'accounts');
 	const cookie = await sys.adminSession(await sys.owner(), websiteId);
 	await sys.switchFeatures(cookie, websiteId, [
-		'email_password',
-		'phone_password',
+		'sign_in',
 		'roles',
 		'two_step',
-		'staff_links',
 		'role_requests',
 	]);
+	expect(
+		(
+			await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/sign_in.methods`, {
+				value: ['email_password', 'phone_password'],
+			})
+		).status,
+	).toBe(204);
 	await sys.connectDatabase(websiteId);
 	// the codes go by SMS through the merchant's own provider, in Notifications
 	const notifyCookie = await sys.adminSession(await sys.owner(), websiteId, 'notifications');

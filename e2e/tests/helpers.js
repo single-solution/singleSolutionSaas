@@ -409,6 +409,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	/** The first admin (an Owner), created from the sign-in page on first use. */
 	const owner = async () => {
 		first ??= await api.firstAdmin({ name: 'Olivia Owner', email: 'owner@portal.test', password: PASSWORD });
+		first.email = 'owner@portal.test';
 		return first;
 	};
 
@@ -426,7 +427,9 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 			body: { token: mailer.token(email, 'admin_invite'), password: PASSWORD, name: `${role} admin` },
 		});
 		if (accepted.status !== 200) throw new Error(`accept ${accepted.status} ${JSON.stringify(accepted.json)}`);
-		return { client: await api.signIn(email, PASSWORD), adminId: String(res.json.admin.adminId), email };
+		const client = await api.signIn(email, PASSWORD);
+		client.email = email;
+		return { client, adminId: String(res.json.admin.adminId), email };
 	};
 
 	/**
@@ -445,7 +448,9 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		/** @type {string[]} */
 		const websiteIds = [];
 		for (const domain of domains) websiteIds.push(await addWebsite(merchantId, domain));
-		return { client: await api.signIn(email, PASSWORD), merchantId, websiteIds, email };
+		const client = await api.signIn(email, PASSWORD);
+		client.email = email;
+		return { client, merchantId, websiteIds, email };
 	};
 
 	/**
@@ -512,8 +517,10 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	 * @param {string} [email]
 	 */
 	const adminSession = async (by, websiteId, productId = productManifest.id, email = 'owner@portal.test') => {
-		const otp = await stepUp(by, email);
-		const launch = await by.post(`/v1/admin/products/${productId}/launch`, { websiteId, ...otp });
+		const client = typeof by === 'object' && by?.client ? by.client : by;
+		const targetEmail = (typeof by === 'object' && by?.email) ? by.email : email;
+		const otp = await stepUp(client, targetEmail);
+		const launch = await client.post(`/v1/admin/products/${productId}/launch`, { websiteId, ...otp });
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;
 	};

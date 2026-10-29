@@ -500,14 +500,20 @@ const SCHEMAS = {
  * The shop tools offered for a turn: those whose feature is on; the sign-in tools only for a verified sign-in.
  * @param {string[]} on switched-on features
  * @param {{ signedIn: boolean }} visitor
+ * @param {Record<string, unknown>} [settings]
  * @returns {AiToolSchema[]}
  */
-export const shopSchemas = (on, { signedIn }) =>
-	SHOP_ENDPOINTS.filter(
-		(row) =>
-			(on.includes('shop_assistant') || on.includes(row.legacy) || on.includes(row.feature)) &&
-			(signedIn || !row.signIn),
-	).map((row) => /** @type {AiToolSchema} */ (SCHEMAS[row.tool]));
+export const shopSchemas = (on, { signedIn }, settings = {}) =>
+	SHOP_ENDPOINTS.filter((row) => {
+		if (row.signIn && !signedIn) return false;
+		if (on.includes(row.legacy)) return true;
+		if (on.includes('shop_assistant')) {
+			const prop = row.setting;
+			if (!prop) return true;
+			return settings[prop] !== false;
+		}
+		return false;
+	}).map((row) => /** @type {AiToolSchema} */ (SCHEMAS[row.tool]));
 
 /** A product id or slug as Ecommerce takes it, else null. @param {unknown} value */
 const productId = (value) => (typeof value === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(value.trim()) ? value.trim() : null);

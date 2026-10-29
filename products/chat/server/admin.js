@@ -191,7 +191,7 @@ export const createAdmin = (product, service) => {
 		const ai = await values('ai_replies');
 		const idle = await values('proactive_idle');
 		const proactiveIdleMinutes =
-			look.proactiveIdleMinutes && look.proactiveIdleMinutes > 0 ? look.proactiveIdleMinutes : (idle.idleMinutes ?? 0);
+			look.proactiveIdleMinutes && look.proactiveIdleMinutes > 0 ? look.proactiveIdleMinutes : (idle.idleMinutes ?? 7);
 		const proactiveOncePer =
 			look.proactiveOncePer && look.proactiveOncePer !== 'session' ? look.proactiveOncePer : (idle.oncePer ?? 'session');
 		const proactiveHideOnMobile =
@@ -248,7 +248,8 @@ export const createAdmin = (product, service) => {
 			pageTypes: await product.lists.get(websiteId, 'page_types'),
 			flows: flows.filter((f) => f.start.kind === 'page').map((f) => ({ id: f.id, name: f.name, start: f.start })),
 			leads: { fields: leads.leadFields, customFields: leads.customLeadFields, consentText: leads.consentText },
-			customFields: on.includes('custom_fields') ? await product.lists.get(websiteId, 'custom_fields') : [],
+			customFields:
+				on.includes('custom_fields') || on.includes('leads_flows') ? await product.lists.get(websiteId, 'custom_fields') : [],
 			attachments: {
 				visitors: attachments.visitorUploads,
 				// the merchant's upload types, each with its own cap (C11)
@@ -256,7 +257,7 @@ export const createAdmin = (product, service) => {
 				limits: visitorRules.limits,
 				maxBytes: visitorRules.max,
 				storage:
-					(on.includes('attachments') || (look.visitorUploads && look.visitorUploads !== 'off')) &&
+					(on.includes('attachments') || on.includes('visitor_chat')) &&
 					(await product.connections.storage(websiteId)) !== null,
 			},
 			ratings: {

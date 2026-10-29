@@ -2,6 +2,7 @@ import { connection } from 'next/server';
 import { DocsHubView } from '../../../src/console/views/docs.js';
 import { loadDocsHub } from '../../../src/console/loaders.js';
 import { consoleApi, consoleBranding } from '../_lib/server.js';
+import '../../(site)/site.css';
 
 export const metadata = {
 	title: 'Documentation Hub',

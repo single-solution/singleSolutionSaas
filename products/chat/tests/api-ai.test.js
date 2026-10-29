@@ -21,10 +21,7 @@ const start = async (on) => {
 
 describe('AI replies', () => {
 	it('answers from knowledge entries, website pages and the merchant’s instructions', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'ai_replies',
-			'knowledge_base']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'knowledge_base']);
 		await sys.setting('ai_instructions', 'instructions', 'Always greet with Salam.');
 		const ticket = await sys.ticket(['knowledge.edit']);
 		const entry = await sys.admin(ticket, 'POST', '/v1/admin/knowledge/entries', {

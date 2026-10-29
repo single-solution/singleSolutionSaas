@@ -1,6 +1,6 @@
 'use client';
 /**
- * Console frame (Unite dialect via theme.css: hard borders, teal accent, dense): the window is the frame and the page itself
+ * Console frame (Unite theme pack via theme.css — see THEME-PACK.md: hard borders, teal accent, dense): the window is the frame and the page itself
  * never scrolls. On the off-white canvas sit a floating WHITE sidebar, bottom-weighted (240 px; it folds to a 64 px icon
  * rail): the logo on top, the main sections in the middle, and at the bottom the website / merchant switcher, help, the
  * account, the theme and the fold button; a floating 56 px header (the menu button on phones, the breadcrumbs and the

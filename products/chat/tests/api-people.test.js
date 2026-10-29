@@ -408,10 +408,7 @@ describe('older messages, typing, Seen and the paused notice (C8, C9)', () => {
 
 describe('inbox options (C11)', () => {
 	it('hides guests until escalated; pausing by reply rights keeps who and why; one note; the first replier', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'inbox',
-			'handoff']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff']);
 		await sys.paste('accounts');
 		const guest = sys.visitor();
 		const g = (await guest('POST', '/v1/chat/messages', { text: 'guest here' })).json.chat.conversation.id;

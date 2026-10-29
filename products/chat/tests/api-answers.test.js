@@ -184,9 +184,7 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 
 describe('fallback answers (C3)', () => {
 	it('answers from the merchant’s list, filled from the shop, when the AI fails; else the on-failure message', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'shop_assistant']);
 		await sys.paste('ecommerce');
 		await sys.paste('accounts');
 		await sys.setting('language_lock', 'allowedLanguages', ['en', 'ar']);
@@ -277,9 +275,7 @@ describe('fallback answers (C3)', () => {
 		// a cap reached: the fallback too, without calling the AI
 		sys.ai({ text: 'Fine, thanks.' });
 		await v('POST', '/v1/chat/messages', { text: 'how are you' });
-		await sys.switchOn([
-			'visitor_chat',
-			'ai_replies']);
+		await sys.switchOn(['visitor_chat', 'ai_replies', 'shop_assistant']);
 		await sys.setting('ai_replies', 'dailyTokens', 1);
 		const calls = sys.aiCalls().length;
 		const best = await v('POST', '/v1/chat/messages', { text: 'what are your best lamps' });
@@ -291,7 +287,7 @@ describe('fallback answers (C3)', () => {
 
 describe('the comparison answer (C18)', () => {
 	it('puts the two products a message names side by side when the AI fails', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'shop_assistant']);
 		await sys.paste('ecommerce');
 		await sys.setting('visitor_chat', 'messageLimit', 0);
 		// {comparison} needs the words between the two products
@@ -402,7 +398,7 @@ describe('the AI reply in the same request (C10)', () => {
 
 describe('fuller shop tools and the store context (C13, C1)', () => {
 	it('passes filters, the search size and quote options; answers grades, variants, stock, warranty and payment methods', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'shop_assistant']);
 		await sys.paste('ecommerce');
 		/** A variant as Ecommerce answers it (ChatVariant). */
 		const variant = {
@@ -602,7 +598,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 	});
 
 	it('adds the store context for the viewed product, cached 60 s per website and sign-in', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'shop_assistant', 'shop_context']);
 		await sys.paste('ecommerce');
 		sys.responders.set(`${ECOMMERCE}/v1/chat/context`, () => ({
 			status: 200,

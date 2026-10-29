@@ -572,7 +572,8 @@ export const createService = (product) => {
 	 */
 	const visitorMessages = async (s, messages) => {
 		const urlOf = await linker(s);
-		const cards = s.on.includes('product_cards') || s.on.includes('shop_assistant');
+		const shop = s.on.includes('shop_assistant') ? await s.values('shop_assistant') : {};
+		const cards = s.on.includes('product_cards') || (s.on.includes('shop_assistant') && shop.productCards !== false);
 		return messages.map((m) => visitorMessageView(m, urlOf, { cards }));
 	};
 
@@ -661,7 +662,8 @@ export const createService = (product) => {
 	 */
 	const staffMessages = async (s, messages) => {
 		const urlOf = await linker(s);
-		const cards = s.on.includes('product_cards') || s.on.includes('shop_assistant');
+		const shop = s.on.includes('shop_assistant') ? await s.values('shop_assistant') : {};
+		const cards = s.on.includes('product_cards') || (s.on.includes('shop_assistant') && shop.productCards !== false);
 		return messages.map((m) => staffMessageView(m, urlOf, { cards }));
 	};
 

@@ -81,10 +81,7 @@ describe('list settings from the merchant’s server (K1)', () => {
 
 describe('the acting member of staff (K2)', () => {
 	it('a server reply with SS-Actor headers carries that person; without them, Team', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'inbox',
-			'handoff']);
+		const sys = await start(['visitor_chat', 'inbox', 'handoff']);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'Hello' });
 		const id = sent.json.chat.conversation.id;
@@ -244,11 +241,7 @@ describe('conversation counts (K4)', () => {
 
 describe('activity labels (K9)', () => {
 	it('labels entries with a name or title and a short detail, never contents', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'ai_replies',
-			'inbox',
-			'knowledge_base']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'knowledge_base']);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'My secret question' });
 		const id = sent.json.chat.conversation.id;

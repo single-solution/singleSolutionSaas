@@ -865,8 +865,9 @@ export function FallbackAnswersEditor({ websiteId, off, bare = false, languages,
 				/** @param {Exclude<FallbackProblem, 'item'>} field @param {Record<string, number>} [values] */
 				const problem = (field, values = {}) => (problems.includes(field) ? fill(A.problems[field], values) : undefined);
 				const choices = [...new Set([...languages, ...(answer.language ? [answer.language] : [])])];
+				const isToolOn = (/** @type {keyof typeof PLACEHOLDERS} */ name) => on(PLACEHOLDERS[name]) || on('shop_assistant');
 				const offTools = placeholdersOf(String(answer.text ?? ''))
-					.filter((name) => !on(PLACEHOLDERS[name]))
+					.filter((name) => !isToolOn(name))
 					.map((name) => A.placeholderFeatures[name]);
 				return (
 					<>

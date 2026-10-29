@@ -173,7 +173,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			await menu('Actions for Notes');
 			await clickEl(menuItem('Open as admin'));
 			await ownerBrowser.api.post('/v1/me/step-up-otp', {});
-			fillDialog('Authenticator code', world.lastOtp('olivia@ss.test'));
+			fillDialog('Two-step or recovery code', world.lastOtp('olivia@ss.test'));
 			await pressDialog('Open configure');
 			await until(() => open.mock.calls.length > 0);
 			await press('Add credits');

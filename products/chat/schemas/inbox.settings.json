@@ -65,6 +65,16 @@
 				"order": 30
 			}
 		},
+		"autoSummary": {
+			"type": "boolean",
+			"title": "Auto-summarize on handoff",
+			"default": false,
+			"description": "The AI writes a short summary for staff whenever a conversation is handed off.",
+			"x-ui": {
+				"group": "AI summary",
+				"order": 39
+			}
+		},
 		"summaryInstructions": {
 			"type": "string",
 			"title": "Summary instructions",

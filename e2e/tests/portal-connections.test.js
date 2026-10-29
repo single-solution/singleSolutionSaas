@@ -91,11 +91,13 @@ const connectionsOf = async (websiteId) =>
 	(await m.client.get(`/v1/merchants/${m.merchantId}/websites/${websiteId}/connections`)).json;
 
 /**
- * The merchant enters a connection in the Portal (the password again).
+ * The merchant enters a connection in the Portal (with OTP).
  * @param {string} websiteId @param {'database' | 'storage'} name @param {unknown} value
  */
-const enter = (websiteId, name, value) =>
-	m.client.put(`/v1/merchants/${m.merchantId}/websites/${websiteId}/connections/${name}`, { value, password: PASSWORD });
+const enter = async (websiteId, name, value) => {
+	const otp = await sys.stepUp(m.client, m.email);
+	return m.client.put(`/v1/merchants/${m.merchantId}/websites/${websiteId}/connections/${name}`, { value, ...otp });
+};
 
 /**
  * A dashboard call on a product with an Owner's session.
@@ -166,7 +168,7 @@ describe('The database is entered once, in the Portal', () => {
 	it('the merchant enters it once (a wrong password changes nothing) and Notes and Notifications each work on a database of their own', async () => {
 		const wrong = await m.client.put(`/v1/merchants/${m.merchantId}/websites/${siteA}/connections/database`, {
 			value: connectionString(),
-			password: 'not the password',
+			code: '000000',
 		});
 		expect(wrong.status).toBeGreaterThanOrEqual(400);
 		expect((await connectionsOf(siteA)).database).toMatchObject({ set: false });
@@ -340,10 +342,11 @@ describe('Ecommerce and Payments are linked by the Portal', () => {
 		const keyB = /** @type {string} */ (await linkKey('ecommerce', siteB, 'payments'));
 		expect(keyA).not.toBe(keyB);
 		expect(await readWith(keyA)).toBe(404);
-		// website A's link is switched off in the Portal (the password again)
+		// website A's link is switched off in the Portal (with OTP)
+		const otpA = await sys.stepUp(m.client, m.email);
 		const off = await m.client.post(`/v1/merchants/${m.merchantId}/websites/${siteA}/links/payments/ecommerce/switch`, {
 			on: false,
-			password: PASSWORD,
+			...otpA,
 		});
 		expect(off.status).toBe(200);
 		expect(await readWith(keyA)).toBe(401);
@@ -353,8 +356,9 @@ describe('Ecommerce and Payments are linked by the Portal', () => {
 
 	it('a new key replaces the old one at once', async () => {
 		const before = /** @type {string} */ (await linkKey('ecommerce', siteB, 'payments'));
+		const otpB = await sys.stepUp(m.client, m.email);
 		const done = await m.client.post(`/v1/merchants/${m.merchantId}/websites/${siteB}/links/payments/ecommerce/regenerate`, {
-			password: PASSWORD,
+			...otpB,
 		});
 		expect(done.status).toBe(200);
 		const after = /** @type {string} */ (await linkKey('ecommerce', siteB, 'payments'));

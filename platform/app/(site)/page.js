@@ -1,24 +1,22 @@
-import { redirectIfSignedIn, consoleBranding, consoleApi } from '../(console)/_lib/server.js';
+import { redirectIfSignedIn, consoleApi } from '../(console)/_lib/server.js';
 import { loadDocsHub } from '../../src/console/loaders.js';
+import { COMPANY_NAME, PRODUCT_BRAND } from './_components/brand-constants.js';
 import { SiteHome } from './_components/SiteHome.js';
 
 export const dynamic = 'force-dynamic';
 
 /** Public marketing home on the Portal (signed-in merchants go to the console). */
 export async function generateMetadata() {
-	const branding = await consoleBranding().catch(() => null);
-	const name = branding?.name ? String(branding.name) : 'Single Solution';
 	return {
-		title: { absolute: name },
-		description:
-			'Prebuilt platform for merchants: build your frontend, place ready products (accounts, payments, chat, and more), run the Portal, share one pack with your developer, use public docs. Plans follow your account.',
+		title: { absolute: PRODUCT_BRAND },
+		description: `${PRODUCT_BRAND} by ${COMPANY_NAME}: ready website features — sign-in, payments, chat, and more — without building them yourself. You keep the look. One account to manage it. Plans follow your account.`,
 		robots: { index: true, follow: true },
 	};
 }
 
 export default async function SitePage() {
 	await redirectIfSignedIn();
-	const [branding, api] = await Promise.all([consoleBranding().catch(() => null), consoleApi()]);
+	const api = await consoleApi();
 	const docs = await loadDocsHub(api).catch(() => null);
 	const products =
 		docs?.ok && Array.isArray(docs.items)
@@ -28,5 +26,5 @@ export default async function SitePage() {
 					description: typeof item.description === 'string' ? item.description : '',
 				}))
 			: [];
-	return <SiteHome brandName={branding?.name ? String(branding.name) : 'Single Solution'} products={products} />;
+	return <SiteHome productName={PRODUCT_BRAND} companyName={COMPANY_NAME} products={products} />;
 }

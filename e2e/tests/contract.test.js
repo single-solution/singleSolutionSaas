@@ -5,7 +5,7 @@
  */
 import { validateDirectoryList } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PASSWORD, PRODUCT_URL, codeOf, startSystem } from './helpers.js';
+import { PRODUCT_URL, codeOf, startSystem } from './helpers.js';
 
 /** @type {import('./helpers.js').System} */
 let sys;
@@ -97,8 +97,9 @@ describe('the product side of the contract', () => {
 		const first = await sys.productApi('GET', '/v1/product/revocations');
 		expect(first.json).toEqual({ tokenIds: [], cursor: expect.anything() });
 		const base = `/v1/merchants/${a.merchantId}/websites/${a1}/tokens/notes/regenerate`;
-		await owner.post(base, { kind: 'server', password: PASSWORD });
-		await owner.post(base, { kind: 'browser', password: PASSWORD });
+		const otp = await sys.stepUp(owner, 'owner@portal.test');
+		await owner.post(base, { kind: 'server', ...otp });
+		await owner.post(base, { kind: 'browser', ...otp });
 		// a cursor trails the clock by 30 seconds (late writes are never skipped; products merge ids as a set)
 		sys.clock.advance(60_000);
 		const next = await sys.productApi('GET', `/v1/product/revocations?since=${encodeURIComponent(first.json.cursor ?? '')}`);

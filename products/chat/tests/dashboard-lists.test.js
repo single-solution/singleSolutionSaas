@@ -208,11 +208,7 @@ describe('Settings → Assistant', () => {
 		});
 		serve({
 			[`${BASE}/settings`]: {
-				features: [
-					feature('ai_replies'),
-					feature(),
-					feature({ allowedLanguages: ['en', 'ar'] }),
-				],
+				features: [feature('ai_replies', { allowedLanguages: ['en', 'ar'] })],
 			},
 			// Settings lists every feature with its switch: the features answer too
 			[`${BASE}/features`]: {
@@ -239,9 +235,6 @@ describe('Settings → Assistant', () => {
 				/>,
 			),
 		);
-		await settle();
-		// every feature has its row; the fallback answers are the page of their feature
-		click(/** @type {HTMLElement} */ (container.querySelector('[role="option"][data-ss-id="fallback_answers"]')));
 		await settle();
 		expect(container.textContent).toContain('Fallback answers');
 		const drawer = await openRow(container, 'Answer 1');

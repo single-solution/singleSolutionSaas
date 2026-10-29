@@ -178,11 +178,7 @@ describe('guests and AI replies', () => {
 
 describe('handoff, office hours and failures', () => {
 	it('a phrase hands off: waiting, the AI stops, the guest is asked for contact, staff are alerted', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'ai_replies',
-			'inbox',
-			'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff', 'ai_summary']);
 		await sys.connect('ai', AI_KEY);
 		await sys.paste('notifications');
 		await sys.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
@@ -280,7 +276,7 @@ describe('handoff, office hours and failures', () => {
 	});
 
 	it('when the AI fails: the backup answers; then the message and a handoff', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff']);
+		const sys = await start(['visitor_chat', 'ai_replies', 'inbox', 'handoff', 'ai_summary']);
 		await sys.connect('ai', AI_KEY);
 		await sys.connect('ai_backup', { ...AI_KEY, apiKey: 'sk-backup-0123456789' });
 		const v = sys.visitor();

@@ -187,9 +187,7 @@ describe('opening the product dashboard', () => {
 		const signIn = await sys.api.call('POST', '/v1/auth/sign-in', { body: { email: m.email, password: PASSWORD } });
 		expect(signIn.json?.status).not.toBe('ok');
 		const admin = await sys.adminSession(owner, w1);
-		expect((await sys.dashboard(admin, 'GET', `/v1/dashboard/websites/${w1}/overview`)).json.status.status).toBe(
-			'suspended',
-		);
+		expect((await sys.dashboard(admin, 'GET', `/v1/dashboard/websites/${w1}/overview`)).json.status.status).toBe('suspended');
 		expect(await sys.waitingNotices()).toEqual([]);
 	});
 });
