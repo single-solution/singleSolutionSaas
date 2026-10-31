@@ -4,7 +4,7 @@
  * moved branch), and the tree with product counts shown to shoppers. No I/O.
  * @module
  */
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import { LIMITS, cleanText, isSlug } from './catalog.js';
 import { CONTENT_LIMITS, EMPTY_CONTENT, checkContent, checkFaqs, checkSeo, iconOf } from './catalog-content.js';
 import { VISIBILITY } from './model.js';

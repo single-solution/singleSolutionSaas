@@ -2,7 +2,7 @@
 // redirects of signed-out visitors and of merchants, on the request's API client and Branding (`app/_lib/server.js`).
 // Thin adapter over src/console/admin (no business logic here).
 import { cache } from 'react';
-import { redirect } from 'next/navigation';
+import { redirect } from 'next/navigation.js';
 import { loadAdminSession } from '../../../src/console/admin/loaders.js';
 import { portalApi, portalBranding } from '../../_lib/server.js';
 

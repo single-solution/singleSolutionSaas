@@ -10,7 +10,7 @@
  * parameter: `grade` or `attr.<slug>`) and `{value}`; query pairs with an empty name or value are left out. No I/O.
  * @module
  */
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import { cleanText } from './catalog.js';
 import { CONTENT_LIMITS, checkFaqs } from './catalog-content.js';
 

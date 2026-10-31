@@ -15,8 +15,37 @@ import { createSnippets } from '../../core/snippets.js';
 import { ConsentsSection } from './consents.js';
 import { FieldsSection } from './fields.js';
 import { KEY_FORMS, KeyForm } from './forms.js';
-import { SETUP } from './setup-steps.js';
 import { TEXTS } from './texts.js';
+
+/** @type {ReadonlyArray<import('@ss/ui/dashboard').SetupRequirement>} */
+const SETUP = Object.freeze([
+	{
+		key: 'sign-in',
+		oneOf: ['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook'],
+		label: 'Switch on a way to sign in',
+		why: 'Visitors cannot sign in or sign up until at least one way is on.',
+		action: 'See features',
+	},
+	{
+		key: 'invite-page',
+		when: ['approval'],
+		setting: 'approval.invitePageUrl',
+		optional: true,
+		label: 'Set the invite page address',
+		why: 'Invites link to this page of your website. It needs the sign-in widget.',
+		action: 'Set address',
+		detail: (/** @type {unknown} */ value) => String(value ?? ''),
+	},
+	{
+		key: 'setup-page',
+		when: ['staff_links'],
+		setting: 'staff_links.setupPageUrl',
+		label: 'Set the setup page address',
+		why: 'Setup links for your staff open this page of your website.',
+		action: 'Set address',
+		detail: (/** @type {unknown} */ value) => String(value ?? ''),
+	},
+]);
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 

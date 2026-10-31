@@ -27,7 +27,7 @@ import { useNavigation } from '../navigation.js';
 import { query, routes } from '../paths.js';
 import { DaysLeft, creditDayBars, formatChartCredits, merchantPill, usageColumns } from './billing.js';
 import { PageProblem } from './common.js';
-import { FrameBilling } from './frame-billing.js';
+import { FrameBilling } from './shell.js';
 import { DateFields, periodFilter } from './range.js';
 
 /**

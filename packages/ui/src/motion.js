@@ -14,7 +14,7 @@
  */
 import { ViewTransition, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
-import { Spinner } from './Spinner.js';
+import { Spinner } from './display.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 

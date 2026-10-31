@@ -1,7 +1,7 @@
 // The server side of both consoles: the request's in-process API client bound to its cookies (one per request), the
 // Branding and query-string reading. Thin adapter over src/console (no business logic here).
 import { cache } from 'react';
-import { headers } from 'next/headers';
+import { headers } from 'next/headers.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import { DEFAULT_SETTINGS } from '../../src/infra/config.js';
 import { getPortal } from '../../src/runtime.js';

@@ -23,8 +23,7 @@
 import { isObject } from '@ss/contracts/util';
 import { checkUrl, isNetError, signV4 } from '@ss/net';
 import { JSON_PATH, SUCCESS_2XX, detailOf, failed, failureMessage, httpOutcome, parseStatusRule } from '../core/gateway.js';
-import { createSmtpMessaging } from './smtp.js';
-import { isMailbox } from './util.js';
+import { isMailbox, createSmtpMessaging } from './smtp.js';
 
 /** @typedef {import('../core/gateway.js').SendOutcome} SendOutcome */
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */

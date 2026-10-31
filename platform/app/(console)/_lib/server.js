@@ -2,7 +2,7 @@
 // the request's API client and Branding (`app/_lib/server.js`). Thin adapter over src/console (no business logic
 // here).
 import { cache } from 'react';
-import { redirect } from 'next/navigation';
+import { redirect } from 'next/navigation.js';
 import { loadSession } from '../../../src/console/loaders.js';
 import { portalApi, portalBranding } from '../../_lib/server.js';
 

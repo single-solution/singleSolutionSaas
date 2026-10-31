@@ -38,3 +38,20 @@ export const hashToken = (secret, purpose, token) => {
 	if (!TOKEN_PURPOSES.includes(purpose)) throw new TypeError(`unknown token purpose ${purpose}`);
 	return createHmac('sha256', secret).update(`ss-identity-token.v1|${purpose}|${token}`).digest('hex');
 };
+
+/** Console paths of each link kind. */
+const LINK_PATHS = Object.freeze({
+	setup: '/set-password',
+	password_reset: '/reset-password',
+	email_change: '/confirm-email',
+});
+
+/**
+ * Console links sent by email or copied by an admin. The token travels in the URL fragment so it never reaches
+ * server logs, proxies or Referer headers; the console page reads it and posts it to the API.
+ * @param {string} portalUrl `PORTAL_URL` (no trailing slash)
+ * @param {keyof typeof LINK_PATHS} kind
+ * @param {string} token
+ */
+export const linkFor = (portalUrl, kind, token) =>
+	`${portalUrl.replace(/\/+$/, '')}${LINK_PATHS[kind]}#token=${encodeURIComponent(token)}`;

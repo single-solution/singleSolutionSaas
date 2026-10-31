@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import * as I from '../../../src/modules/identity/core/inputs.js';
-import { linkFor } from '../../../src/modules/identity/core/links.js';
 import { COUNTRY_CHOICES, COUNTRY_CODES, isCountryCode } from '../../../src/modules/identity/core/countries.js';
 import { iso, presentAdmin, presentMerchant, presentWebsite } from '../../../src/modules/identity/core/present.js';
 import {
@@ -9,7 +8,7 @@ import {
 	revocationFilter,
 	revocationPage,
 } from '../../../src/modules/identity/core/revocations.js';
-import { hashToken, newToken, SETUP_TTL_MS, TOKEN_TTL_MS } from '../../../src/modules/identity/core/tokens.js';
+import { hashToken, linkFor, newToken, SETUP_TTL_MS, TOKEN_TTL_MS } from '../../../src/modules/identity/core/tokens.js';
 
 const WEB = 'web_0123456789abcdefghjkmnpq';
 

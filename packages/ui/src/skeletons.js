@@ -21,7 +21,7 @@ import {
 	pageBody,
 } from './layout-metrics.js';
 import { Crumbs, ShellMenuButton } from './page-parts.js';
-import { PaginationSkeleton } from './Pagination.js';
+import { PaginationSkeleton } from './paged.js';
 
 /** Widths of the placeholder lines, repeated so a list does not look like a ruler. */
 const WIDTHS = ['w-3/4', 'w-1/2', 'w-2/3', 'w-5/6', 'w-2/5'];

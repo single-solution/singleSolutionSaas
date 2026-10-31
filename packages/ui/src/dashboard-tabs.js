@@ -17,12 +17,10 @@
 import { useRef, useState } from 'react';
 import { CodeBlock } from './CodeBlock.js';
 import { Card, EmptyState } from './display.js';
-import { SaveBar, SettingList, SettingsCard } from './blocks.js';
+import { NextStep, SaveBar, SettingList, SettingsCard } from './blocks.js';
 import { Input } from './fields.js';
-import { NextStep } from './NextStep.js';
 import { ChangesTable, OverviewSkeleton, ProductOverview } from './overview.js';
-import { usePaged } from './paged.js';
-import { Pagination } from './Pagination.js';
+import { Pagination, usePaged } from './paged.js';
 import { Row } from './Row.js';
 import { Toolbar } from './Toolbar.js';
 import { formatCreditsPerHour, parseCredits } from './format.js';
@@ -31,7 +29,7 @@ import { call, useLoad } from './dashboard-api.js';
 import { useConnections } from './dashboard-connections.js';
 import { featureLooks, useFeatureSwitches } from './dashboard-features.js';
 import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
-import { Outcome, ResealCard, useDashboard, useHeld } from './dashboard-parts.js';
+import { Outcome, ResealCard, useDashboard, useHeld, websiteSettingsUrl } from './dashboard-parts.js';
 import {
 	SettingsBar,
 	TextFields,
@@ -40,7 +38,6 @@ import {
 	useSettingsEditor,
 	useTextsEditor,
 } from './dashboard-settings.js';
-import { websiteSettingsUrl } from './portal-links.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-parts.js').FeatureSettings} FeatureSettings */

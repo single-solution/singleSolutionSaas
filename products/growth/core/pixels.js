@@ -13,9 +13,15 @@
  * `contentIds` setting `variant`.
  * @module
  */
-import { isAmount, isCurrency } from '@ss/contracts/format';
+import { currencyDigits, isAmount, isCurrency } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
-import { toMajor } from './money.js';
+
+/**
+ * Minor units as a major-unit number (1250 USD → 12.5).
+ * @param {number} minor
+ * @param {string} currency
+ */
+export const toMajor = (minor, currency) => minor / 10 ** currencyDigits(currency);
 
 /** Meta's standard events (`fbq('track', …)`); any other name is a custom event (`fbq('trackCustom', …)`). */
 const META_STANDARD = new Set([

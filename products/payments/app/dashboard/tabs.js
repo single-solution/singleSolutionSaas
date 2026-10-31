@@ -14,8 +14,28 @@ import { methodReady } from '../../core/methods.js';
 import { createSnippets } from '../../core/snippets.js';
 import { ConnectionForm, FORMS } from './forms.js';
 import { MethodsEditor } from './methods.js';
-import { SETUP } from './setup-steps.js';
 import { TEXTS } from './texts.js';
+
+/** @type {ReadonlyArray<import('@ss/ui/dashboard').SetupRequirement>} */
+const SETUP = Object.freeze([
+	{
+		key: 'way-to-pay',
+		oneOf: [
+			'stripe',
+			'paypal',
+			'payfast',
+			'payfast_pk',
+			'jazzcash',
+			'easypaisa',
+			'rapid',
+			'generic_gateway',
+			'manual_payments',
+		],
+		label: 'Switch on a way to take payments',
+		why: 'Payers have nothing to pay with until a payment gateway or a manual method is on.',
+		action: 'See features',
+	},
+]);
 
 /** @typedef {import('@ss/ui/dashboard').Answer} Answer */
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */

@@ -10,7 +10,7 @@
  * best saving first. Units are counted per line (never expanded), so large quantities stay cheap. No I/O.
  * @module
  */
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import { BUNDLE_TYPES } from './model.js';
 import { allocateUnits, percentOf, roundDown } from './money.js';
 import {

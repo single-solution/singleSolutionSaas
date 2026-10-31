@@ -13,7 +13,7 @@ import { Fragment, isValidElement } from 'react';
 import { cx } from './cx.js';
 import { Avatar, DOTS, IconBadge } from './display.js';
 import { LIST, LIST_TONE } from './layout-metrics.js';
-import { useShell } from './shell-state.js';
+import { useShell } from './AppShell.js';
 import { UNSAVED_TEXTS } from './unsaved.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */

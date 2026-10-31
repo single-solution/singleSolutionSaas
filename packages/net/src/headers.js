@@ -1,10 +1,8 @@
 /**
- * The static security headers of every page the Portal and the products serve (the Portal's `next.config.js` sets them
- * on every response, each product's on its dashboard page): HTTPS only, no type sniffing, no frames, a short referrer,
- * no powerful browser features, its own browsing context group, no DNS prefetching and no cross-domain policy files.
- * Each side adds its own Content-Security-Policy (the Portal's per-request nonce policy stays in the Portal).
+ * HTTP header helpers shared by the Portal and products: static security headers and client IP extraction.
  * @module
  */
+import { isIP } from 'node:net';
 
 /** The headers, in the order they are sent. @type {ReadonlyArray<readonly [string, string]>} */
 const STATIC_SECURITY_HEADERS = Object.freeze([
@@ -26,3 +24,20 @@ const STATIC_SECURITY_HEADERS = Object.freeze([
  * @returns {Array<{ key: string, value: string }>}
  */
 export const staticSecurityHeaders = () => STATIC_SECURITY_HEADERS.map(([key, value]) => ({ key, value }));
+
+/** @param {string | null | undefined} value @returns {string | null} an IP address, else null */
+const addressOf = (value) => {
+	const trimmed = (value ?? '').trim();
+	return isIP(trimmed) === 0 ? null : trimmed;
+};
+
+/**
+ * The caller's IP address: the hosting platform's own header first (`X-Real-IP`, which Vercel sets itself), else the
+ * LAST `X-Forwarded-For` hop (the one our own proxy appended; the first values are whatever the caller wrote), else null
+ * (the caller keeps its `unknown` bucket). A value that is not an IP address is never used, so no caller makes buckets
+ * of its own with text.
+ * @param {Headers} headers the request's headers
+ * @returns {string | null}
+ */
+export const clientIpOf = (headers) =>
+	addressOf(headers.get('x-real-ip')) ?? addressOf(headers.get('x-forwarded-for')?.split(',').at(-1));

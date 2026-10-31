@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../src/AppShell.js';
-import { Pagination } from '../src/Pagination.js';
+import { Pagination } from '../src/paged.js';
 import { ListColumn } from '../src/ListColumn.js';
 import { Page, PAGE_TEXTS } from '../src/Page.js';
 import { PAGE } from '../src/layout-metrics.js';

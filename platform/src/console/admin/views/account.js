@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Button, Form, FormError, Input, SettingsCard, fieldErrors, useToast } from '@ss/ui';
 import { ADMIN, LOGIN, TWO_STEP } from '../../../texts/console.js';
 import { apiFetch, useResource } from '../../client.js';
-import { AccountPage } from '../../views/account-page.js';
+import { AccountPage } from '../../views/account.js';
 import { EmailPanel, PasswordPanel, TwoStepPanel } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, RoleBadge } from './common.js';

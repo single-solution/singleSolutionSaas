@@ -15,11 +15,10 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from './Button.js';
 import { cx } from './cx.js';
-import { EmptyState, SkeletonBlock } from './display.js';
+import { EmptyState, SkeletonBlock, Spinner } from './display.js';
 import { Icon } from './icons.js';
 import { LIST, STAGGER } from './layout-metrics.js';
 import { Row, leadOf } from './Row.js';
-import { Spinner } from './Spinner.js';
 import { PickKeepsEditsContext, askLeave } from './unsaved.js';
 
 /** @typedef {Parameters<typeof Row>[0]} RowProps */

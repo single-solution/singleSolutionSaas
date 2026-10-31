@@ -8,9 +8,14 @@
  */
 import { ProductDashboard } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { CATEGORIES } from './categories.js';
 import { TABS } from './tabs.js';
 import { TEXTS } from './texts.js';
+
+/** @type {import('@ss/ui/dashboard').DashboardCategories} */
+const CATEGORIES = Object.freeze([
+	{ title: 'Channels', features: ['email', 'sms', 'whatsapp', 'push'] },
+	{ title: 'Delivery', features: ['webhooks', 'send_api'] },
+]);
 
 export default function Dashboard() {
 	return <ProductDashboard manifest={manifest} texts={TEXTS} categories={CATEGORIES} tabs={TABS} />;

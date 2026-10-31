@@ -32,7 +32,7 @@ import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api, routes } from '../paths.js';
 import { DaysLeft, ProductStatusBadge, creditDayBars, formatChartCredits, productStatusLabel, productTone } from './billing.js';
-import { FrameBilling } from './frame-billing.js';
+import { FrameBilling } from './shell.js';
 import { PageProblem, openDashboard } from './common.js';
 import { ConfirmOtp } from './confirm-change.js';
 import { ActivityTimeline } from './login-settings.js';

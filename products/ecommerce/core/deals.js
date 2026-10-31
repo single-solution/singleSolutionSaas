@@ -21,7 +21,7 @@
  * of a deal. No I/O.
  * @module
  */
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import { publicPhoto } from './catalog-content.js';
 import { MAX_QUANTITY, lineGross, perMeasure, piecesOf } from './measure.js';
 import { DEAL_TYPES } from './model.js';

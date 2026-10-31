@@ -12,8 +12,35 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { AiForm, FORMS } from './forms.js';
 import { SettingsTab, aiLabelNotice } from './settings.js';
-import { SETUP } from './setup-steps.js';
 import { TEXTS } from './texts.js';
+
+/** @type {ReadonlyArray<import('@ss/ui/dashboard').SetupRequirement>} */
+const SETUP = Object.freeze([
+	{
+		key: 'instructions',
+		when: ['ai_instructions'],
+		setting: 'ai_instructions.instructions',
+		label: 'Tell the AI about your business',
+		why: 'Every answer follows what you write: what you sell, how it should sound and what it must never say.',
+		action: 'Write it',
+	},
+	{
+		key: 'booking',
+		when: ['book_slot'],
+		setting: 'book_slot.bookingUrl',
+		label: 'Set the booking address',
+		why: 'The AI cannot offer or book times until it knows the address on your server that gives free times.',
+		action: 'Set address',
+	},
+	{
+		key: 'alert-page',
+		when: ['staff_alerts'],
+		setting: 'staff_alerts.adminUrl',
+		label: 'Set the conversation page address',
+		why: 'Alerts link staff to this page of your admin, where they open the chat and reply.',
+		action: 'Set address',
+	},
+]);
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 

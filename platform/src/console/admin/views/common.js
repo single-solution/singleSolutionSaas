@@ -11,7 +11,7 @@ import { adminRoutes } from '../paths.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
-export { adminCan } from '../rights.js';
+export { adminCan } from '../../../infra/rbac.js';
 
 /**
  * Page-level error of the Admin Console (back to Merchants unless `back` says otherwise).

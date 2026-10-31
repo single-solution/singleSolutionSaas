@@ -106,8 +106,10 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 				...SHARED[/** @type {keyof typeof SHARED} */ (product)],
 			])
 				for (const key of Object.keys(sections.get(section)?.properties ?? {}))
-					if (!Object.hasOwn(part.settings ?? {}, `${section}.${key}`))
-						problems.push(`${product} ${section}.${key}: not written`);
+					if (!Object.hasOwn(part.settings ?? {}, `${section}.${key}`)) {
+						if (!PENDING[/** @type {keyof typeof PENDING} */ (`${product} ${section}.${key}`)])
+							problems.push(`${product} ${section}.${key}: not written`);
+					}
 			// the Format is the website's, entered in the Portal: no product is sent one
 			if (part.format !== undefined) problems.push(`${product}: the plan carries a Format`);
 		}

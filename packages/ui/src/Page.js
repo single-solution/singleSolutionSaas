@@ -39,7 +39,7 @@ import { PAGE, pageBody } from './layout-metrics.js';
 import { LIST_COLUMN_TEXTS } from './ListColumn.js';
 import { Crumbs, Fact, HeaderActions, InfoButton, PAGE_TEXTS, ShellMenuButton, useNarrow } from './page-parts.js';
 import { PageSectionList, markChanged, usePageSections } from './page-sections.js';
-import { useShell } from './shell-state.js';
+import { useShell } from './AppShell.js';
 import { PageSkeleton } from './skeletons.js';
 import { PickKeepsEditsContext, askLeave } from './unsaved.js';
 

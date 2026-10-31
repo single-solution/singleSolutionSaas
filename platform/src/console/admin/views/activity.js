@@ -9,7 +9,7 @@ import { ButtonLink, Callout, Page, Pagination, Toolbar, describeProblem } from 
 import { ADMIN, MORE } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
-import { useListPages } from '../../views/paging.js';
+import { useListPages } from '../../views/common.js';
 import { DateFields, periodFilter } from '../../views/range.js';
 import { useNavigation } from '../../navigation.js';
 import { usePagedList } from '../../client.js';

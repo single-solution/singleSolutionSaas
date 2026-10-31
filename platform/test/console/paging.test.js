@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@ss/ui/testing';
-import { useListPages } from '../../src/console/views/paging.js';
+import { useListPages } from '../../src/console/views/common.js';
 
 afterEach(cleanup);
 

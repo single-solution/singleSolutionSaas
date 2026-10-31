@@ -10,12 +10,11 @@
 import { useState } from 'react';
 import { TextLink } from './display.js';
 import { Switch } from './fields.js';
-import { NextStep } from './NextStep.js';
+import { NextStep } from './blocks.js';
 import { ConfirmDialog } from './overlay.js';
 import { call, fill } from './dashboard-api.js';
 import { formatCreditsPerHour, supportContact } from './format.js';
-import { useDashboard, withDependents } from './dashboard-parts.js';
-import { websiteSettingsUrl } from './portal-links.js';
+import { useDashboard, websiteSettingsUrl, withDependents } from './dashboard-parts.js';
 import { useDisplayLocale } from './time.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */

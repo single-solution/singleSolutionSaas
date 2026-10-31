@@ -14,7 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { isAmount } from '@ss/contracts/format';
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
 import { DURATION_RULE, durationOf } from './durations.js';
 import { gradeForType } from './grades.js';

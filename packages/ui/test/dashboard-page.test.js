@@ -5,9 +5,8 @@
  * its own `#address`, with counts, dots and locks; a section with parts is one row whose page shows every part).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DashboardProvider } from '../src/dashboard-parts.js';
+import { DashboardProvider, dashboardTexts } from '../src/dashboard-parts.js';
 import { FrameContext, LoadedPage, SectionsPage, useCrumbs } from '../src/dashboard-page.js';
-import { dashboardTexts } from '../src/dashboard-texts.js';
 import { act, allByRole, byText, cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(() => {

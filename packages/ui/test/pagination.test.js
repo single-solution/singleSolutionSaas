@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Pagination, PaginationSkeleton } from '../src/Pagination.js';
+import { Pagination, PaginationSkeleton } from '../src/paged.js';
 import { usePaged, fillRange, PAGED_TEXTS } from '../src/paged.js';
 import { byText, cleanup, click, render, type } from '../src/testing.js';
 

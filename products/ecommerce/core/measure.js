@@ -15,7 +15,7 @@
  * @module
  */
 import { MAX_AMOUNT } from '@ss/contracts/format';
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 
 /** Thousandths of the unit in one unit (the integer base of measured quantities). */
 export const MILLI = 1000;

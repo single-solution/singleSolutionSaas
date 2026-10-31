@@ -11,7 +11,7 @@ import {
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { appleClientSecret, createProviders, pkceChallenge } from '../adapters/providers.js';
-import { emailDomain } from '../core/identifiers.js';
+import { emailDomain } from '../core/rules.js';
 import {
 	checkAddresses,
 	checkCustomValues,

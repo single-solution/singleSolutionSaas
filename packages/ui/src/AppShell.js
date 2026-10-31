@@ -17,17 +17,27 @@
  * pane returns to its top when the page changes (`scrollKey`).
  * @module
  */
-import { Fragment, cloneElement, isValidElement, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, cloneElement, createContext, isValidElement, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { Avatar, DOTS, IconBadge, TINTS } from './display.js';
 import { Icon } from './icons.js';
 import { AccountMenu, ThemeMenu } from './Menu.js';
 import { NavigationProgress, usePresence } from './motion.js';
 import { useFocusTrap } from './overlay.js';
-import { ShellContext } from './shell-state.js';
 import { ThemeToggle } from './theme.js';
 
-export { useShell } from './shell-state.js';
+/**
+ * @typedef {object} ShellState
+ * @property {boolean} rail true while the sidebar is folded to icons
+ * @property {import('react').ElementType} [linkAs] the app's router link component
+ * @property {() => void} [openNav] opens the navigation sheet (phones)
+ */
+
+/** @type {import('react').Context<ShellState>} */
+export const ShellContext = createContext(/** @type {ShellState} */ ({ rail: false }));
+
+/** @returns {ShellState} the frame state: whether the sidebar is folded, the router link, how to open the menu */
+export const useShell = () => useContext(ShellContext);
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./display.js').Kind} Kind */
@@ -251,8 +261,8 @@ function Brand({ name, tagline, product, compact = false, markOnly = false }) {
 				<span className="sr-only">{name}</span>
 			) : (
 				<span className="min-w-0">
-					<span className="block truncate text-sm font-semibold tracking-[-0.01em] text-fg">{name}</span>
-					{tagline && !compact ? <span className="block truncate text-help text-muted">{tagline}</span> : null}
+					<span className="block truncate font-display text-sm font-bold tracking-tight text-fg">{name}</span>
+					{tagline && !compact ? <span className="block truncate font-mono text-help text-muted">{tagline}</span> : null}
 				</span>
 			)}
 		</div>
@@ -585,25 +595,27 @@ export function AppShell({
 	return (
 		<NavigationProgress>
 			<ShellContext.Provider value={shell}>
-				{/* Unite portal-kit frame: one hard shell, sidebar flush with main (no floating panels) */}
+				{/* Unite portal-kit frame: website source of truth (wash, grid-hard, glass panels) */}
 				<div
 					className={cx(
-						'flex h-dvh w-full overflow-hidden bg-canvas p-2 text-fg sm:p-2.5',
+						'relative flex h-dvh w-full overflow-hidden bg-canvas p-2 text-fg sm:p-2.5',
 						// save bar centres on the page area inside the frame
 						'[--ss-pane-left:0.5rem] [--ss-pane-right:0.5rem] sm:[--ss-pane-left:0.625rem] sm:[--ss-pane-right:0.625rem]',
 						rail ? 'lg:[--ss-pane-left:5.125rem]' : 'lg:[--ss-pane-left:16.625rem]',
 					)}>
+					<div className="wash" aria-hidden="true" />
+					<div className="grid-hard" aria-hidden="true" />
 					<a
 						href={`#${mainId}`}
 						className="sr-only z-[70] rounded-control bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
 						Skip to content
 					</a>
-					<div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-panel border border-line bg-surface">
+					<div className="relative z-10 flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-panel border border-line bg-surface/90 shadow-2xl backdrop-blur-md">
 						<aside
 							data-rail={rail || undefined}
 							className={cx(
 								// menus open upward over the page from the rail
-								'relative z-30 hidden h-full shrink-0 border-r border-line bg-canvas/65 [view-transition-name:ss-sidebar] lg:block',
+								'relative z-30 hidden h-full shrink-0 border-r border-line bg-surface/80 backdrop-blur-md [view-transition-name:ss-sidebar] lg:block',
 								'transition-[width] duration-(--ss-motion) ease-ss',
 								rail ? 'w-16' : 'w-[15.5rem]',
 							)}>
@@ -622,13 +634,13 @@ export function AppShell({
 									role="dialog"
 									aria-modal="true"
 									aria-label="Navigation"
-									className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line bg-canvas group-data-[state=closed]:animate-ss-drawer-out">
+									className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line bg-surface/95 backdrop-blur-md group-data-[state=closed]:animate-ss-drawer-out">
 									{sidebar(false, true)}
 								</div>
 							</div>
 						) : null}
 						<div className="group/main flex h-full min-w-0 flex-1 flex-col ss-grid-wash">
-							<header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-2 group-has-[[data-ss-page]]/main:hidden [view-transition-name:ss-topbar] sm:gap-3 sm:px-3">
+							<header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface/80 backdrop-blur-md px-2 group-has-[[data-ss-page]]/main:hidden [view-transition-name:ss-topbar] sm:gap-3 sm:px-3">
 								<button
 									type="button"
 									onClick={() => setOpen(true)}

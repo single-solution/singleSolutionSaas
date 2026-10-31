@@ -8,7 +8,7 @@
 import { isId } from '@ss/contracts';
 import { firstFailure, itemsOf, loadSetup, loadWebsiteRows, loadWebsiteSettings, orElse } from '../loaders.js';
 import { adminApi as paths, merchantFilter } from './paths.js';
-import { adminCan } from './rights.js';
+import { adminCan } from '../../infra/rbac.js';
 
 /** @typedef {import('../api.js').ConsoleApi} ConsoleApi */
 /** @typedef {import('@ss/ui/problems').Problem} Problem */

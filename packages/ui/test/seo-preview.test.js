@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { SeoPreview } from '../src/SeoPreview.js';
 import {
 	SEO_PREVIEW_CSS,
 	SEO_PREVIEW_TEXTS,
 	SERP_LIMITS,
+	SeoPreview,
 	breadcrumbOf,
 	estimateWidth,
 	fitWidth,

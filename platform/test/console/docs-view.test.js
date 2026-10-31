@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { DocsHubView } from '../../src/console/views/docs.js';
-import { DocsProductView } from '../../src/console/views/docs-product.js';
 import * as loaders from '../../src/console/loaders.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
@@ -70,21 +69,6 @@ describe('Docs hub views (PLAN §10 B1, B2)', () => {
 		expect(html).toContain('/docs/openapi.json');
 	});
 
-	it('renders DocsProductView with guide, features, widget snippet, and operations table without error', () => {
-		const html = renderToString(<DocsProductView branding={branding} product={sampleProduct} />);
-		expect(html).toContain('Chat');
-		expect(html).toContain('v1.0.0');
-		expect(html).toContain('Embed live chat on your site');
-		expect(html).toContain('Widget Integration');
-		expect(html).toContain('http://localhost:3003/widget.js');
-		expect(html).toContain('YOUR_WEBSITE_BROWSER_TOKEN');
-		expect(html).toContain('AI Assistant');
-		expect(html).toContain('Operator Inbox');
-		expect(html).toContain('/v1/conversations');
-		expect(html).toContain('List active conversations');
-		expect(html).toContain('/v1/messages');
-		expect(html).toContain('/docs/chat/openapi.json');
-	});
 
 	it('loads docs hub and product detail via loaders', async () => {
 		const mockApi = {

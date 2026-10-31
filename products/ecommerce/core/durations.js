@@ -4,7 +4,7 @@
  * last day of February). Shown in the reader's language by `Intl` (`1 year`, `2 Jahre`). No I/O.
  * @module
  */
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 
 /** The units of a time. */
 export const DURATION_UNITS = Object.freeze(/** @type {const} */ (['days', 'months', 'years']));

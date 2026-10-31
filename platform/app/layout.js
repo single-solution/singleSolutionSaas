@@ -11,7 +11,6 @@ const display = Space_Grotesk({
 	subsets: ['latin'],
 	variable: '--ss-font-display',
 	display: 'swap',
-	weight: ['500', '600', '700'],
 });
 const mono = JetBrains_Mono({
 	subsets: ['latin'],

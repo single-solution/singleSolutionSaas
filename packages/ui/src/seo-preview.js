@@ -1,3 +1,4 @@
+'use client';
 /**
  * `@ss/ui/seo-preview` — the search result and share card preview of a page (R7 #105), framework-free so the product
  * widgets (plain DOM in a Shadow DOM) and the React dashboards (`<SeoPreview>`) draw the same part.
@@ -13,6 +14,8 @@
  * Widgets add {@link SEO_PREVIEW_CSS} to their own CSS; `<SeoPreview>` adds it to the document once.
  * @module
  */
+
+import { createElement, useEffect, useRef } from 'react';
 
 /** Google's usual widths: a title is cut past 600 px at 20 px Arial, a description past 920 px at 14 px Arial. */
 export const SERP_LIMITS = Object.freeze({
@@ -371,3 +374,40 @@ export const SEO_PREVIEW_CSS = `
 .ss-seo-ctitle { font-size: 15px; }
 .ss-seo-cdesc { font-size: 13px; color: var(--ss-seo-muted); }
 `;
+
+/** @param {Document} doc */
+const addStyles = (doc) => {
+	if (doc.head.querySelector('style[data-ss-seo-preview]')) return;
+	const style = doc.createElement('style');
+	style.setAttribute('data-ss-seo-preview', '');
+	style.textContent = SEO_PREVIEW_CSS;
+	doc.head.append(style);
+};
+
+/**
+ * `<SeoPreview>` — search result and share card preview of a page for React dashboards.
+ * @param {SeoPreviewInput & {
+ *   texts?: Partial<Record<keyof typeof SEO_PREVIEW_TEXTS, string>>, className?: string }} props
+ */
+export function SeoPreview({ title, description, url, siteName, image, texts, className }) {
+	const box = useRef(/** @type {HTMLDivElement | null} */ (null));
+	const view = useRef(
+		/** @type {{ words: string, update: (input: SeoPreviewInput) => void } | null} */ (null),
+	);
+	const words = JSON.stringify(texts ?? {});
+	useEffect(() => {
+		const holder = box.current;
+		if (!holder) return;
+		const input = { title, description, url, siteName, image };
+		if (view.current?.words === words) {
+			view.current.update(input);
+			return;
+		}
+		addStyles(holder.ownerDocument);
+		const made = seoPreview(holder.ownerDocument, input, { texts: JSON.parse(words) });
+		holder.replaceChildren(made.node);
+		view.current = { words, update: made.update };
+	}, [title, description, url, siteName, image, words]);
+	return createElement('div', { ref: box, className });
+}
+

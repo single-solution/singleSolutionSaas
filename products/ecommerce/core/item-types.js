@@ -16,7 +16,7 @@
  * stock is in thousandths of the unit), but they are not sold then. No I/O.
  * @module
  */
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import { FIELD_LIMITS } from './fields.js';
 import { checkMeasure, checkQuantityRule, sameMeaning } from './measure.js';
 

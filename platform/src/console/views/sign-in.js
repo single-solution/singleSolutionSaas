@@ -13,7 +13,7 @@ import { AUTH } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
 import { Link } from '../link.js';
 import { routes } from '../paths.js';
-import { BrandMark } from './brand.js';
+import { BrandMark } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 /** @typedef {{ name: string, accent: string, logoUrl: string | null, support: { channels: import('@ss/contracts/text').SupportChannel[] } }} Branding */

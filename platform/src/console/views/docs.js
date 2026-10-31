@@ -7,9 +7,7 @@
  */
 import { useState } from 'react';
 import { Icon, ToastProvider } from '@ss/ui';
-import { COMPANY_NAME, PRODUCT_BRAND } from '../../../app/(site)/_components/brand-constants.js';
-import { SiteHeader } from '../../../app/(site)/_components/SiteHeader.js';
-import { SiteFooter } from '../../../app/(site)/_components/SiteFooter.js';
+import { COMPANY_NAME, PRODUCT_BRAND, SiteFooter, SiteHeader } from '../../../app/(site)/_components/SiteNav.js';
 
 /**
  * @typedef {object} DocCatalogProduct

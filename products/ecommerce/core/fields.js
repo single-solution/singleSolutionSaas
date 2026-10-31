@@ -8,7 +8,7 @@
  * @module
  */
 import { luhnValid } from '@ss/contracts/text';
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 
 /** Which characters a format allows. */
 export const FORMAT_CHARS = Object.freeze(

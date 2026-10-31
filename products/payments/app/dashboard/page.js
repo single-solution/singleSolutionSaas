@@ -7,9 +7,27 @@
  */
 import { ProductDashboard } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { CATEGORIES } from './categories.js';
 import { TABS } from './tabs.js';
 import { TEXTS } from './texts.js';
+
+/** @type {import('@ss/ui/dashboard').DashboardCategories} */
+const CATEGORIES = Object.freeze([
+	{
+		title: 'Ways to pay',
+		features: [
+			'manual_payments',
+			'stripe',
+			'paypal',
+			'payfast',
+			'payfast_pk',
+			'jazzcash',
+			'easypaisa',
+			'rapid',
+			'generic_gateway',
+		],
+	},
+	{ title: 'Selling tools', features: ['payment_links', 'subscriptions', 'refunds', 'payment_api'] },
+]);
 
 export default function Dashboard() {
 	return <ProductDashboard manifest={manifest} texts={TEXTS} categories={CATEGORIES} tabs={TABS} />;

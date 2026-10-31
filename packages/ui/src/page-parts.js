@@ -11,7 +11,7 @@ import { cx } from './cx.js';
 import { DOTS } from './display.js';
 import { Icon } from './icons.js';
 import { ActionMenu } from './Menu.js';
-import { useShell } from './shell-state.js';
+import { useShell } from './AppShell.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./display.js').Tone} Tone */

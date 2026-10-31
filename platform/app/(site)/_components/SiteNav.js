@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react';
 import NextLink from 'next/link.js';
 import { usePathname } from 'next/navigation.js';
-import { PRODUCT_BRAND } from './brand-constants.js';
 
 const Link = /** @type {any} */ (NextLink);
+
+import { COMPANY_NAME, PRODUCT_BRAND } from './brand-constants.js';
+
+export { COMPANY_NAME, PRODUCT_BRAND };
 
 /**
  * Shared floating glass header for the public Portal surface (Website + Docs).
@@ -45,5 +48,25 @@ export function SiteHeader({ brandName = PRODUCT_BRAND, isHome = false }) {
 				</Link>
 			</header>
 		</div>
+	);
+}
+
+/**
+ * Shared footer for the public Portal surface (Website + Docs).
+ * @param {{ brandName?: string, companyName?: string, isHome?: boolean }} props
+ */
+export function SiteFooter({ brandName = PRODUCT_BRAND, companyName = COMPANY_NAME, isHome = false }) {
+	return (
+		<footer>
+			<div>
+				<strong>{brandName}</strong>
+				<span className="by">by {companyName}</span>
+			</div>
+			<nav aria-label="Footer">
+				<a href={isHome ? '#products' : '/#products'}>Features</a>
+				<Link href="/docs">Docs</Link>
+				<Link href="/login">Sign in</Link>
+			</nav>
+		</footer>
 	);
 }

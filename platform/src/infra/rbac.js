@@ -181,3 +181,12 @@ export const can = (actor, permission, resource = {}) => {
 		return permissionsFor(actor, { ...resource, merchantId: actor.merchantId ?? null }).includes(permission);
 	return permissionsFor(actor, resource).includes(permission);
 };
+
+/**
+ * Does the signed-in admin's role hold `permission`?
+ * @param {any} admin `{ adminId, role }`
+ * @param {string} permission
+ */
+export const adminCan = (admin, permission) =>
+	Boolean(admin) && can({ type: 'admin', id: String(admin.adminId ?? 'admin'), role: admin.role ?? null }, permission);
+

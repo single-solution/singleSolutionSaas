@@ -42,9 +42,11 @@ export {
 	ResealCard,
 	SaveOutcome,
 	SettingsForms,
+	WEBSITE_SECTION_NAMES,
 	hasSettings,
 	toneOf,
 	useDashboard,
+	websiteSettingsUrl,
 	withDependents,
 } from './dashboard-parts.js';
 export {
@@ -58,7 +60,6 @@ export {
 	useTextsEditor,
 } from './dashboard-settings.js';
 export { FrameContext, SectionsPage, pageState, useCrumbs } from './dashboard-page.js';
-export { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
 export { DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */

@@ -16,8 +16,27 @@ import { PROVIDER_FORMS, ProviderForm } from './providers.js';
 import { TemplatesSection } from './templates.js';
 import { TEXTS } from './texts.js';
 import { FallbackChainsCard, QuietHoursCard, StopKeywordsCard, TemplateSettingsCard, TopicsCard } from './lists.js';
-import { SETUP } from './setup-steps.js';
 import { WebhookUrlsCard } from './webhooks.js';
+
+/** @type {ReadonlyArray<import('@ss/ui/dashboard').SetupRequirement>} */
+const SETUP = Object.freeze([
+	{
+		key: 'channel',
+		oneOf: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
+		label: 'Switch on a channel',
+		why: 'Messages need at least one channel (email, SMS, WhatsApp or push) to go out.',
+		action: 'See features',
+	},
+	{
+		key: 'webhook-address',
+		when: ['webhooks'],
+		list: 'webhook_urls',
+		label: 'Add a webhook address',
+		why: 'Outgoing webhooks send nothing until at least one address on your server is added.',
+		action: 'Add address',
+		section: 'webhooks',
+	},
+]);
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 

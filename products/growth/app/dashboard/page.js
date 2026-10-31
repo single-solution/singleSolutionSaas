@@ -7,9 +7,20 @@
  */
 import { ProductDashboard } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { CATEGORIES } from './categories.js';
 import { TABS } from './tabs.js';
 import { TEXTS } from './texts.js';
+
+/** @type {import('@ss/ui/dashboard').DashboardCategories} */
+const CATEGORIES = Object.freeze([
+	{
+		title: 'Ads and tracking tags',
+		features: ['google_tags', 'meta_pixel', 'tiktok_pixel', 'custom_scripts', 'consent_banner', 'tags', 'pixels'],
+	},
+	{ title: 'Analytics', features: ['visitor_analytics', 'conversion_funnel', 'searches_404s', 'web_vitals'] },
+	{ title: 'Search engines', features: ['robots_verification', 'seo_checklist', 'indexnow', 'redirects'] },
+	{ title: 'On-site messages', features: ['notice_bar'] },
+	{ title: 'Migration', features: ['import'] },
+]);
 
 export default function Dashboard() {
 	return <ProductDashboard manifest={manifest} texts={TEXTS} categories={CATEGORIES} tabs={TABS} />;

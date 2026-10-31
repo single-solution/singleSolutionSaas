@@ -10,17 +10,78 @@
  * @module
  */
 import { usePathname, useRouter } from 'next/navigation.js';
-import { useEffect, useState, useTransition } from 'react';
-import { AppShell, SwitcherSelect, ToastProvider, useNavigationProgress } from '@ss/ui';
-import { BILLING, MERCHANT } from '../../texts/console.js';
+import { createContext, useContext, useEffect, useState, useTransition } from 'react';
+import { AppShell, Icon, SwitcherSelect, ToastProvider, cx, formatCredits, useNavigationProgress } from '@ss/ui';
+import { BILLING, MERCHANT, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
-import { NavLink } from '../link.js';
+import { Link, NavLink } from '../link.js';
 import { PUBLIC_PATHS, api, routes } from '../paths.js';
 import { BillingBanner } from './billing.js';
-import { accentStyle } from './brand.js';
-import { BillingContext } from './frame-billing.js';
-import { FrameFooter } from './frame-footer.js';
+import { accentStyle } from './common.js';
 import { contactLine } from './sign-in.js';
+
+/** Set by the frame: replaces the billing summary it shows. */
+export const BillingContext = createContext(/** @type {((billing: any) => void) | null} */ (null));
+
+/**
+ * Hands a page's billing summary (from its own check) to the frame's balance and banner.
+ * @param {{ billing: any }} props
+ */
+export function FrameBilling({ billing }) {
+	const set = useContext(BillingContext);
+	useEffect(() => {
+		if (set && billing) set(billing);
+	}, [set, billing]);
+	return null;
+}
+
+/** The look of a footer row (the same for the balance and the help link). @param {boolean} rail */
+const footerRowClass = (rail) =>
+	cx(
+		'ss-motion ss-press flex h-9 items-center gap-2.5 rounded-control text-sm font-medium text-fg/80 hover:bg-surface-2 hover:text-fg',
+		'focus-visible:outline-2 focus-visible:outline-focus',
+		rail ? 'justify-center' : 'px-2.5',
+	);
+
+/**
+ * Bottom of the merchant sidebar: credits balance and help link.
+ * @param {{ rail: boolean, balance?: number | null, help?: { label: string, url: string } | null }} props
+ */
+function FrameFooter({ rail, balance = null, help = null }) {
+	return (
+		<div className="space-y-0.5">
+			<a href={routes.docs()} title={WEBSITE.docs} target="_blank" rel="noopener noreferrer" className={footerRowClass(rail)}>
+				<span aria-hidden="true" className="text-muted">
+					<Icon name="code" size={17} />
+				</span>
+				<span className={rail ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{WEBSITE.docs}</span>
+			</a>
+			{balance !== null ? (
+				<Link href={routes.credits()} title={MERCHANT.balanceLink} className={footerRowClass(rail)}>
+					<span aria-hidden="true" className="text-muted">
+						<Icon name="wallet" size={17} />
+					</span>
+					<span className={rail ? 'sr-only' : 'min-w-0 flex-1 truncate'}>
+						{MERCHANT.balanceLink}
+						<span className="ml-1.5 tabular-nums text-muted">{formatCredits(balance)}</span>
+					</span>
+				</Link>
+			) : null}
+			{help ? (
+				<a
+					href={help.url}
+					title={help.label}
+					{...(/^https?:/i.test(help.url) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+					className={footerRowClass(rail)}>
+					<span aria-hidden="true" className="text-info">
+						<Icon name="help" size={17} />
+					</span>
+					<span className={rail ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{help.label}</span>
+				</a>
+			) : null}
+		</div>
+	);
+}
 
 /**
  * The attention mark of Usage and credits for a billing summary: red when the websites are stopped, amber while the

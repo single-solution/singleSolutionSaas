@@ -8,7 +8,6 @@
 export { cx } from './cx.js';
 export { Icon } from './icons.js';
 export { Button, IconButton, ButtonLink, FormBusyContext } from './Button.js';
-export { Spinner } from './Spinner.js';
 export { useNavigationProgress, RouteProgress, PendingHint, PageTransition, SwapTransition } from './motion.js';
 export {
 	Input,
@@ -55,15 +54,16 @@ export {
 	Masonry,
 	TextLink,
 	ManagedNote,
+	Spinner,
 } from './display.js';
 export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
 export { Toolbar, TOOLBAR_TEXTS } from './Toolbar.js';
 export { FiguresTable, FIGURES_TABLE_TEXTS } from './FiguresTable.js';
-export { Pagination, PaginationSkeleton } from './Pagination.js';
+export { Pagination, PaginationSkeleton } from './paged.js';
 export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
 export { Row } from './Row.js';
-export { NextStep, NEXT_STEP_TEXTS } from './NextStep.js';
+export { NextStep, NEXT_STEP_TEXTS } from './blocks.js';
 export { ListColumn, LIST_COLUMN_TEXTS } from './ListColumn.js';
 export { useListSelection, useRowSelection } from './list-selection.js';
 export { Page, PAGE_TEXTS } from './Page.js';
@@ -81,8 +81,7 @@ export {
 	DrawerBodySkeleton,
 } from './skeletons.js';
 export { METRICS } from './layout-metrics.js';
-export { TypedConfirmDialog } from './TypedConfirm.js';
-export { PasswordConfirmDialog, OtpConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
+export { TypedConfirmDialog, PasswordConfirmDialog, OtpConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
 export { TOAST_TEXTS, ToastOnce, ToastProvider, useToast } from './Toast.js';
 export { UNSAVED_TEXTS, askLeave, hasUnsaved } from './unsaved.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
@@ -108,7 +107,7 @@ export { ThemeScript } from './theme-script.js';
 export { ThemeToggle, useThemeChoice } from './theme.js';
 export { DisplayLocale, LocalTime, useDisplayLocale, useViewerTimeZone } from './time.js';
 export { BarChart, isEmptySeries } from './charts.js';
-export { SeoPreview } from './SeoPreview.js';
+export { SeoPreview } from './seo-preview.js';
 export {
 	NeedsList,
 	SetupChecklist,
@@ -117,10 +116,11 @@ export {
 	ChangesTable,
 	ProductOverview,
 	OverviewSkeleton,
+	OVERVIEW_TEXTS,
 	initialsOf,
 } from './overview.js';
 // plain data, not a client module: a product's `texts.js` also gives its server `app/layout.js` the page title
-export { DASHBOARD_TEXTS, dashboardTexts, resealAdvice } from './dashboard-texts.js';
+export { DASHBOARD_TEXTS, dashboardTexts, resealAdvice } from './dashboard-parts.js';
 export { SchemaForm } from './SchemaForm.js';
 export {
 	formatCredits,

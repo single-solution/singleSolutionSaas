@@ -7,7 +7,7 @@
  */
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { cx } from './cx.js';
-import { Spinner } from './Spinner.js';
+import { Spinner } from './display.js';
 
 /** The busy state of the enclosing form (`Form` sets it while its submit runs); its submit buttons show it. */
 export const FormBusyContext = createContext(false);

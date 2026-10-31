@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation.js';
 import { ADMIN, TWO_STEP, WEBSITE } from '../../../texts/console.js';
 import { Link, NavLink } from '../../link.js';
 import { routes } from '../../paths.js';
-import { accentStyle } from '../../views/brand.js';
+import { accentStyle } from '../../views/common.js';
 import { TwoStepSetup } from '../../views/login-settings.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';

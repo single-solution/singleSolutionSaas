@@ -4,7 +4,9 @@
  * @module
  */
 import { PASSWORD_LOCK_MINUTES, PASSWORD_MAX_ATTEMPTS } from './limits.js';
-import { emailDomain } from './identifiers.js';
+
+/** @param {string} email a normalized address */
+export const emailDomain = (email) => email.slice(email.lastIndexOf('@') + 1);
 
 // ------------------------------------------------------------------------------------------------- one-time codes
 

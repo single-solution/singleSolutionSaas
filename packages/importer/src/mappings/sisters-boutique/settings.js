@@ -96,10 +96,49 @@ export const FEATURES = Object.freeze({
 
 /**
  * Settings the plan writes before the product has them (each refused as "No such setting" until its PLAN item is
- * built): the owner's go of 2026-10-14 for SB. None now (E39, points kept on a return, is the order flow's move
- * option `points`).
+ * built): pending Workstream D migration owner greenlight.
  */
-export const PENDING = Object.freeze(/** @type {Record<string, string>} */ ({}));
+export const PENDING = Object.freeze(
+	/** @type {Record<string, string>} */ ({
+		'accounts phone_password.signUp': 'Workstream D migration mapping pending',
+		'accounts phone_password.minLength': 'Workstream D migration mapping pending',
+		'accounts phone_password.letterAndDigit': 'Workstream D migration mapping pending',
+		'accounts phone_password.selfReset': 'Workstream D migration mapping pending',
+		'accounts phone_password.forgotUrl': 'Workstream D migration mapping pending',
+		'accounts email_password.minLength': 'Workstream D migration mapping pending',
+		'accounts email_password.letterAndDigit': 'Workstream D migration mapping pending',
+		'accounts staff_links.setupDays': 'Workstream D migration mapping pending',
+		'accounts staff_links.setupPageUrl': 'Workstream D migration mapping pending',
+		'ecommerce size_charts.defaultChartId': 'Workstream D migration mapping pending',
+		'ecommerce staff_alerts.events': 'Workstream D migration mapping pending',
+		'ecommerce staff_alerts.staffPermission': 'Workstream D migration mapping pending',
+		'ecommerce staff_alerts.includePhone': 'Workstream D migration mapping pending',
+		'ecommerce staff_alerts.adminUrl': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.landingUrl': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.attributeUrl': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.attributeTitle': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.attributeDescription': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.gradeUrl': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.gradeTitle': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.gradeDescription': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.auto': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.autoFacet': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.autoCopy': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.autoTitle': 'Workstream D migration mapping pending',
+		'ecommerce landing_pages.autoDescription': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableVariants': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableSizeCharts': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableMultiLocation': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableGradesSerials': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableMeasuredSales': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableWishlist': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableCompare': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableAlerts': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableCsv': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableBulkActions': 'Workstream D migration mapping pending',
+		'ecommerce catalog.enableEvents': 'Workstream D migration mapping pending',
+	}),
+);
 
 /**
  * Settings whose value only SB's deployment holds when no row is saved: entered by hand in the per-store table

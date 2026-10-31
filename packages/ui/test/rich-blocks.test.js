@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Card, Stat } from '../src/display.js';
 import { Switch } from '../src/fields.js';
-import { NextStep } from '../src/NextStep.js';
+import { NextStep } from '../src/blocks.js';
 import { act, cleanup, click, render } from '../src/testing.js';
 
 afterEach(() => {

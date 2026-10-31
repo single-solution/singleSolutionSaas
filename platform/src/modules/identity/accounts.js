@@ -25,9 +25,8 @@ import {
 } from '../../infra/auth.js';
 import { resealEach, sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
-import { linkFor } from './core/links.js';
 import { presentAdmin, presentMerchant, twoStepOf } from './core/present.js';
-import { SETUP_TTL_MS, newToken } from './core/tokens.js';
+import { SETUP_TTL_MS, linkFor, newToken } from './core/tokens.js';
 import { checkSecondFactor, failAttempt, insertUnique, openTotpSecret, sendLater, throttleGate, totpAad } from './repo.js';
 
 /** @typedef {import('./repo.js').Deps} Deps */

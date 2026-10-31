@@ -468,7 +468,7 @@ describe('admin console smoke', () => {
 	});
 
 	it('opens an old address of a Settings part at that part of the one Settings page', async () => {
-		const { default: SettingsPart } = await import('../../app/(admin)/admin/_views/settings-part.js');
+		const { SettingsPart } = await import('../../app/(admin)/admin/[[...path]]/page.js');
 		const open = (/** @type {string} */ part) => SettingsPart({ params: Promise.resolve({ part }) });
 		await expect(open('mail')).rejects.toMatchObject({ digest: expect.stringContaining('/admin/settings#mail') });
 		await expect(open('billing')).rejects.toMatchObject({ digest: expect.stringContaining('/admin/settings#billing') });

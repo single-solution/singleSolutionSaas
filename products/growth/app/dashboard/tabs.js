@@ -7,15 +7,54 @@
  * @module
  */
 import { Button, CodeBlock, Section, Stat, useViewerTimeZone } from '@ss/ui';
-import { DefaultsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
+import { DefaultsTab, DevelopersTab, OverviewTab, SettingsTab, fill, isFilled, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { searchParamsOf, tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
 import { BROWSER_EVENTS, SITE_EVENTS } from '../../core/widgets.js';
 import { listExtras } from './lists.js';
-import { SETUP } from './setup-steps.js';
 import { settingsNotice } from './setup.js';
 import { TEXTS } from './texts.js';
+
+/** @type {ReadonlyArray<import('@ss/ui/dashboard').SetupRequirement>} */
+const SETUP = Object.freeze([
+	{
+		key: 'meta-pixel',
+		when: ['meta_pixel'],
+		setting: 'meta_pixel.pixelId',
+		label: 'Add your Meta pixel ID',
+		why: 'The Meta pixel loads nothing on your pages until its id is set.',
+		action: 'Add id',
+	},
+	{
+		key: 'google-tags',
+		when: ['google_tags'],
+		setting: 'google_tags.ga4Id',
+		done: (/** @type {unknown} */ _value, /** @type {{ values: Record<string, unknown> }} */ { values }) =>
+			['ga4Id', 'adsId', 'gtmId'].some((name) => isFilled(values[name])),
+		label: 'Add a Google tag ID',
+		why: 'Google Analytics, Google Ads and Tag Manager load nothing until at least one id is set.',
+		action: 'Add id',
+	},
+	{
+		key: 'tiktok-pixel',
+		when: ['tiktok_pixel'],
+		setting: 'tiktok_pixel.pixelId',
+		label: 'Add your TikTok pixel ID',
+		why: 'The TikTok pixel loads nothing on your pages until its id is set.',
+		action: 'Add id',
+	},
+	{
+		key: 'indexnow-key',
+		when: ['indexnow'],
+		setting: 'indexnow.key',
+		done: (/** @type {unknown} */ value, /** @type {{ values: Record<string, unknown> }} */ { values }) =>
+			isFilled(value) && isFilled(values.keyPath),
+		label: 'Set your IndexNow key',
+		why: 'Search engines hear about changed pages only with a key that your website serves as a text file.',
+		action: 'Set key',
+	},
+]);
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 /** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */

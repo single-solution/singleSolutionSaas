@@ -3,9 +3,7 @@
 import Link from 'next/link.js';
 import { ButtonLink } from '@ss/ui';
 import { useEffect, useState } from 'react';
-import { COMPANY_NAME, PRODUCT_BRAND } from './brand-constants.js';
-import { SiteHeader } from './SiteHeader.js';
-import { SiteFooter } from './SiteFooter.js';
+import { COMPANY_NAME, PRODUCT_BRAND, SiteFooter, SiteHeader } from './SiteNav.js';
 
 export { COMPANY_NAME, PRODUCT_BRAND };
 
@@ -86,70 +84,6 @@ const WORK_STEPS = [
 	},
 ];
 
-/** Lightweight mock cues shown beside each feature detail. */
-const FEATURE_MOCK = {
-	accounts: {
-		chrome: 'your-site · sign in',
-		title: 'Sign in',
-		rows: [
-			{ kind: 'field', label: 'Email', value: 'you@business.com' },
-			{ kind: 'field', label: 'Password', value: '••••••••' },
-			{ kind: 'action', label: 'Continue' },
-			{ kind: 'toggle', label: 'Staff invite link', on: true },
-		],
-	},
-	ecommerce: {
-		chrome: 'your-site · shop',
-		title: 'Catalog',
-		rows: [
-			{ kind: 'tile', label: 'Item A', value: 'In stock' },
-			{ kind: 'tile', label: 'Item B', value: 'Cart ready' },
-			{ kind: 'action', label: 'Checkout' },
-			{ kind: 'toggle', label: 'Returns', on: true },
-		],
-	},
-	payments: {
-		chrome: 'your-site · pay',
-		title: 'Collect payment',
-		rows: [
-			{ kind: 'field', label: 'Amount', value: '1,500' },
-			{ kind: 'chips', label: 'Card · Wallet · Link' },
-			{ kind: 'action', label: 'Pay now' },
-			{ kind: 'toggle', label: 'Staff proof review', on: true },
-		],
-	},
-	chat: {
-		chrome: 'your-site · chat',
-		title: 'Live chat',
-		rows: [
-			{ kind: 'bubble', label: 'Visitor', value: 'Do you open Sundays?' },
-			{ kind: 'bubble-me', label: 'You', value: 'Yes — 10 to 6.' },
-			{ kind: 'toggle', label: 'AI first reply', on: true },
-			{ kind: 'action', label: 'Hand to person' },
-		],
-	},
-	notifications: {
-		chrome: 'account · messages',
-		title: 'Send update',
-		rows: [
-			{ kind: 'chips', label: 'WhatsApp · SMS · Email · Push' },
-			{ kind: 'field', label: 'Template', value: 'Order ready' },
-			{ kind: 'toggle', label: 'Quiet hours', on: true },
-			{ kind: 'action', label: 'Send' },
-		],
-	},
-	growth: {
-		chrome: 'account · growth',
-		title: 'Site measurement',
-		rows: [
-			{ kind: 'toggle', label: 'Consent banner', on: true },
-			{ kind: 'toggle', label: 'SEO helpers', on: true },
-			{ kind: 'field', label: 'Analytics', value: 'Connected' },
-			{ kind: 'action', label: 'Save' },
-		],
-	},
-};
-
 const FAQ = [
 	{
 		q: 'What is Shelfway, in one line?',
@@ -202,70 +136,6 @@ const COMPARE = [
 	},
 ];
 
-/** Illustrated surfaces — teaching the model, not live screenshots. */
-const SCREENS = [
-	{
-		id: 'portal',
-		label: 'Your account',
-		path: 'account · websites',
-		badge: 'Portal Live',
-		side: ['Overview', 'Websites', 'Credits', 'Account', 'Docs'],
-		sideOn: 1,
-		title: 'Your website home',
-		lede: 'Add features, open settings, share setup with your developer.',
-		cards: [
-			{ b: 'Site status', s: 'live', v: 'myshop.com', dot: 'ok' },
-			{ b: 'Features on', s: '4 enabled', v: 'Accounts, Chat, Pay', dot: 'teal' },
-			{ b: 'Team staff', s: '3 active', v: 'Owner, Support', dot: 'ok' },
-		],
-		rows: [
-			{ k: 'Active', t: 'Visitor accounts & sign-in on your site', s: 'Running', e: 'Open →' },
-			{ k: 'Active', t: 'Live chat widget with AI handoff', s: '12 active today', e: 'Open →' },
-			{ k: 'Handoff', t: 'Developer share file with safe tokens', s: 'Up to date', e: 'Copy →' },
-		],
-	},
-	{
-		id: 'settings',
-		label: 'Settings',
-		path: 'settings · feature',
-		badge: 'Instant sync',
-		side: ['Features', 'Texts', 'Connections', 'Lists', 'Policies'],
-		sideOn: 0,
-		title: 'Feature settings',
-		lede: 'What is on, what visitors read, which services you connect.',
-		cards: [
-			{ b: 'Features on', s: '6 / 6', v: 'All active', dot: 'ok' },
-			{ b: 'Custom texts', s: 'Saved', v: 'Welcome & Prompts', dot: 'teal' },
-			{ b: 'Connected', s: '3 services', v: 'WhatsApp, Stripe', dot: 'ok' },
-		],
-		rows: [
-			{ k: 'Toggle', t: 'Core options & behavior switches', s: 'Immediate', e: 'Edit →' },
-			{ k: 'Copy', t: 'Customer-facing copy and greetings', s: 'Draft ready', e: 'Edit →' },
-			{ k: 'Connect', t: 'Payment & notification gateways', s: 'Verified', e: 'Config →' },
-		],
-	},
-	{
-		id: 'operate',
-		label: 'On your site',
-		path: 'site · today',
-		badge: 'Real-time',
-		side: ['Inbox', 'Payments', 'Team', 'Activity'],
-		sideOn: 0,
-		title: 'Work on the live site',
-		lede: 'Your team replies and reviews where visitors already are.',
-		cards: [
-			{ b: 'Live inbox', s: '2 waiting', v: 'Chat session open', dot: 'lime' },
-			{ b: 'Pay reviews', s: '1 pending', v: 'Proof submission', dot: 'mid' },
-			{ b: 'Staff on duty', s: 'Online now', v: 'Ready to reply', dot: 'ok' },
-		],
-		rows: [
-			{ k: 'Chat', t: 'Visitor asking about shipping times', s: 'Just now', e: 'Reply →' },
-			{ k: 'Order', t: 'Payment verification needed #1042', s: '2m ago', e: 'Review →' },
-			{ k: 'Staff', t: 'Support joined session #89', s: '5m ago', e: 'View →' },
-		],
-	},
-];
-
 /**
  * @typedef {{ id: string, name: string, description?: string }} MarketingProduct
  */
@@ -275,29 +145,7 @@ const SCREENS = [
  * @param {{ productName?: string, companyName?: string, products?: MarketingProduct[] }} props
  */
 export function SiteHome({ productName = PRODUCT_BRAND, companyName = COMPANY_NAME, products = [] }) {
-	const [screen, setScreen] = useState(0);
 	const [spotId, setSpotId] = useState('');
-	const [mockOverrides, setMockOverrides] = useState({});
-	const [actionFeedback, setActionFeedback] = useState('');
-	const shot = SCREENS[screen];
-
-	const isRowOn = (featureId, row) => {
-		const key = `${featureId}::${row.label}`;
-		return mockOverrides[key] !== undefined ? mockOverrides[key] : !!row.on;
-	};
-
-	const toggleRow = (featureId, row) => {
-		const key = `${featureId}::${row.label}`;
-		setMockOverrides((prev) => ({
-			...prev,
-			[key]: !isRowOn(featureId, row),
-		}));
-	};
-
-	const triggerAction = (label) => {
-		setActionFeedback(label);
-		setTimeout(() => setActionFeedback(''), 1500);
-	};
 
 	const fromApi = products.filter((p) => p.id && p.name);
 	const catalog =
@@ -374,9 +222,6 @@ export function SiteHome({ productName = PRODUCT_BRAND, companyName = COMPANY_NA
 							<div className="fit-col">
 								<p className="label">You keep</p>
 								<div className="fit-card">
-									<span className="fit-bar" />
-									<span className="fit-bar short" />
-									<span className="fit-bar mid" />
 									<strong>Your website look</strong>
 									<em>Pages and design you own</em>
 								</div>
@@ -444,15 +289,6 @@ export function SiteHome({ productName = PRODUCT_BRAND, companyName = COMPANY_NA
 										</div>
 									</li>
 								))}
-								<li className="burden-foot">
-									<span className="mark" aria-hidden="true">
-										✗
-									</span>
-									<div>
-										<strong>Who carries the load</strong>
-										<p>You — every piece, every fix, every release</p>
-									</div>
-								</li>
 							</ul>
 						</div>
 						<div className="compare-card us-card glass hard">
@@ -469,15 +305,6 @@ export function SiteHome({ productName = PRODUCT_BRAND, companyName = COMPANY_NA
 										</div>
 									</li>
 								))}
-								<li className="burden-foot">
-									<span className="mark" aria-hidden="true">
-										✓
-									</span>
-									<div>
-										<strong>Who carries the load</strong>
-										<p>You own the look; we own the features</p>
-									</div>
-								</li>
 							</ul>
 						</div>
 					</div>
@@ -517,67 +344,7 @@ export function SiteHome({ productName = PRODUCT_BRAND, companyName = COMPANY_NA
 						</div>
 
 						{active ? (
-							<div className="feature-panel" key={active.id}>
-								<div className="feature-mock glass hard">
-									<div className="shot-chrome">
-										<i />
-										<i />
-										<i />
-										<span className="mono">{(FEATURE_MOCK[active.id] || FEATURE_MOCK.accounts).chrome}</span>
-									</div>
-									<div className="feature-mock-body">
-										<div className="feature-mock-head">
-											<p className="feature-mock-title">{(FEATURE_MOCK[active.id] || FEATURE_MOCK.accounts).title}</p>
-											<span className="mock-live-pill mono">Live preview</span>
-										</div>
-										<ul className="feature-mock-rows">
-											{(FEATURE_MOCK[active.id] || FEATURE_MOCK.accounts).rows.map((row) => {
-												const rowKey = `${active.id}-${row.label}`;
-												const onState = row.kind === 'toggle' ? isRowOn(active.id, row) : false;
-												return (
-													<li key={rowKey} className={`fm-${row.kind}${onState ? ' is-on' : ''}`}>
-														{row.kind === 'toggle' ? (
-															<button
-																type="button"
-																role="switch"
-																aria-checked={onState}
-																className="fm-toggle-btn"
-																onClick={() => toggleRow(active.id, row)}>
-																<span>{row.label}</span>
-																<span className="fm-switch" aria-hidden="true" />
-															</button>
-														) : row.kind === 'field' ? (
-															<div className="fm-field-inner">
-																<span className="mono">{row.label}</span>
-																<strong>{row.value}</strong>
-															</div>
-														) : row.kind === 'chips' ? (
-															<span className="fm-chips">{row.label}</span>
-														) : row.kind === 'tile' ? (
-															<div className="fm-tile-inner">
-																<strong>{row.label}</strong>
-																<em>{row.value}</em>
-															</div>
-														) : row.kind === 'bubble' || row.kind === 'bubble-me' ? (
-															<div className="fm-bubble-inner">
-																<span className="mono">{row.label}</span>
-																<p>{row.value}</p>
-															</div>
-														) : (
-															<button
-																type="button"
-																className="fm-action-btn"
-																onClick={() => triggerAction(row.label)}>
-																<span>{actionFeedback === row.label ? 'Done ✓' : row.label}</span>
-															</button>
-														)}
-													</li>
-												);
-											})}
-										</ul>
-									</div>
-								</div>
-
+							<div className="feature-panel glass hard" key={active.id}>
 								<div className="feature-detail">
 									<p className="eyebrow">Includes</p>
 									<h3>{active.name}</h3>
@@ -614,77 +381,6 @@ export function SiteHome({ productName = PRODUCT_BRAND, companyName = COMPANY_NA
 						<h2>Your account, settings, then work on the live site.</h2>
 						<p>You run the business here. Your developer starts from one share file and public docs.</p>
 					</header>
-
-					<div className="shot-wrap reveal">
-						<div className="shot-tabs" role="tablist" aria-label="How you use it">
-							{SCREENS.map((s, i) => (
-								<button
-									key={s.id}
-									type="button"
-									role="tab"
-									aria-selected={screen === i}
-									className={`shot-tab${screen === i ? ' on' : ''}`}
-									onClick={() => setScreen(i)}>
-									{s.label}
-								</button>
-							))}
-						</div>
-						<div className="shot-frame glass hard" role="tabpanel">
-							<div className="shot-chrome">
-								<i />
-								<i />
-								<i />
-								<span className="mono">{shot.path}</span>
-							</div>
-							<div className="shot-body">
-								<aside className="shot-side">
-									<p>Menu</p>
-									<ul>
-										{shot.side.map((item, i) => (
-											<li key={item} className={i === shot.sideOn ? 'on' : undefined}>
-												{item}
-											</li>
-										))}
-									</ul>
-								</aside>
-								<div className="shot-main">
-									<div className="shot-main-header">
-										<div>
-											<h4>{shot.title}</h4>
-											<p className="shot-lede">{shot.lede}</p>
-										</div>
-										{shot.badge ? (
-											<span className="shot-badge mono">
-												<span className="live-dot" aria-hidden="true" />
-												{shot.badge}
-											</span>
-										) : null}
-									</div>
-									<div className="shot-grid">
-										{shot.cards.map((c) => (
-											<div key={c.b} className="shot-card">
-												<div>
-													<b>{c.b}</b>
-													{c.v ? <div className="card-val">{c.v}</div> : null}
-												</div>
-												<span className={`shot-status ${c.dot || 'teal'}`}>{c.s}</span>
-											</div>
-										))}
-									</div>
-									<div className="shot-rows">
-										{shot.rows.map((r) => (
-											<div key={r.t} className="shot-row">
-												<b>{r.k}</b>
-												<span>{r.t}</span>
-												{r.s ? <span className="shot-row-status mono">{r.s}</span> : null}
-												<em>{r.e}</em>
-											</div>
-										))}
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
 
 					<ol className="work-steps reveal">
 						{WORK_STEPS.map((r) => (

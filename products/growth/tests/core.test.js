@@ -41,13 +41,13 @@ import {
 	ratingOf,
 	textOf,
 } from '../core/events.js';
-import { toMajor } from '../core/money.js';
 import {
 	contactCalls,
 	contactOf,
 	customCalls,
 	detailOf,
 	funnelEvent,
+	toMajor,
 	pixelCalls,
 	searchCalls,
 	searchOf,

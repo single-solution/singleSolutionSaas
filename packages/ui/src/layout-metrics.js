@@ -29,7 +29,7 @@ export const METRICS = Object.freeze({
 
 /** The inner navigation panel on wide screens (about 224 px, own scroll). */
 export const NAV_PANEL =
-	'hidden min-h-0 w-56 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface lg:flex';
+	'hidden min-h-0 w-56 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface/90 backdrop-blur-md lg:flex';
 
 /** Drawer widths: about 480 px (`md`), about 760 px (`lg`), the whole screen on phones. */
 export const DRAWER_WIDTH = Object.freeze({
@@ -44,10 +44,10 @@ export const DRAWER_WIDTH = Object.freeze({
  */
 export const DRAWER = Object.freeze({
 	layer: 'justify-end p-0 sm:p-3',
-	panel: 'flex h-full w-full flex-col border-line bg-surface text-fg sm:rounded-panel sm:border',
-	header: `relative z-10 flex ${METRICS.drawerHeader} shrink-0 items-center gap-3 border-b border-line px-3 sm:px-4`,
+	panel: 'flex h-full w-full flex-col border-line bg-surface/95 backdrop-blur-md text-fg sm:rounded-panel sm:border',
+	header: `relative z-10 flex ${METRICS.drawerHeader} shrink-0 items-center gap-3 border-b border-line bg-surface/90 backdrop-blur-md px-3 sm:px-4`,
 	body: 'ss-scroll min-h-0 flex-1 space-y-4 px-3 py-4 sm:px-4 sm:py-5',
-	footer: `flex ${METRICS.drawerFooter} shrink-0 items-center justify-end gap-2 border-t border-line px-3 sm:px-4`,
+	footer: `flex ${METRICS.drawerFooter} shrink-0 items-center justify-end gap-2 border-t border-line bg-surface/90 backdrop-blur-md px-3 sm:px-4`,
 });
 
 /** How many table rows come in one after the other on first load, and the gap between them (ms). */
@@ -105,12 +105,12 @@ export const PAGE = Object.freeze({
 	root: 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 lg:gap-3',
 	// a size container: the parts of the header decide by its own width (see `Page`); z-25 keeps its menus over the toolbar
 	// (z-20) and under the sidebar (z-30) now that the container is a stacking context of its own
-	header: `@container z-[25] flex ${METRICS.header} min-w-0 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-2 sm:gap-3 sm:px-3`,
+	header: `@container z-[25] flex ${METRICS.header} min-w-0 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface/90 backdrop-blur-md px-2 sm:gap-3 sm:px-3`,
 	area: 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3',
-	main: 'relative flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line bg-surface ss-grid-wash',
+	main: 'relative flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line bg-surface/90 backdrop-blur-md ss-grid-wash',
 	// above the body, so the menus of its filters open over the list
-	toolbar: 'relative z-20 shrink-0 rounded-t-panel border-b border-line bg-surface/90',
-	footer: `relative z-10 flex shrink-0 items-center rounded-b-panel border-t border-line bg-surface ${METRICS.footer} ${METRICS.gutter}`,
+	toolbar: 'relative z-20 shrink-0 rounded-t-panel border-b border-line bg-surface/90 backdrop-blur-md',
+	footer: `relative z-10 flex shrink-0 items-center rounded-b-panel border-t border-line bg-surface/90 backdrop-blur-md ${METRICS.footer} ${METRICS.gutter}`,
 	/** the padding of a body that is not a list */
 	padded: 'flex flex-col gap-5 p-3 sm:p-4',
 	/** the body of a list: the table uses all of it */
@@ -126,7 +126,7 @@ export const PAGE = Object.freeze({
  */
 export const LIST = Object.freeze({
 	/** the side column: a panel like the inner navigation, 320 px wide beside the page, the whole width on phones */
-	column: 'flex min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface sm:w-80',
+	column: 'flex min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface/90 backdrop-blur-md sm:w-80',
 	/** the search box and the filter chips above the rows (they stay put) */
 	head: 'flex shrink-0 flex-col gap-2 p-2 pb-0',
 	/** the box of the rows that scrolls; `group/list` and `data-ss-slide` tell a row that the highlight is drawn for it */
@@ -160,11 +160,11 @@ export const pageBody = ({ toolbar = false, footer = false }) =>
 
 /** The card and the summary tile, shared by the real ones (`Card`, `Stat`) and their skeletons. */
 export const CARD = Object.freeze({
-	box: 'min-w-0 rounded-card border border-line bg-surface',
+	box: 'min-w-0 rounded-card border border-line bg-surface/90 backdrop-blur-sm',
 	header: 'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-3.5',
 	body: 'p-4',
 	bodyWithHeader: 'px-4 pt-2.5 pb-4',
-	tile: '@container min-w-0 rounded-card border border-line bg-surface px-4 py-3.5 ss-lift',
+	tile: '@container min-w-0 rounded-card border border-line bg-surface/90 backdrop-blur-sm px-4 py-3.5 ss-lift',
 });
 
 /**

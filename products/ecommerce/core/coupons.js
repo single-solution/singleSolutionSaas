@@ -8,7 +8,7 @@
 import { COUPON_TYPES } from './model.js';
 import { allocateUnits, percentOf, roundDown } from './money.js';
 import { MAX_AMOUNT, isAmount } from '@ss/contracts/format';
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import {
 	checkAmount,
 	checkBoolean,

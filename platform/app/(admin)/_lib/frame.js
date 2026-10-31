@@ -1,5 +1,5 @@
 import { loadAttentionCount } from '../../../src/console/admin/loaders.js';
-import { adminCan } from '../../../src/console/admin/rights.js';
+import { adminCan } from '../../../src/infra/rbac.js';
 import { portalApi } from '../../_lib/server.js';
 import { AdminShell } from '../../../src/console/admin/views/shell.js';
 import { adminBranding, adminSession } from './server.js';

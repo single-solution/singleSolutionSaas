@@ -17,8 +17,7 @@ import { Input } from './fields.js';
 import { ConfirmDialog } from './overlay.js';
 import { call, fill, useLoad } from './dashboard-api.js';
 import { describeProblem } from './problems.js';
-import { toneOf, useDashboard } from './dashboard-parts.js';
-import { websiteSettingsUrl } from './portal-links.js';
+import { toneOf, useDashboard, websiteSettingsUrl } from './dashboard-parts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-page.js').Section} Section */

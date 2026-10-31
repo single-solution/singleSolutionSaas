@@ -14,7 +14,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
-import { isObject } from './json.js';
+import { isObject } from '@ss/contracts/util';
 import { LIMITS, checkProduct, cleanText, givenFacts, isSlug, summarize } from './catalog.js';
 import { keyAllowed, mediaExtras, publicPhoto } from './catalog-content.js';
 import { checkAttribute, checkBrand, checkCategory } from './catalog-taxonomy.js';
