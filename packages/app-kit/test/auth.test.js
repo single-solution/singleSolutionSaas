@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { PRODUCT_DATABASE_OPTIONS, createMongoStore, createProduct, created, defineRoute } from '../src/index.js';
 import { createPortalClient } from '../src/portal-client.js';
 import { OFFLINE_GRACE_MS, WAITED_FETCH_MS, createStatus } from '../src/status.js';
-import { noopLogger } from '../src/logger.js';
+import { noopLogger } from '@ss/net';
 import { createMemoryStore } from '../src/testing.js';
 import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, T0, createClock, manifest, productRoutes, setup } from './helpers.js';
 

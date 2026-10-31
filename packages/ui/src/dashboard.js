@@ -31,10 +31,10 @@ import { call, fill, useLoad } from './dashboard-api.js';
 import { DisplayLocale } from './time.js';
 import { DashboardProvider, useDashboard } from './dashboard-parts.js';
 import { FrameContext } from './dashboard-page.js';
+import { settingSectionOf } from './dashboard-settings.js';
 import { DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab } from './dashboard-tabs.js';
 
 export { call, fill, useLoad } from './dashboard-api.js';
-export { isFilled, useSetupSteps, wantsSettings } from './dashboard-setup.js';
 export {
 	DashboardProvider,
 	Loaded,
@@ -68,7 +68,31 @@ export { DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsT
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
 /** @typedef {import('./dashboard-parts.js').DashboardCategories} DashboardCategories */
 /** @typedef {import('./dashboard-settings.js').FeatureExtra} FeatureExtra */
-/** @typedef {import('./dashboard-setup.js').SetupRequirement} SetupRequirement */
+/**
+ * What a requirement's `done` and `detail` are given: the setting or list value, and the other settings of its feature
+ * (by name) with the switched-on features.
+ * @typedef {{ values: Record<string, unknown>, on: string[] }} SetupContext
+ */
+/**
+ * One thing a merchant must set, in plain words.
+ * @typedef {object} SetupRequirement
+ * @property {string} key
+ * @property {string[]} [when]
+ * @property {string} [after]
+ * @property {string} [setting]
+ * @property {string} [list]
+ * @property {string[]} [oneOf]
+ * @property {(value: any, context: SetupContext) => boolean} [done]
+ * @property {boolean} [confirm]
+ * @property {boolean} [own]
+ * @property {boolean} [optional]
+ * @property {string} label
+ * @property {string} why
+ * @property {string} action
+ * @property {string} [tab]
+ * @property {string} [section]
+ * @property {(value: any, context: SetupContext) => string | undefined} [detail]
+ */
 /** @typedef {import('./overview.js').SetupStep} SetupStep */
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('./dashboard-tabs.js').TabProps} TabProps */
@@ -79,6 +103,158 @@ export { DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsT
 /** @typedef {import('./dashboard-tabs.js').OverviewMore} OverviewMore */
 /** @typedef {import('./dashboard-tabs.js').UseOverviewMore} UseOverviewMore */
 /** @typedef {import('react').ComponentType<TabProps>} TabComponent */
+
+/** Whether a saved value holds something: text, a list or any number or switch. @param {unknown} value */
+export const isFilled = (value) =>
+	typeof value === 'string'
+		? value.trim() !== ''
+		: Array.isArray(value)
+			? value.length > 0
+			: value !== null && value !== undefined;
+
+/**
+ * Whether any requirement that applies reads a setting.
+ * @param {Answer | null} overview
+ * @param {ReadonlyArray<SetupRequirement>} requirements
+ */
+export const wantsSettings = (overview, requirements) =>
+	overview?.ok === true &&
+	requirements.some(
+		(requirement) =>
+			requirement.setting !== undefined &&
+			(!requirement.when || requirement.when.some((key) => overview.data.featuresOn.includes(key))),
+	);
+
+/**
+ * The setup steps a product's requirements make for a website.
+ * @param {{ overview: Answer | null, websiteId: string | null, open: (tab: string, section?: string) => void,
+ *   settings?: (Answer & { retry?: () => void }) | null }} from the overview answer, the website, the tab's `open`, and the settings answer if read
+ * @param {ReadonlyArray<SetupRequirement>} requirements a constant list of the product
+ * @returns {SetupStep[]}
+ */
+export function useSetupSteps({ overview, websiteId, open, settings: given }, requirements) {
+	const base = `/v1/dashboard/websites/${websiteId}`;
+	/** @type {string[]} */
+	const on = overview?.ok ? overview.data.featuresOn : [];
+	/** @type {Array<{ name: string, status: string }>} */
+	const connections = overview?.ok ? overview.data.checklist.connections : [];
+	/** @param {SetupRequirement} requirement */
+	const applies = (requirement) =>
+		(!requirement.when || requirement.when.some((key) => on.includes(key))) &&
+		(!requirement.after || connections.some((item) => item.name === requirement.after && item.status === 'connected'));
+	const live = requirements.filter((requirement) => overview?.ok && applies(requirement));
+	const own = useLoad(given === undefined && live.some((requirement) => requirement.setting) ? `${base}/settings` : null);
+	const settings = given === undefined ? own.answer : given;
+	const names = [...new Set(requirements.flatMap((requirement) => (requirement.list ? [requirement.list] : [])))];
+	const lists = new Map(
+		names.map((name) => [
+			name,
+			useLoad(live.some((requirement) => requirement.list === name) ? `${base}/lists/${name}` : null),
+		]),
+	);
+
+	const retrySettings = given?.retry ?? own.reload;
+
+	/** @type {SetupStep[]} */
+	const steps = [];
+	for (const requirement of live) {
+		/** @type {SetupContext} */
+		let context = { values: {}, on };
+		/** @type {boolean} */
+		let done;
+		/** @type {unknown} */
+		let value;
+		let section = requirement.section;
+		const tab = requirement.tab ?? 'settings';
+		if (requirement.oneOf) {
+			const some = requirement.oneOf.some((key) => on.includes(key));
+			done = some;
+		} else if (requirement.setting) {
+			const [featureKey = '', name = ''] = requirement.setting.split('.');
+			if (settings === null) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Checking...',
+					done: false,
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => (section ? open(tab, section) : open(tab)),
+				});
+				continue;
+			}
+			if (!settings.ok) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Could not check',
+					done: false,
+					actionLabel: 'Retry',
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => retrySettings?.(),
+				});
+				continue;
+			}
+			/** @type {import('./dashboard-parts.js').FeatureSettings | undefined} */
+			const feature = settings.data.features.find((/** @type {{ key: string }} */ item) => item.key === featureKey);
+			const entry = feature?.values?.[name];
+			if (!feature || !entry) continue;
+			value = entry.value;
+			context = {
+				values: Object.fromEntries(Object.entries(feature.values).map(([setting, item]) => [setting, item.value])),
+				on,
+			};
+			done = requirement.done
+				? requirement.done(value, context)
+				: requirement.own
+					? entry.source === 'website'
+					: requirement.confirm
+						? entry.source !== 'built-in'
+						: isFilled(value);
+			section ??= settingSectionOf(feature);
+		} else if (requirement.list) {
+			const listLoad = lists.get(requirement.list);
+			const answer = listLoad?.answer ?? null;
+			if (answer === null) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Checking...',
+					done: false,
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => (section ? open(tab, section) : open(tab)),
+				});
+				continue;
+			}
+			if (!answer.ok) {
+				steps.push({
+					key: requirement.key,
+					label: requirement.label,
+					why: 'Could not check',
+					done: false,
+					actionLabel: 'Retry',
+					...(requirement.optional ? { optional: true } : {}),
+					onSelect: () => listLoad?.reload(),
+				});
+				continue;
+			}
+			value = answer.data?.value;
+			done = requirement.done ? requirement.done(value, context) : isFilled(value);
+		} else continue;
+		const detail = requirement.detail?.(value, context);
+		steps.push({
+			key: requirement.key,
+			label: requirement.label,
+			why: requirement.why,
+			done,
+			actionLabel: requirement.action,
+			...(requirement.optional ? { optional: true } : {}),
+			...(detail ? { detail } : {}),
+			onSelect: () => (section ? open(tab, section) : open(tab)),
+		});
+	}
+	return steps;
+}
+
 /**
  * A sidebar tab: its section, its icon and kind (the kind gives its color, PLAN 0.6 color rule), and whether it is an
  * Owner tab that needs no website (`global`). Its label is `texts.tabs[key]`.

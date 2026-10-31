@@ -6,7 +6,7 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { dayBounds } from '../core/calendar.js';
+import { dayBounds } from '../core/durations.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { parseRange } from '../core/reports.js';

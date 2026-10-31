@@ -192,7 +192,7 @@ const valueViolation = (kind, value) => {
  *   policy: import('@ss/net').OutboundPolicy, testDatabase: (uri: string) => Promise<{ ok: boolean, message?: string }>,
  *   directory: (productId: string) => Promise<{ baseUrl: string }>,
  *   directoryList: () => Promise<{ items: DirectoryEntry[] }>,
- *   now: () => number, logger: import('./logger.js').Logger,
+ *   now: () => number, logger: import('@ss/net').Logger,
  *   attach?: import('./messages.js').Messages['attach'],
  * }} options `links`: the links the manifest needs (`linkDefinitionsOf`)
  */

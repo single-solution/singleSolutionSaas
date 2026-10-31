@@ -77,7 +77,7 @@ export const PRODUCT_DATABASE_OPTIONS = Object.freeze(databaseClientOptions());
  */
 export const isDatabaseUnavailable = (error) => isKitError(error, 'database_unreachable') || isUnreachable(error);
 
-/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 /** @typedef {import('mongodb').Document} Document */
 
 const NAME = /^[a-z][a-z0-9_]{0,62}$/;

@@ -37,7 +37,7 @@ const MEMORY_LIMIT = 200;
 
 /**
  * @param {{ store: Store, client: () => import('./portal-client.js').PortalClient, now: () => number,
- *   logger: import('./logger.js').Logger }} options
+ *   logger: import('@ss/net').Logger }} options
  */
 export const createWebsiteSettings = ({ store, client, now, logger }) => {
 	/**

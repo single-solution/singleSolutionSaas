@@ -107,7 +107,7 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  *   Portal holds none (then the product uses its own values). Memory, then the product database: never the Portal on the
  *   hot path. Needs a website request
  * @property {() => Promise<import('../data.js').WebsiteData>} data the website's merchant database (tenant guard)
- * @property {import('../logger.js').Logger} log
+ * @property {import('@ss/net').Logger} log
  */
 
 /** Per-request `after()` schedulers registered by adapters (`toNextRoute`). */

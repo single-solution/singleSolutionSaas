@@ -28,7 +28,7 @@ import { createRequestHandler } from './http/handler.js';
 import { defineRoute } from './http/routes.js';
 import { createAccountsSignIns } from './identity.js';
 import { createKitRoutes } from './kit-routes.js';
-import { noopLogger } from './logger.js';
+import { noopLogger } from '@ss/net';
 import { createRecentChanges } from './recent.js';
 import { createReports } from './reports.js';
 import { createReseal } from './reseal.js';
@@ -64,7 +64,7 @@ import { defaultRandomBytes, isKitError, kitError } from './util.js';
  * @property {typeof globalThis.fetch} [fetch] Portal calls
  * @property {() => number} [now]
  * @property {(length: number) => Uint8Array} [randomBytes]
- * @property {import('./logger.js').Logger} [logger]
+ * @property {import('@ss/net').Logger} [logger]
  * @property {string} [nodeEnv] default `process.env.NODE_ENV`
  * @property {import('@ss/net').OutboundPolicyOptions} [outbound] policy of calls to addresses merchants enter
  *   (`allowHostsFor`: this machine too under `next dev`; `allowHosts` is ignored in production)
@@ -103,7 +103,7 @@ import { defaultRandomBytes, isKitError, kitError } from './util.js';
  * @typedef {object} Kit
  * @property {Manifest} manifest
  * @property {import('./stores/types.js').Store} store
- * @property {import('./logger.js').Logger} logger
+ * @property {import('@ss/net').Logger} logger
  * @property {() => number} now
  * @property {(length: number) => Uint8Array} randomBytes
  * @property {import('@ss/contracts').ProblemFactory} problems

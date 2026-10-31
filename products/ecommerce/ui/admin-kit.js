@@ -31,7 +31,7 @@ import {
 	viewerOf,
 } from '@ss/app-kit/widget';
 import { SEO_PREVIEW_CSS } from '@ss/ui/seo-preview';
-import { dayBounds } from '../core/calendar.js';
+import { dayBounds } from '../core/durations.js';
 import { DURATION_UNITS, isDuration } from '../core/durations.js';
 import { fromDecimal, toDecimal } from '@ss/app-kit/widget';
 import { problemKey } from './admin-problems.js';

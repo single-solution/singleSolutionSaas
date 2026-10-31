@@ -8,7 +8,7 @@
  * @module
  */
 import { zonedDay } from '@ss/contracts/format';
-import { dayBounds } from './calendar.js';
+import { dayBounds } from './durations.js';
 import { toDecimal } from '@ss/contracts/format';
 import { DAY_MS } from './durations.js';
 

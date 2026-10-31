@@ -37,7 +37,7 @@ import { currentFeatures } from './connection.js';
 import { activityFilter, activityPage, activityView } from './activity.js';
 import { countHandlers } from './counts.js';
 import { defineRoute } from './http/routes.js';
-import { KIT_LINK_SCOPES } from './link-scopes.js';
+import { KIT_LINK_SCOPES } from './kit-routes.js';
 import { allows } from './staff.js';
 import { noContent, ok, paginate, problem } from './http/results.js';
 

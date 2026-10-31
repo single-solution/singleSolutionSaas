@@ -8,15 +8,15 @@ export { verifyIdentityToken } from './identity.js';
 export { defineRoute } from './http/routes.js';
 export { ok, created, noContent, problem, paginate } from './http/results.js';
 export { toNextRoute } from './http/next.js';
-export { createLogger } from './logger.js';
+export { createLogger } from '@ss/net';
 export { createMongoStore } from './stores/mongo.js';
 export { createMemoryStore } from './stores/memory.js';
 export { createSealer } from './sealing.js';
 export { resealEach, sumCounts } from './reseal.js';
-export { formatText } from './text.js';
+export { formatText } from './util.js';
 export { actorOf } from './actor.js';
 export { KIT_PERMISSIONS, allows, checkStaff, grantedOf, grants } from './staff.js';
-export { KIT_LINK_SCOPES } from './link-scopes.js';
+export { KIT_LINK_SCOPES } from './kit-routes.js';
 export { countHandlers } from './counts.js';
 export { KIT_GUIDE } from './guide.js';
 export { apiAnchor, renderApiReference } from './api-reference.js';
@@ -41,7 +41,7 @@ export { createAiClient } from './ai/client.js';
 /** @typedef {import('./data.js').WebsiteData} WebsiteData */
 /** @typedef {import('./data.js').IndexDefinition} IndexDefinition */
 /** @typedef {import('./stores/types.js').Store} Store */
-/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 /** @typedef {import('./sealing.js').Sealer} Sealer */
 /** @typedef {import('./reseal.js').ResealCounts} ResealCounts */
 /** @typedef {import('./actor.js').ActingUser} ActingUser */

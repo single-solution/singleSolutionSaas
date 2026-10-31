@@ -62,7 +62,7 @@ const missingDependencies = (manifest, on) =>
 /**
  * @param {{ store: Store, manifest: Manifest, connection: ReturnType<typeof import('./connection.js').createConnection>,
  *   status: import('./status.js').StatusCache, recent: import('./recent.js').RecentChanges, now: () => number,
- *   logger: import('./logger.js').Logger }} options
+ *   logger: import('@ss/net').Logger }} options
  */
 export const createReports = ({ store, manifest, connection, status, recent, now, logger }) => {
 	const keys = manifest.features.map((feature) => feature.key);

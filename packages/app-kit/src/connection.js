@@ -77,7 +77,7 @@ export const featuresDiffer = (a, b) => {
 /**
  * @param {{ store: Store, manifest: Manifest, connectSecret: string, sealer: import('./sealing.js').Sealer,
  *   fetch: typeof globalThis.fetch, now: () => number, randomBytes: (length: number) => Uint8Array,
- *   nodeEnv: string | undefined, logger: import('./logger.js').Logger }} options
+ *   nodeEnv: string | undefined, logger: import('@ss/net').Logger }} options
  */
 export const createConnection = ({ store, manifest, connectSecret, sealer, fetch, now, randomBytes, nodeEnv, logger }) => {
 	const productId = manifest.id;

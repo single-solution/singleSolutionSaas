@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { defineRoute } from '../src/index.js';
-import { noopLogger } from '../src/logger.js';
+import { noopLogger } from '@ss/net';
 import {
 	ALERT_KEEP_MS,
 	MAX_RECIPIENTS,

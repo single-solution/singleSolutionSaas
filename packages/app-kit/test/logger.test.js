@@ -1,7 +1,7 @@
 import * as net from '@ss/net';
 import { describe, expect, it } from 'vitest';
 import { configFromEnv, createLogger, createProduct, defineRoute } from '../src/index.js';
-import { noopLogger, redact } from '../src/logger.js';
+import { noopLogger, redact } from '@ss/net';
 import { createMemoryStore } from '../src/testing.js';
 import { BASE, manifest, setup } from './helpers.js';
 

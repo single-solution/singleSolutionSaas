@@ -67,7 +67,7 @@ export const effectiveStatus = (status, nowMs) =>
 
 /**
  * @param {{ store: Store, client: () => import('./portal-client.js').PortalClient, now: () => number,
- *   logger: import('./logger.js').Logger, onRefreshed?: (websiteId: string, status: StatusResponse) => Promise<unknown> }} options
+ *   logger: import('@ss/net').Logger, onRefreshed?: (websiteId: string, status: StatusResponse) => Promise<unknown> }} options
  *   `onRefreshed`: runs after a status copy fetched again after a response (the settings follow the status copy's version)
  */
 export const createStatus = ({ store, client, now, logger, onRefreshed }) => {

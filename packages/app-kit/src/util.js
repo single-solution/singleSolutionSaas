@@ -48,3 +48,15 @@ export const kitError = (code, message, details) => {
  */
 export const isKitError = (error, code) =>
 	error instanceof Error && error.name === 'AppKitError' && (code === undefined || /** @type {any} */ (error).code === code);
+
+const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
+
+/**
+ * Fill a widget text's `{placeholders}`. Unknown placeholders stay as they are. The result is plain text: set it with
+ * `textContent`, never as HTML.
+ * @param {string} text
+ * @param {Record<string, string | number>} [values]
+ * @returns {string}
+ */
+export const formatText = (text, values = {}) =>
+	String(text).replace(PLACEHOLDER, (whole, name) => (Object.hasOwn(values, name) ? String(values[name]) : whole));

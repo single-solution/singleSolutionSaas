@@ -31,7 +31,7 @@
  */
 import { createId } from '@ss/contracts';
 import { normalizePhone } from '@ss/contracts/phone';
-import { formatText } from './text.js';
+import { formatText } from './util.js';
 
 /** @typedef {{ email?: string | null, phone?: string | null, id?: string | null }} Assignee */
 /**
@@ -147,7 +147,7 @@ export const recipientOf = (value, phoneChannel = 'sms') => {
 /**
  * @param {{ productId: string, settings: import('./settings.js').Settings,
  *   connections: import('./connections.js').Connections, data: import('./data.js').Data, now: () => number,
- *   logger: import('./logger.js').Logger, website: import('./website-settings.js').WebsiteSettingsCache }} options
+ *   logger: import('@ss/net').Logger, website: import('./website-settings.js').WebsiteSettingsCache }} options
  *   `website`: the Portal's copy of the website's settings (its team gets the alerts)
  */
 export const createStaffAlerts = ({ productId, settings, connections, data, now, logger, website }) => {

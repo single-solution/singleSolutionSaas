@@ -23,10 +23,16 @@
 import { validateDataRightsRequest } from '@ss/contracts';
 import { CONNECT_PATH, NOTICE_PATH, isProtocolError, ticketOriginAllowed, verifyNotice } from '@ss/protocol';
 import { isObject } from '@ss/contracts/util';
-import { KIT_LINK_SCOPES } from './link-scopes.js';
 import { defineRoute } from './http/routes.js';
 import { noContent, problem } from './http/results.js';
 import { KIT_PERMISSIONS, grantedOf } from './staff.js';
+
+export const KIT_LINK_SCOPES = Object.freeze({
+	permissionsRead: 'permissions.read',
+	dataRightsExport: 'data_rights.export',
+	dataRightsErase: 'data_rights.erase',
+	settingsRead: 'settings.read',
+});
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
 /** @typedef {{ id?: string, email?: string, phone?: string }} DataRightsUser */

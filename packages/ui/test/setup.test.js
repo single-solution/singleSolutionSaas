@@ -66,7 +66,7 @@ describe('a link names a section with the name of the feature', () => {
 	});
 });
 
-/** @type {import('../src/dashboard-setup.js').SetupRequirement[]} */
+/** @type {import('../src/dashboard.js').SetupRequirement[]} */
 const REQUIREMENTS = [
 	{ key: 'pay', oneOf: ['checkout', 'shipping'], label: 'Switch on a way to sell', why: 'Why one.', action: 'See features' },
 	{

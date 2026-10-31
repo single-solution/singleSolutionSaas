@@ -1,6 +1,6 @@
 import { redirectIfSignedIn, consoleApi } from '../(console)/_lib/server.js';
 import { loadDocsHub } from '../../src/console/loaders.js';
-import { COMPANY_NAME, PRODUCT_BRAND } from './_components/brand-constants.js';
+import { COMPANY_NAME, PRODUCT_BRAND } from './_components/SiteNav.js';
 import { SiteHome } from './_components/SiteHome.js';
 
 export const dynamic = 'force-dynamic';

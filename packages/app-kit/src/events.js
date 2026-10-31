@@ -64,7 +64,7 @@ const eventView = (productId, event) => ({
 
 /**
  * @param {{ productId: string, enabled: boolean, data: import('./data.js').Data,
- *   connections: import('./connections.js').Connections, now: () => number, logger: import('./logger.js').Logger }} options
+ *   connections: import('./connections.js').Connections, now: () => number, logger: import('@ss/net').Logger }} options
  */
 export const createEvents = ({ productId, enabled, data, connections, now, logger }) => {
 	/** Per instance: websites known to have nothing to forward. @type {Set<string>} */

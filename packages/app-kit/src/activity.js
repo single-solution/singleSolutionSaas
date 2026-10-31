@@ -154,7 +154,7 @@ export const activityView = (entry) => ({
 
 /**
  * @param {{ productId: string, data: import('./data.js').Data, connections: import('./connections.js').Connections,
- *   now: () => number, logger: import('./logger.js').Logger }} options
+ *   now: () => number, logger: import('@ss/net').Logger }} options
  */
 export const createActivity = ({ productId, data, connections, now, logger }) => {
 	/** Per instance: websites known to have no unsent copies. @type {Set<string>} */

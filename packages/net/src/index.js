@@ -10,8 +10,7 @@ export { jsonOf, safeFetch, textOf } from './fetch.js';
 export { isSafeMongoUri, mongoDatabaseName } from './mongo.js';
 export { DATABASE_DEADLINES, connectBeforeUse, databaseClientOptions, isDatabaseUnavailable } from './database.js';
 export { createLogger, noopLogger, redact } from './logger.js';
-export { clientIpOf, staticSecurityHeaders } from './headers.js';
-export { createLocalWindows } from './windows.js';
+export { clientIpOf, createLocalWindows, staticSecurityHeaders } from './headers.js';
 export { objectUrl, presignV4, signV4 } from './sigv4.js';
 
 /** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */

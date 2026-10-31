@@ -33,7 +33,7 @@ import {
 	normalizeFormat,
 	toDecimal,
 } from '@ss/contracts/format';
-import { formatText } from './text.js';
+import { formatText } from './util.js';
 
 export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, fromDecimal, isCurrency, normalizeFormat, toCsv, toDecimal };
 export {

@@ -56,7 +56,7 @@ export const sumCounts = (parts) => ({
 /**
  * @param {{ sealer: import('./sealing.js').Sealer, parts: Array<{ part: ResealPart, reseal: () => Promise<ResealCounts> }>,
  *   hooks: import('./kit-routes.js').ProductHooks, websites: () => Promise<string[]>, data: import('./data.js').Data,
- *   logger: import('./logger.js').Logger }} options `parts`: the kit's parts in the product database (Connections,
+ *   logger: import('@ss/net').Logger }} options `parts`: the kit's parts in the product database (Connections,
  *   keys); `hooks` are read when pressed (products may attach them after `createProduct`)
  * @returns {() => Promise<ResealResult>}
  */

@@ -6,9 +6,10 @@ import { usePathname } from 'next/navigation.js';
 
 const Link = /** @type {any} */ (NextLink);
 
-import { COMPANY_NAME, PRODUCT_BRAND } from './brand-constants.js';
-
-export { COMPANY_NAME, PRODUCT_BRAND };
+/** Product brand (launchable SaaS). Company stays Single Solution. */
+export const PRODUCT_BRAND = 'Shelfway';
+/** Company behind the product. */
+export const COMPANY_NAME = 'Single Solution';
 
 /**
  * Shared floating glass header for the public Portal surface (Website + Docs).

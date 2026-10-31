@@ -37,7 +37,7 @@ const MEMORY_LIMIT = 200;
 
 /**
  * @param {{ store: Store, client: () => import('./portal-client.js').PortalClient, connections: import('./connections.js').Connections,
- *   now: () => number, logger: import('./logger.js').Logger }} options
+ *   now: () => number, logger: import('@ss/net').Logger }} options
  */
 export const createPortalConnections = ({ store, client, connections, now, logger }) => {
 	/** @type {Map<string, { held: Held | null, needed: number, at: number }>} */
