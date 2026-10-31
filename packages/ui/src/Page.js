@@ -308,9 +308,7 @@ export function HeaderActions({ actions, narrow, texts, byWidth = false }) {
 				key={action.label}
 				variant={variant}
 				className={cx(
-					byWidth
-						? 'max-w-[14rem]'
-						: variant === 'secondary' && 'max-sm:hidden',
+					byWidth ? 'max-w-[14rem]' : variant === 'secondary' && 'max-sm:hidden',
 					byWidth && variant === 'secondary' && '@max-3xl:hidden',
 					iconOnly && '@max-md:w-9 @max-md:px-0',
 				)}

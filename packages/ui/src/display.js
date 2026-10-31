@@ -458,7 +458,7 @@ const PILL_TONES = {
 /**
  * The one look of a state across the Portal and the dashboards: a pill with a dot — Active (green), Needs setup
  * (orange: it needs you), Off (neutral), an error (red), a warning (yellow), a note (teal), New (pink) or Locked (a lock:
- * only a Single Solution admin can switch it on).
+ * only a Shelfway admin can switch it on).
  * @param {{ status: PillStatus, children: ReactNode, title?: string, className?: string }} props
  */
 export function StatusPill({ status, children, title, className }) {
@@ -602,7 +602,7 @@ export function SkeletonBlock({ className }) {
 
 /**
  * A feature the person cannot use yet, said clearly (owner 2026-10-17): a lock, what it does, and who can switch it on
- * (`note`, e.g. "Ask your Single Solution admin to switch it on."); an optional action (contact support). `compact`
+ * (`note`, e.g. "Ask your Shelfway admin to switch it on."); an optional action (contact support). `compact`
  * draws it as one row inside a list.
  * @param {{ title: ReactNode, description?: ReactNode, note?: ReactNode, action?: ReactNode, compact?: boolean,
  *   className?: string }} props

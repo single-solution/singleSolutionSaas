@@ -203,10 +203,10 @@ export const settingsPlan = (values) => {
 	return {
 		accounts: {
 			settings: {
-				// phone codes: the SaaS defaults (SB sends none: Forgot password is its WhatsApp chat); mechanical, to review
+				// phone codes: the suite defaults (SB sends none: Forgot password is its WhatsApp chat); mechanical, to review
 				'phone.channel': 'sms',
 				'phone.websitePerHour': 0,
-				// SaaS default (A9; store mapping to review)
+				// suite default (A9; store mapping to review)
 				// addresses: at most 6, name, phone and city needed (`packages/shared/src/customerAddresses.ts`:4, :55-80)
 				'profile.keepOneAddress': false,
 				// members: invite only (owner 2026-10-14, SA-2); passwords 8–128 with a letter and a digit
@@ -214,7 +214,7 @@ export const settingsPlan = (values) => {
 				'phone_password.signUp': false,
 				'phone_password.minLength': 8,
 				'phone_password.letterAndDigit': true,
-				// SaaS default (K-27; SB counts no failures per account): store mapping to review when the owner asks
+				// suite default (K-27; SB counts no failures per account): store mapping to review when the owner asks
 				// forgot password: a WhatsApp chat with the shop (`apps/web/src/app/account/_components/SignIn.tsx`:31)
 				'phone_password.selfReset': 'off',
 				'phone_password.forgotUrl': store.whatsappNumber
@@ -229,7 +229,7 @@ export const settingsPlan = (values) => {
 				// links 7 days (`apps/admin/src/app/api/membership-requests/[id]/setup-link/route.ts`:16-17)
 				'staff_links.setupDays': 7,
 				...(site ? { 'staff_links.setupPageUrl': `${site}/account/setup/{code}` } : {}),
-				// SaaS default (A12; store mapping to review)
+				// suite default (A12; store mapping to review)
 				'role_requests.requestableRoles': [MEMBER_ROLE],
 				'role_requests.requireNote': false,
 				// SB tells a repeat ask that the number already belongs to a member, "already-member"
@@ -269,11 +269,11 @@ export const settingsPlan = (values) => {
 				// SB sends shoppers no message (owner decision D5, "Store facts corrected after the re-audit")
 				'checkout.messageChannels': [],
 				'checkout.statusTemplates': 'one',
-				'checkout.returnsAccepted': 'unknown', // SaaS default (store mapping to review when the owner asks)
+				'checkout.returnsAccepted': 'unknown', // suite default (store mapping to review when the owner asks)
 				// nothing expires and no open-order cap (no expiry code in SB; `apps/web/src/app/api/orders/route.ts`:107)
 				'checkout.paymentWindowMinutes': 0,
 				'checkout.confirmationHours': 0,
-				// the SaaS default (no burst limit; store mapping to review when the owner asks)
+				// the suite default (no burst limit; store mapping to review when the owner asks)
 				// guests order unless the phone is a member's (`apps/web/src/app/api/orders/route.ts`:195-198)
 				'checkout.guests': 'unless_password',
 				// mechanical defaults (store mapping to review when the owner asks): SB guests order by phone, and every order
@@ -289,7 +289,7 @@ export const settingsPlan = (values) => {
 				'checkout.deleteGivesBack': 'all',
 				'checkout.orderUrl': '',
 				'checkout.reviewUrl': '',
-				// SaaS defaults: no delivery days said (store mapping to review when the owner asks); the flat fee is the
+				// suite defaults: no delivery days said (store mapping to review when the owner asks); the flat fee is the
 				// Standard rate of the delivery_zones list below (E5)
 				'delivery_zones.handlingDays': [],
 				'delivery_zones.pickupEnabled': true,
@@ -322,7 +322,7 @@ export const settingsPlan = (values) => {
 				'loyalty.redeemMode': 'maximum',
 				'loyalty.expiryUnit': 'days',
 				'loyalty.expiryRule': 'at_earn',
-				// the SaaS default (E47; store mapping to review when the owner asks)
+				// the suite default (E47; store mapping to review when the owner asks)
 				'loyalty.memberFlag': 'off',
 				// alerts on placement, status changes and cancels (`apps/admin/src/app/api/orders/[id]/route.ts`:336-342); the
 				// status changes are each status's staffAlert in the order flow below (E36)
@@ -335,7 +335,7 @@ export const settingsPlan = (values) => {
 				'seo.titleTemplate': (seo.titleTemplate || '{title} | {storeName}')
 					.replaceAll('{title}', '{name}')
 					.replaceAll('{storeName}', '{business}'),
-				// the site answer's settings at the SaaS defaults (store mapping to review when the owner asks)
+				// the site answer's settings at the suite defaults (store mapping to review when the owner asks)
 				'seo.homeTitle': '',
 				'seo.homeDescription': '',
 				'seo.productTitle': '{name}',
@@ -344,7 +344,7 @@ export const settingsPlan = (values) => {
 				'seo.categoryDescription': '',
 				'seo.variantTitle': '{name} - {options}',
 				'seo.pagedListings': 'index',
-				'seo.emptyCategories': 'noindex', // SaaS default (store mapping to review when the owner asks)
+				'seo.emptyCategories': 'noindex', // suite default (store mapping to review when the owner asks)
 				'seo.sitemapUrl': '/sitemap.xml',
 				'seo.defaultDescription': seo.defaultDescription || store.siteTagline,
 				'seo.indexNowOnSave': false,
@@ -355,12 +355,12 @@ export const settingsPlan = (values) => {
 				'feeds.includeOutOfStock': false,
 				'feeds.itemTitle': '{brand} {name} ({options})',
 				'feeds.itemDescription': 'seo',
-				'feeds.descriptionPattern': '{description}', // SaaS default (store mapping to review when the owner asks)
+				'feeds.descriptionPattern': '{description}', // suite default (store mapping to review when the owner asks)
 				'feeds.skuAs': 'none',
 				'feeds.identifierExists': 'no',
 				'feeds.googleCategory': '',
 				'feeds.gradeLabel': false,
-				'feeds.shipping': true, // SaaS default (store mapping to review when the owner asks)
+				'feeds.shipping': true, // suite default (store mapping to review when the owner asks)
 				// category × brand pages `?brand=` and glossary pages (`packages/shared/src/seo/intentSurface.ts`:33-36,
 				// `apps/web/src/app/attributes/[category]/[attribute]`)
 				'landing_pages.landingUrl': '{categoryUrl}?brand={brand}',
@@ -368,10 +368,10 @@ export const settingsPlan = (values) => {
 				'landing_pages.attributeTitle': '{name}',
 				'landing_pages.attributeDescription': '',
 				'landing_pages.gradeUrl': '',
-				'landing_pages.gradeTitle': '{name}', // SaaS default (store mapping to review when the owner asks)
-				'landing_pages.gradeDescription': '', // SaaS default (store mapping to review when the owner asks)
+				'landing_pages.gradeTitle': '{name}', // suite default (store mapping to review when the owner asks)
+				'landing_pages.gradeDescription': '', // suite default (store mapping to review when the owner asks)
 				'landing_pages.auto': 'category_brand',
-				'landing_pages.autoFacet': '', // SaaS default (store mapping to review when the owner asks)
+				'landing_pages.autoFacet': '', // suite default (store mapping to review when the owner asks)
 				'landing_pages.autoCopy': 'formula',
 				// SB's formula copy (`packages/shared/src/seo/intentSurface.ts`:180-225)
 				'landing_pages.autoTitle': '{brand} {category}',
@@ -383,7 +383,7 @@ export const settingsPlan = (values) => {
 				attachment_kinds: [
 					{ key: 'dispatch_video', label: 'Dispatch video', type: 'video', requiredAt: 'packed', shoppers: true },
 				],
-				// SB's return and privacy policies in the SaaS's seeded list (E27; mechanical, store mapping to review)
+				// SB's return and privacy policies in the suite's seeded list (E27; mechanical, store mapping to review)
 				policies: [
 					{ key: 'shipping', title: 'Delivery policy', text: '' },
 					{ key: 'returns', title: 'Returns policy', text: store.returnPolicyHtml },
@@ -500,7 +500,7 @@ export const settingsPlan = (values) => {
 			},
 		},
 		notifications: {
-			// the SaaS default waits (store mapping to review)
+			// the suite default waits (store mapping to review)
 			settings: {
 				'delivery_log.retentionDays': 0,
 			},
@@ -550,7 +550,7 @@ export const settingsPlan = (values) => {
 				// no AI training crawler blocked (mechanical; store mapping to review when the owner asks)
 				'robots_verification.aiCrawlers': [],
 				'robots_verification.moreAiCrawlers': [],
-				// Growth's robots presets at the SaaS defaults (mechanical; store mapping to review when the owner asks)
+				// Growth's robots presets at the suite defaults (mechanical; store mapping to review when the owner asks)
 				'robots_verification.blockSearchPages': true,
 				'robots_verification.blockParameters': 'sort, minPrice, maxPrice, inStock',
 				'robots_verification.blockPaths': ['/cart', '/checkout', '/account'],

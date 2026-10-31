@@ -44,7 +44,7 @@ const bad = (message) => ({ ok: false, message });
 // Fields
 
 /**
- * An email address by the one rule of the SaaS (`@ss/contracts/email`): trimmed, lower-cased, a Unicode domain as
+ * An email address by the one rule of the suite (`@ss/contracts/email`): trimmed, lower-cased, a Unicode domain as
  * punycode.
  * @type {Field<string>}
  */

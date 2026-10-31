@@ -10,7 +10,7 @@ vi.mock('next/navigation.js', async (importOriginal) => {
 });
 
 describe('Docs hub views (PLAN §10 B1, B2)', () => {
-	const branding = { name: 'Single Solution', accent: '#0f766e', logoUrl: null };
+	const branding = { name: 'Shelfway', accent: '#0f766e', logoUrl: null };
 	const sampleProduct = {
 		productId: 'chat',
 		name: 'Chat',
@@ -68,7 +68,6 @@ describe('Docs hub views (PLAN §10 B1, B2)', () => {
 		expect(html).toContain('/docs/chat/openapi.json');
 		expect(html).toContain('/docs/openapi.json');
 	});
-
 
 	it('loads docs hub and product detail via loaders', async () => {
 		const mockApi = {

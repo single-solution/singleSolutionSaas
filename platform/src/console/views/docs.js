@@ -181,8 +181,8 @@ export function DocsHubView({ branding, items = [] }) {
 							<p className="eyebrow">Product Guides</p>
 							<h2>All docs in one place. No extra pages.</h2>
 							<p>
-								Click any product below to view its storefront widget snippet, backend API command, and available
-								features right here.
+								Click any product below to view its storefront widget snippet, backend API command, and available features
+								right here.
 							</p>
 						</header>
 
@@ -242,9 +242,7 @@ export function DocsHubView({ branding, items = [] }) {
 										</div>
 
 										{/* Backend API Snippet */}
-										<div
-											className="shot-chrome"
-											style={{ borderTop: '1px solid var(--ss-line)', marginTop: '0.5rem' }}>
+										<div className="shot-chrome" style={{ borderTop: '1px solid var(--ss-line)', marginTop: '0.5rem' }}>
 											<i />
 											<i />
 											<i />

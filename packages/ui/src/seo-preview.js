@@ -391,9 +391,7 @@ const addStyles = (doc) => {
  */
 export function SeoPreview({ title, description, url, siteName, image, texts, className }) {
 	const box = useRef(/** @type {HTMLDivElement | null} */ (null));
-	const view = useRef(
-		/** @type {{ words: string, update: (input: SeoPreviewInput) => void } | null} */ (null),
-	);
+	const view = useRef(/** @type {{ words: string, update: (input: SeoPreviewInput) => void } | null} */ (null));
 	const words = JSON.stringify(texts ?? {});
 	useEffect(() => {
 		const holder = box.current;
@@ -410,4 +408,3 @@ export function SeoPreview({ title, description, url, siteName, image, texts, cl
 	}, [title, description, url, siteName, image, words]);
 	return createElement('div', { ref: box, className });
 }
-

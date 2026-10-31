@@ -9,10 +9,7 @@
 	"widgetScriptUrl": "/widget.js",
 	"docsUrl": "/docs",
 	"websiteSettings": {
-		"requires": [
-			"region.currency",
-			"region.country"
-		]
+		"requires": ["region.currency", "region.country"]
 	},
 	"needs": {
 		"database": true,
@@ -55,62 +52,32 @@
 		"needs": [
 			{
 				"product": "accounts",
-				"scopes": [
-					"activity.write"
-				],
+				"scopes": ["activity.write"],
 				"features": []
 			},
 			{
 				"product": "accounts",
-				"scopes": [
-					"users.read",
-					"me.read"
-				],
-				"features": [
-					"checkout",
-					"reviews",
-					"catalog"
-				]
+				"scopes": ["users.read", "me.read"],
+				"features": ["checkout", "reviews", "catalog"]
 			},
 			{
 				"product": "payments",
-				"scopes": [
-					"methods.read",
-					"payments.create",
-					"payments.read",
-					"payments.cancel",
-					"payments.refund"
-				],
-				"features": [
-					"checkout"
-				]
+				"scopes": ["methods.read", "payments.create", "payments.read", "payments.cancel", "payments.refund"],
+				"features": ["checkout"]
 			},
 			{
 				"product": "notifications",
-				"scopes": [
-					"messages.send"
-				],
-				"features": [
-					"checkout",
-					"returns",
-					"catalog"
-				]
+				"scopes": ["messages.send"],
+				"features": ["checkout", "returns", "catalog"]
 			},
 			{
 				"product": "notifications",
-				"scopes": [
-					"events.forward"
-				],
-				"features": [
-					"catalog"
-				]
+				"scopes": ["events.forward"],
+				"features": ["catalog"]
 			},
 			{
 				"product": "growth",
-				"scopes": [
-					"settings.read",
-					"indexnow.submit"
-				],
+				"scopes": ["settings.read", "indexnow.submit"],
 				"features": []
 			}
 		]
@@ -121,11 +88,7 @@
 			"name": "Catalog",
 			"description": "Products, item types (what each item is and which parts it has), categories with SEO text, brands, the shop's own fields (product, variant, unit, order and customer), media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget, with best-practice SEO for every page: meta tags, structured data (products, listings, the business and the website) and sitemaps.",
 			"dependsOn": [],
-			"recommendFor": [
-				"sells.physical",
-				"sells.digital",
-				"sells.services"
-			],
+			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/catalog.settings.json"
 			}
@@ -134,14 +97,8 @@
 			"key": "checkout",
 			"name": "Cart and checkout",
 			"description": "The cart, checkout, the merchant's own payment methods (paid online, paid first such as a bank transfer, on delivery or at pickup, each with its note, fee, largest order and advance), orders with merchant-defined statuses, couriers with tracking links, customer records and the success page.",
-			"dependsOn": [
-				"catalog"
-			],
-			"recommendFor": [
-				"sells.physical",
-				"sells.digital",
-				"sells.services"
-			],
+			"dependsOn": ["catalog"],
+			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/checkout.settings.json"
 			}
@@ -150,12 +107,8 @@
 			"key": "digital_goods",
 			"name": "Digital goods",
 			"description": "Downloads and license keys, given to the shopper once the order is paid.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"sells.digital"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.digital"],
 			"settings": {
 				"$ref": "schemas/digital_goods.settings.json"
 			}
@@ -164,12 +117,8 @@
 			"key": "bookings",
 			"name": "Services and bookings",
 			"description": "Services, sold without a time or booked in simple slots as their item type says: a duration, booking schedules per place, person or service with weekly hours and dated exceptions (holidays, special hours), and no double booking.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"sells.services"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.services"],
 			"settings": {
 				"$ref": "schemas/bookings.settings.json"
 			}
@@ -178,13 +127,8 @@
 			"key": "delivery_zones",
 			"name": "Delivery zones",
 			"description": "Delivery zones by any place (countries, regions, cities, areas or postcodes), each with named rates the shopper picks (Standard, Express \u2026; by package weight or order value, free over an amount, with their days), and pickup.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"delivers.*",
-				"pays.pickup"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["delivers.*", "pays.pickup"],
 			"settings": {
 				"$ref": "schemas/delivery_zones.settings.json"
 			}
@@ -193,12 +137,8 @@
 			"key": "taxes",
 			"name": "Taxes",
 			"description": "Tax rules by region (country, region, city or postcode) and category, each a percentage; prices shown with or without tax.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"taxes.yes"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["taxes.yes"],
 			"settings": {
 				"$ref": "schemas/taxes.settings.json"
 			}
@@ -207,12 +147,8 @@
 			"key": "coupons",
 			"name": "Coupons",
 			"description": "Codes for a percentage or fixed amount off, with limits, dates and conditions.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"offers.coupons"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.coupons"],
 			"settings": {
 				"$ref": "schemas/coupons.settings.json"
 			}
@@ -221,12 +157,8 @@
 			"key": "deals",
 			"name": "Deals",
 			"description": "Automatic offers on products, categories or brands, with dates and use limits.",
-			"dependsOn": [
-				"catalog"
-			],
-			"recommendFor": [
-				"offers.discounts"
-			],
+			"dependsOn": ["catalog"],
+			"recommendFor": ["offers.discounts"],
 			"settings": {
 				"$ref": "schemas/deals.settings.json"
 			}
@@ -235,12 +167,8 @@
 			"key": "loyalty",
 			"name": "Loyalty",
 			"description": "Points earned on delivered orders and redeemed at checkout, with expiry and a history.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"offers.loyalty"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.loyalty"],
 			"settings": {
 				"$ref": "schemas/loyalty.settings.json"
 			}
@@ -249,12 +177,8 @@
 			"key": "bundles",
 			"name": "Bundles",
 			"description": "Bundles and buy X get Y offers applied in the cart.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"offers.bundles"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.bundles"],
 			"settings": {
 				"$ref": "schemas/bundles.settings.json"
 			}
@@ -263,12 +187,8 @@
 			"key": "reviews",
 			"name": "Reviews",
 			"description": "Ratings and reviews from shoppers whose order was delivered, with moderation.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"offers.reviews"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.reviews"],
 			"settings": {
 				"$ref": "schemas/reviews.settings.json"
 			}
@@ -277,12 +197,8 @@
 			"key": "returns",
 			"name": "Returns",
 			"description": "Return and warranty claims with time windows per item and grade, photos, approval, refunds and restocking exactly once.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"offers.returns"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.returns"],
 			"settings": {
 				"$ref": "schemas/returns.settings.json"
 			}
@@ -291,12 +207,8 @@
 			"key": "invoices",
 			"name": "Invoices",
 			"description": "Invoices and packing slips, with the serial numbers on each line.",
-			"dependsOn": [
-				"checkout"
-			],
-			"recommendFor": [
-				"offers.invoices"
-			],
+			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.invoices"],
 			"settings": {
 				"$ref": "schemas/invoices.settings.json"
 			}
@@ -305,12 +217,8 @@
 			"key": "seo",
 			"name": "SEO",
 			"description": "Your own SEO on top of the catalog's: title and description patterns, your home page and business details for search engines, sitemap and listing choices, SEO copy written on save, IndexNow on save, and landing and glossary pages (Landing pages).",
-			"dependsOn": [
-				"catalog"
-			],
-			"recommendFor": [
-				"marketing.seo"
-			],
+			"dependsOn": ["catalog"],
+			"recommendFor": ["marketing.seo"],
 			"settings": {
 				"$ref": "schemas/seo.settings.json"
 			}
@@ -319,13 +227,8 @@
 			"key": "feeds",
 			"name": "Feeds",
 			"description": "Product feeds for shopping and social catalogs.",
-			"dependsOn": [
-				"catalog"
-			],
-			"recommendFor": [
-				"marketing.google+sells.physical",
-				"marketing.meta+sells.physical"
-			],
+			"dependsOn": ["catalog"],
+			"recommendFor": ["marketing.google+sells.physical", "marketing.meta+sells.physical"],
 			"settings": {
 				"$ref": "schemas/feeds.settings.json"
 			}
@@ -334,9 +237,7 @@
 			"key": "ai_copy",
 			"name": "AI copy",
 			"description": "Product descriptions and meta text written with the merchant's own AI key.",
-			"dependsOn": [
-				"catalog"
-			],
+			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/ai_copy.settings.json"
 			}
@@ -345,9 +246,7 @@
 			"key": "reports",
 			"name": "Reports",
 			"description": "Sales by any grouping (product, category, brand, tags, place, zone, courier, payment method, period or any field), a summary by day, week or month, stock age, return rate and margin.",
-			"dependsOn": [
-				"checkout"
-			],
+			"dependsOn": ["checkout"],
 			"settings": {
 				"$ref": "schemas/reports.settings.json"
 			}
@@ -357,9 +256,7 @@
 			"name": "Import",
 			"description": "Catalog, customers, orders, promotions, loyalty and shopper records moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
 			"dependsOn": [],
-			"recommendFor": [
-				"moving.yes"
-			],
+			"recommendFor": ["moving.yes"],
 			"settings": {
 				"$ref": "schemas/import.settings.json"
 			}
@@ -495,22 +392,12 @@
 		},
 		{
 			"key": "promotions_admin",
-			"feature": [
-				"coupons",
-				"deals",
-				"bundles",
-				"loyalty"
-			],
+			"feature": ["coupons", "deals", "bundles", "loyalty"],
 			"kind": "admin"
 		},
 		{
 			"key": "customers_admin",
-			"feature": [
-				"checkout",
-				"reviews",
-				"reports",
-				"catalog"
-			],
+			"feature": ["checkout", "reviews", "reports", "catalog"],
 			"kind": "admin"
 		}
 	]

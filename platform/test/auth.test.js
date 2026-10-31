@@ -101,8 +101,8 @@ describe('TOTP (RFC 6238)', () => {
 		expect(verifyTotp(secret, '12345', { now: () => at })).toEqual({ ok: false });
 		expect(verifyTotp(secret, 123456, { now: () => at })).toEqual({ ok: false });
 		expect(() => base32Decode('!!')).toThrow();
-		expect(totpUri({ secret: 'ABC', issuer: 'Single Solution', account: 'a@b.c' })).toBe(
-			'otpauth://totp/Single%20Solution:a%40b.c?secret=ABC&issuer=Single+Solution&algorithm=SHA1&digits=6&period=30',
+		expect(totpUri({ secret: 'ABC', issuer: 'Shelfway', account: 'a@b.c' })).toBe(
+			'otpauth://totp/Shelfway:a%40b.c?secret=ABC&issuer=Shelfway&algorithm=SHA1&digits=6&period=30',
 		);
 	});
 

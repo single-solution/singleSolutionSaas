@@ -1,7 +1,7 @@
 {
 	"name": "@ss/cli",
 	"version": "0.2.0",
-	"description": "Developer CLI for Single Solution products: ss app init, ss app validate, ss app assets.",
+	"description": "Developer CLI for Shelfway products: ss app init, ss app validate, ss app assets.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {

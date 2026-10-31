@@ -79,7 +79,7 @@ describe('sso and sessions', () => {
 		expect(merchant.switcher).toEqual([
 			{ merchantId: 'mer_0123456789abcdefghjkmnpq', merchantName: 'Example Shop', websites: [{ websiteId, domain: DOMAIN }] },
 		]);
-		expect(merchant.branding).toEqual({ name: 'Single Solution', accent: '#2563eb', logoUrl: null });
+		expect(merchant.branding).toEqual({ name: 'Shelfway', accent: '#2563eb', logoUrl: null });
 	});
 
 	it('pages the admin switcher and answers 503 without the Portal', async () => {

@@ -518,7 +518,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	 */
 	const adminSession = async (by, websiteId, productId = productManifest.id, email = 'owner@portal.test') => {
 		const client = typeof by === 'object' && by?.client ? by.client : by;
-		const targetEmail = (typeof by === 'object' && by?.email) ? by.email : email;
+		const targetEmail = typeof by === 'object' && by?.email ? by.email : email;
 		const otp = await stepUp(client, targetEmail);
 		const launch = await client.post(`/v1/admin/products/${productId}/launch`, { websiteId, ...otp });
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);

@@ -113,7 +113,7 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		);
 		const own = await m.client.get(`/v1/merchants/${m.merchantId}/activity`);
 		expect(own.json.items.find((/** @type {any} */ e) => e.action === 'token.revealed')).toMatchObject({
-			actor: { type: 'admin', id: null, name: 'Single Solution' },
+			actor: { type: 'admin', id: null, name: 'Shelfway' },
 			target: { type: 'website', id: websiteId },
 		});
 		expect((await m.client.post(`${site}/tokens/notes/reveal`, await h.confirmOtp(m.client, m.email))).json.serverToken).toBe(

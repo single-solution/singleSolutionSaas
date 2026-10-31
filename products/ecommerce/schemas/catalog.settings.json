@@ -41,10 +41,7 @@
 			"title": "Archived products",
 			"description": "Where an archived product's address leads when it names no replacement: nowhere (not found), or its category's page. Search engines treat many old addresses sent to one broad page as soft 404s: prefer a replacement for products with a near match.",
 			"default": "none",
-			"enum": [
-				"none",
-				"category"
-			],
+			"enum": ["none", "category"],
 			"x-ui": {
 				"group": "Page addresses",
 				"order": 13,
@@ -80,11 +77,7 @@
 			"title": "Show stock to shoppers",
 			"description": "Whether shoppers see how many units are left: never, only when few are left, or always.",
 			"default": "none",
-			"enum": [
-				"none",
-				"low",
-				"always"
-			],
+			"enum": ["none", "low", "always"],
 			"x-ui": {
 				"group": "Basics",
 				"order": 3
@@ -108,10 +101,7 @@
 			"title": "Search",
 			"description": "Basic search matches every word; Atlas Search is fuzzy and ranked, and needs the search index described in the docs on your database (MongoDB Atlas). If the index is missing, basic search answers and Overview says so.",
 			"default": "basic",
-			"enum": [
-				"basic",
-				"atlas"
-			],
+			"enum": ["basic", "atlas"],
 			"x-ui": {
 				"group": "Search",
 				"order": 21
@@ -122,10 +112,7 @@
 			"title": "Basic search matches",
 			"description": "Every word anywhere in the name, summary, tags or SKUs; or the whole phrase, words in order, in the name or a SKU. For the shop's basic search.",
 			"default": "words",
-			"enum": [
-				"words",
-				"phrase"
-			],
+			"enum": ["words", "phrase"],
 			"x-ui": {
 				"group": "Search",
 				"order": 22,

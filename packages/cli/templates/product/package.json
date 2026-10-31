@@ -1,7 +1,7 @@
 {
 	"name": "@ss/product-{{id}}",
 	"version": "0.1.0",
-	"description": "{{name}}: a Single Solution product (widgets and API).",
+	"description": "{{name}}: a Shelfway product (widgets and API).",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",

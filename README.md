@@ -1,4 +1,4 @@
-# Single Solution
+# Shelfway
 
 A **Portal** (control plane) plus six separately hosted **products** (Notifications, Accounts, Chat, Payments,
 Ecommerce, Growth), plus a **public Docs hub** for builders. Merchants add websites, place products, and share a
@@ -10,7 +10,7 @@ Ecommerce, Growth), plus a **public Docs hub** for builders. Merchants add websi
 | `platform/`         | the Portal (merchant console, admin console at `/admin`, API)                     | yes, one deployment      |
 | `products/<id>/`    | the six products                                                                  | yes, one deployment each |
 | `packages/`         | the shared kit (`app-kit`, `protocol`, `contracts`, `net`, `ui`, `cli`, `config`) | no, built into the above |
-| `packages/importer` | `ss-import`: moves a store's records into the products (see PLAN — Migration)      | no, a command-line tool  |
+| `packages/importer` | `ss-import`: moves a store's records into the products (see PLAN — Migration)     | no, a command-line tool  |
 | `e2e/`              | system tests: the products against the real Portal                                | no                       |
 
 Every folder is a unit that builds and checks on its own, so it can be split into its own repository later.

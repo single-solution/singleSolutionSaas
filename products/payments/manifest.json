@@ -58,16 +58,12 @@
 		"needs": [
 			{
 				"product": "accounts",
-				"scopes": [
-					"activity.write"
-				],
+				"scopes": ["activity.write"],
 				"features": []
 			},
 			{
 				"product": "notifications",
-				"scopes": [
-					"events.forward"
-				],
+				"scopes": ["events.forward"],
 				"features": []
 			}
 		]
@@ -78,10 +74,7 @@
 			"name": "Stripe",
 			"description": "Card and wallet payments on Stripe Checkout with the merchant's own Stripe keys; also Stripe subscriptions.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online",
-				"sells.subscriptions"
-			],
+			"recommendFor": ["pays.online", "sells.subscriptions"],
 			"settings": {
 				"$ref": "schemas/stripe.settings.json"
 			}
@@ -91,10 +84,7 @@
 			"name": "PayPal",
 			"description": "PayPal checkout with the merchant's own PayPal app; also PayPal subscriptions.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online",
-				"sells.subscriptions"
-			],
+			"recommendFor": ["pays.online", "sells.subscriptions"],
 			"settings": {
 				"$ref": "schemas/paypal.settings.json"
 			}
@@ -104,9 +94,7 @@
 			"name": "PayFast (South Africa)",
 			"description": "Payments on PayFast South Africa's own page (payfast.co.za, ZAR) with the merchant's own PayFast account.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online+countries.za"
-			],
+			"recommendFor": ["pays.online+countries.za"],
 			"settings": {
 				"$ref": "schemas/payfast.settings.json"
 			}
@@ -116,9 +104,7 @@
 			"name": "PayFast (Pakistan)",
 			"description": "Payments on PayFast Pakistan's hosted checkout (gopayfast, PKR) with the merchant's own PayFast account.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online+countries.pk"
-			],
+			"recommendFor": ["pays.online+countries.pk"],
 			"settings": {
 				"$ref": "schemas/payfast_pk.settings.json"
 			}
@@ -128,9 +114,7 @@
 			"name": "JazzCash (Pakistan)",
 			"description": "Payments on JazzCash's hosted checkout with the merchant's own JazzCash account.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online+countries.pk"
-			],
+			"recommendFor": ["pays.online+countries.pk"],
 			"settings": {
 				"$ref": "schemas/jazzcash.settings.json"
 			}
@@ -140,9 +124,7 @@
 			"name": "Easypaisa (Pakistan)",
 			"description": "Payments on Easypaisa's hosted checkout (Easypay) with the merchant's own store.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online+countries.pk"
-			],
+			"recommendFor": ["pays.online+countries.pk"],
 			"settings": {
 				"$ref": "schemas/easypaisa.settings.json"
 			}
@@ -152,9 +134,7 @@
 			"name": "Rapid Gateway (Pakistan)",
 			"description": "Payments on Rapid Gateway's hosted checkout (card, Easypaisa, JazzCash, Raast; PKR) with the merchant's own Rapid account.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online+countries.pk"
-			],
+			"recommendFor": ["pays.online+countries.pk"],
 			"settings": {
 				"$ref": "schemas/rapid.settings.json"
 			}
@@ -164,9 +144,7 @@
 			"name": "Manual payment methods",
 			"description": "The merchant's own ways to pay outside a gateway (bank transfer, pay on delivery, pay at pickup \u2026): their details, instructions and accounts; payers may upload a proof to the merchant's own storage and the merchant confirms receipt.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.bank_transfer"
-			],
+			"recommendFor": ["pays.bank_transfer"],
 			"settings": {
 				"$ref": "schemas/manual_payments.settings.json"
 			}
@@ -185,9 +163,7 @@
 			"name": "Payment links",
 			"description": "Reusable links for any amount (invoices, bookings, donations), with a hosted page and the pay button.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.link"
-			],
+			"recommendFor": ["pays.link"],
 			"settings": {
 				"$ref": "schemas/payment_links.settings.json"
 			}
@@ -197,9 +173,7 @@
 			"name": "Merchant payment API",
 			"description": "The merchant's server (and Ecommerce through the Portal's link) creates, reads and verifies payments; the Payments admin widget.",
 			"dependsOn": [],
-			"recommendFor": [
-				"pays.online"
-			],
+			"recommendFor": ["pays.online"],
 			"settings": {
 				"$ref": "schemas/payment_api.settings.json"
 			}
@@ -209,9 +183,7 @@
 			"name": "Subscriptions",
 			"description": "Gateway-managed subscriptions on Stripe and PayPal; Payments mirrors their status; the Subscriptions admin widget.",
 			"dependsOn": [],
-			"recommendFor": [
-				"sells.subscriptions"
-			],
+			"recommendFor": ["sells.subscriptions"],
 			"settings": {
 				"$ref": "schemas/subscriptions.settings.json"
 			}
@@ -257,10 +229,7 @@
 	"widgets": [
 		{
 			"key": "pay_button",
-			"feature": [
-				"payment_links",
-				"payment_api"
-			],
+			"feature": ["payment_links", "payment_api"],
 			"kind": "visitor"
 		},
 		{

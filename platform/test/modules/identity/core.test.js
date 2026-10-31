@@ -15,7 +15,7 @@ const WEB = 'web_0123456789abcdefghjkmnpq';
 describe('inputs: fields', () => {
 	it('email', () => {
 		expect(I.email('  A.B+c@Example.COM ')).toEqual({ ok: true, value: 'a.b+c@example.com' });
-		// the one email rule of the SaaS (@ss/contracts/email): the same addresses as Accounts and Notifications
+		// the one email rule of the suite (@ss/contracts/email): the same addresses as Accounts and Notifications
 		expect(I.email('ana@example.xn--p1ai')).toEqual({ ok: true, value: 'ana@example.xn--p1ai' });
 		expect(I.email('ana..b@example.com').ok).toBe(false);
 		for (const bad of ['', 'a', 'a@b', '@b.c', 'a b@c.d', 'a@b@c.d', 1, null, `${'x'.repeat(250)}@b.cd`])

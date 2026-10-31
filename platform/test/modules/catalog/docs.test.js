@@ -130,7 +130,7 @@ describe('Docs hub (PLAN §10 B1, B2, B3)', () => {
 		expect(catalogRes.status).toBe(200);
 		expect(catalogRes.json).toMatchObject({
 			openapi: '3.1.0',
-			info: { title: 'Single Solution Catalog OpenAPI' },
+			info: { title: 'Shelfway Catalog OpenAPI' },
 			'x-products': [
 				{
 					productId: product.productId,

@@ -712,7 +712,7 @@ export const createCatalogService = (ctx, options = {}) => {
 					const description =
 						/** @type {any} */ (manifest).description ||
 						(typeof guide?.intro === 'string' ? guide.intro : '') ||
-						`${manifest.name} product for Single Solution`;
+						`${manifest.name} product for Shelfway`;
 					return {
 						productId: String(doc._id),
 						name: manifest.name,
@@ -743,7 +743,7 @@ export const createCatalogService = (ctx, options = {}) => {
 			const description =
 				/** @type {any} */ (manifest).description ||
 				(typeof guide?.intro === 'string' ? guide.intro : '') ||
-				`${manifest.name} product for Single Solution`;
+				`${manifest.name} product for Shelfway`;
 			return {
 				product: {
 					productId: String(doc._id),
@@ -802,9 +802,9 @@ export const createCatalogService = (ctx, options = {}) => {
 			return {
 				openapi: '3.1.0',
 				info: {
-					title: 'Single Solution Catalog OpenAPI',
+					title: 'Shelfway Catalog OpenAPI',
 					version: '1.0.0',
-					description: 'Aggregated OpenAPI 3.0 catalog for all active Single Solution products.',
+					description: 'Aggregated OpenAPI 3.0 catalog for all active Shelfway products.',
 				},
 				servers: [{ url: ctx.config.portalUrl, description: 'Portal host' }],
 				'x-products': activeList,

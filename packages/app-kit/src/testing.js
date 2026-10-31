@@ -614,7 +614,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				audience: productId,
 				kind,
 				sessionExpiresAt: sessionExpiresAt ?? new Date(now() + 8 * 60 * 60_000).toISOString(),
-				branding: { name: 'Single Solution', accent: '#2563eb', logoUrl: null },
+				branding: { name: 'Shelfway', accent: '#2563eb', logoUrl: null },
 				support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:support@example.com' }] },
 				now,
 			};

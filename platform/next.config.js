@@ -5,7 +5,7 @@ import { staticSecurityHeaders } from '@ss/net';
 import { API_CSP } from './src/infra/security-headers.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-// inside the Single Solution monorepo the workspace packages are linked from its root; extracted, the project is the root
+// inside the Shelfway monorepo the workspace packages are linked from its root; extracted, the project is the root
 const monorepo = resolve(here, '..');
 const root = existsSync(resolve(monorepo, 'pnpm-workspace.yaml')) ? monorepo : here;
 

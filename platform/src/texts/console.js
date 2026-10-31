@@ -1683,7 +1683,7 @@ export const DOCS_HUB = Object.freeze({
 	title: 'Docs',
 	hubTitle: 'Documentation Hub',
 	hubIntro:
-		'Public developer guides and OpenAPI 3.0 references for Single Solution products. Build storefronts with zero Portal login.',
+		'Public developer guides and OpenAPI 3.0 references for Shelfway products. Build storefronts with zero Portal login.',
 	quickstart: 'Quickstart for Developers and AI',
 	quickstartDevPackTitle: '1. Developer Pack',
 	quickstartDevPackDesc:
@@ -1696,7 +1696,7 @@ export const DOCS_HUB = Object.freeze({
 	quickstartOpenapiDesc: 'Consume OpenAPI 3.0 specs directly for client generation, AI agent tooling, and API reference.',
 	activeProducts: 'Active Products',
 	activeProductsDesc:
-		'All active catalog products available on Single Solution. Documentation is public even if not placed on a website.',
+		'All active catalog products available on Shelfway. Documentation is public even if not placed on a website.',
 	readGuide: 'Read Guide',
 	openapiSpec: 'OpenAPI Spec',
 	catalogOpenapi: 'Catalog OpenAPI Index',

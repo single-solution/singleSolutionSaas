@@ -1,7 +1,7 @@
 /**
  * The generic gateway adapter (PLAN 0.8.7) for any other gateway, or the merchant's own bridge to one. The payer's
  * browser posts signed fields to the checkout address; the gateway confirms by posting JSON to the notice address,
- * signed the same way as every Single Solution webhook. Refunds go to the refund address when one is set, else they are
+ * signed the same way as every Shelfway webhook. Refunds go to the refund address when one is set, else they are
  * recorded by hand.
  *
  * - Checkout fields: `payment_id`, `website_id`, `amount` (minor units), `currency`, `description`, `return_url`,

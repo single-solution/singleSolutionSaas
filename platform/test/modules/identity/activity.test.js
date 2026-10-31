@@ -60,7 +60,7 @@ describe('Activity (PLAN 0.5.12, 0.8.2)', () => {
 		expect(own.find((/** @type {any} */ e) => e.actor.type === 'admin')?.actor).toEqual({
 			type: 'admin',
 			id: null,
-			name: 'Single Solution',
+			name: 'Shelfway',
 		});
 		// My account: the admin's own activity
 		const mine = (await support.client.get('/v1/me/activity')).json.items;

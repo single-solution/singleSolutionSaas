@@ -68,7 +68,7 @@ const text = (html) =>
 		.replace(/\s+/g, ' ');
 
 const BRANDING = {
-	name: 'Single Solution',
+	name: 'Shelfway',
 	accent: '#0f766e',
 	logoUrl: null,
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@ss.test' }] },

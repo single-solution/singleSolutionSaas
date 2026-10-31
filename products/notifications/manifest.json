@@ -43,9 +43,7 @@
 		"needs": [
 			{
 				"product": "accounts",
-				"scopes": [
-					"activity.write"
-				],
+				"scopes": ["activity.write"],
 				"features": []
 			}
 		]
@@ -56,9 +54,7 @@
 			"name": "WhatsApp",
 			"description": "Sends WhatsApp messages through the merchant's own provider: Meta WhatsApp Cloud API, Twilio, or any WhatsApp gateway with an HTTP API.",
 			"dependsOn": [],
-			"recommendFor": [
-				"messages.whatsapp"
-			],
+			"recommendFor": ["messages.whatsapp"],
 			"settings": {
 				"$ref": "schemas/whatsapp.settings.json"
 			}
@@ -68,10 +64,7 @@
 			"name": "Email",
 			"description": "Sends email through the merchant's own provider: SMTP, Resend, SendGrid, Mailgun or Amazon SES.",
 			"dependsOn": [],
-			"recommendFor": [
-				"messages.email",
-				"signIn.email"
-			],
+			"recommendFor": ["messages.email", "signIn.email"],
 			"settings": {
 				"$ref": "schemas/email.settings.json"
 			}
@@ -81,9 +74,7 @@
 			"name": "SMS",
 			"description": "Sends SMS through the merchant's own provider: Twilio, or any SMS gateway with an HTTP API.",
 			"dependsOn": [],
-			"recommendFor": [
-				"messages.sms"
-			],
+			"recommendFor": ["messages.sms"],
 			"settings": {
 				"$ref": "schemas/sms.settings.json"
 			}
@@ -93,9 +84,7 @@
 			"name": "Push notifications",
 			"description": "Web push notifications in browsers with the merchant's push keys (VAPID): for visitors who subscribe and for staff.",
 			"dependsOn": [],
-			"recommendFor": [
-				"messages.push"
-			],
+			"recommendFor": ["messages.push"],
 			"settings": {
 				"$ref": "schemas/push.settings.json"
 			}
@@ -154,24 +143,12 @@
 		},
 		{
 			"key": "delivery_log",
-			"feature": [
-				"send_api",
-				"email",
-				"sms",
-				"whatsapp",
-				"push"
-			],
+			"feature": ["send_api", "email", "sms", "whatsapp", "push"],
 			"kind": "admin"
 		},
 		{
 			"key": "template_editor",
-			"feature": [
-				"send_api",
-				"email",
-				"sms",
-				"whatsapp",
-				"push"
-			],
+			"feature": ["send_api", "email", "sms", "whatsapp", "push"],
 			"kind": "admin"
 		},
 		{

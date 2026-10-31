@@ -748,7 +748,7 @@ describe('Settings (stored in the database, never in the environment; Owner only
 		const { call } = await boot({ dbName: 'it_settings_none' });
 		const branding = await call('GET', '/v1/branding');
 		expect(branding.json).toEqual({
-			name: 'Single Solution',
+			name: 'Shelfway',
 			accent: '#0f766e',
 			logoUrl: null,
 			support: { channels: [] },
@@ -849,7 +849,7 @@ describe('runtime', () => {
 		const runtimeDb = mongo.dbName('it_runtime_settings');
 		const env = await testEnv({ MONGODB_URI: `${mongo.uri.replace(/\/?(\?|$)/, `/${runtimeDb}$1`)}` });
 		const before = await getPortal({ env, now: clock.now });
-		expect(before.config.settings.branding.name).toBe('Single Solution');
+		expect(before.config.settings.branding.name).toBe('Shelfway');
 		// an Owner saves a setting (on this instance or another): the settings version goes up
 		await createSystemStore(mongo.client.db(runtimeDb), { encryptionKey: ENCRYPTION_KEY }).update({
 			branding: { name: 'Renamed' },

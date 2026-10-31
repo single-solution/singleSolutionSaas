@@ -929,7 +929,7 @@ describe('AppShell without the optional parts', () => {
 				<p>Body</p>
 			</AppShell>,
 		);
-		expect(container.textContent).toContain('Single Solution');
+		expect(container.textContent).toContain('Shelfway');
 		expect(container.textContent).toContain('Console');
 		expect(container.querySelector('a[href="#content"]')).not.toBeNull();
 		expect(container.querySelector('a[data-router="yes"]')?.textContent).toBe('Home3');

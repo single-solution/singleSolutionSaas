@@ -18,7 +18,7 @@ import {
 const ISS = 'https://portal.test';
 const AUD = 'chat';
 const SESSION_END = new Date(T0 + 12 * 3_600_000).toISOString();
-const branding = { name: 'Single Solution', accent: '#0f766e', logoUrl: 'https://portal.test/branding/logo?v=1' };
+const branding = { name: 'Shelfway', accent: '#0f766e', logoUrl: 'https://portal.test/branding/logo?v=1' };
 const support = {
 	channels: [
 		{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@portal.test' },

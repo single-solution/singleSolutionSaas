@@ -175,4 +175,3 @@ export function PaginationSkeleton({ label = 'Loading', className }) {
 		</div>
 	);
 }
-

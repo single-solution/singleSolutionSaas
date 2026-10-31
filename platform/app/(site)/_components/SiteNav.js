@@ -6,10 +6,9 @@ import { usePathname } from 'next/navigation.js';
 
 const Link = /** @type {any} */ (NextLink);
 
-/** Product brand (launchable SaaS). Company stays Single Solution. */
-export const PRODUCT_BRAND = 'Shelfway';
-/** Company behind the product. */
-export const COMPANY_NAME = 'Single Solution';
+import { COMPANY_NAME, PRODUCT_BRAND } from './brand.js';
+
+export { COMPANY_NAME, PRODUCT_BRAND };
 
 /**
  * Shared floating glass header for the public Portal surface (Website + Docs).
@@ -38,9 +37,7 @@ export function SiteHeader({ brandName = PRODUCT_BRAND, isHome = false }) {
 				</Link>
 				<nav aria-label="Main">
 					<a href={isCurrentHome ? '#products' : '/#products'}>Features</a>
-					<Link
-						href="/docs"
-						style={isDocs ? { color: 'var(--ss-primary)', fontWeight: 600 } : undefined}>
+					<Link href="/docs" style={isDocs ? { color: 'var(--ss-primary)', fontWeight: 600 } : undefined}>
 						Docs
 					</Link>
 				</nav>

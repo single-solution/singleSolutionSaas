@@ -164,12 +164,7 @@ beforeAll(async () => {
 	await sys.addCredits(m.merchantId, 100);
 	tokens = await sys.tokens(m.merchantId, websiteId, 'accounts');
 	const cookie = await sys.adminSession(await sys.owner(), websiteId);
-	await sys.switchFeatures(cookie, websiteId, [
-		'sign_in',
-		'roles',
-		'two_step',
-		'role_requests',
-	]);
+	await sys.switchFeatures(cookie, websiteId, ['sign_in', 'roles', 'two_step', 'role_requests']);
 	expect(
 		(
 			await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/sign_in.methods`, {

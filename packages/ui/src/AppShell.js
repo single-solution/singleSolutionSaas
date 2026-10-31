@@ -17,7 +17,18 @@
  * pane returns to its top when the page changes (`scrollKey`).
  * @module
  */
-import { Fragment, cloneElement, createContext, isValidElement, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+	Fragment,
+	cloneElement,
+	createContext,
+	isValidElement,
+	useContext,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react';
 import { cx } from './cx.js';
 import { Avatar, DOTS, IconBadge, TINTS } from './display.js';
 import { Icon } from './icons.js';
@@ -446,7 +457,7 @@ export function ScrollArea({ children, className, label, ref, as = 'div' }) {
  *   (the current menu item by default)
  */
 export function AppShell({
-	brand = { name: 'Single Solution', tagline: 'Console' },
+	brand = { name: 'Shelfway', tagline: 'Console' },
 	sections,
 	topbar,
 	actions,

@@ -178,7 +178,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		const activity = await (await h.signIn('sam@shop.test')).get(`/v1/merchants/${m.merchantId}/activity`);
 		const suspendedEntry = activity.json.items.find((/** @type {any} */ e) => e.action === 'merchant.suspended');
 		expect(suspendedEntry).not.toHaveProperty('reason');
-		expect(suspendedEntry.actor).toEqual({ type: 'admin', id: null, name: 'Single Solution' });
+		expect(suspendedEntry.actor).toEqual({ type: 'admin', id: null, name: 'Shelfway' });
 	});
 
 	it('delete (Owner, typed name, no websites): login and personal details erased, email free, records kept', async () => {

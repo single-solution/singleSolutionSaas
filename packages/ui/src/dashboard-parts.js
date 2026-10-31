@@ -182,9 +182,7 @@ export const resealAdvice = (words, done) => {
 	if (done.unreadable === 0) return words.finished;
 	const parts = Object.entries(done.unreadableIn ?? {})
 		.filter(([, count]) => (count ?? 0) > 0)
-		.map(([part, count]) =>
-			fill(words.parts[/** @type {'connections' | 'keys' | 'product'} */ (part)], { count: count ?? 0 }),
-		);
+		.map(([part, count]) => fill(words.parts[/** @type {'connections' | 'keys' | 'product'} */ (part)], { count: count ?? 0 }));
 	return fill(words.unreadable, { parts: parts.join('; ') });
 };
 

@@ -107,7 +107,7 @@ describe('admin console smoke', () => {
 			// ------------------------------------------------------------------ frame
 			const shell = text(
 				ssr(
-					<AdminShell admin={owner} branding={{ name: 'Single Solution', accent: '#0f766e' }}>
+					<AdminShell admin={owner} branding={{ name: 'Shelfway', accent: '#0f766e' }}>
 						<p>child</p>
 					</AdminShell>,
 				),
@@ -118,7 +118,7 @@ describe('admin console smoke', () => {
 			expect(shell).toContain('child');
 			const pending = text(
 				ssr(
-					<AdminShell admin={owner} twoStepRequired branding={{ name: 'Single Solution', accent: '#0f766e' }}>
+					<AdminShell admin={owner} twoStepRequired branding={{ name: 'Shelfway', accent: '#0f766e' }}>
 						<p>hidden</p>
 					</AdminShell>,
 				),

@@ -81,7 +81,7 @@ const setToken = (token) => {
 
 const PASSWORD = 'correct horse battery';
 const BRANDING = {
-	name: 'Single Solution',
+	name: 'Shelfway',
 	accent: '#0f766e',
 	logoUrl: null,
 	support: {

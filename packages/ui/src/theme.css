@@ -6,7 +6,7 @@
  * ratio of at least 4.5:1 (WCAG AA) in both themes; `line-strong` (checkboxes, a hovered control) keeps 3:1 against
  * surfaces. `subtle` text (placeholders, meta that is also said elsewhere) is decorative only.
  *
- * Theme pack: **Unite** — the single Shelfway / Single Solution visual kit.
+ * Theme pack: **Unite** — the single Shelfway visual kit.
  * One pack for Portal marketing (`/`), Docs hub, Portal console, and every product dashboard.
  * Do not invent a second palette for marketing or a product. Marketing `site.css` is layout + motion only;
  * it must alias to `--ss-*` / `@theme` tokens from this file.
@@ -433,7 +433,12 @@
 	background:
 		radial-gradient(1000px 520px at 8% -8%, color-mix(in srgb, var(--ss-info-solid) 18%, transparent), transparent 55%),
 		radial-gradient(700px 400px at 100% 5%, color-mix(in srgb, var(--ss-success-solid) 8%, transparent), transparent 45%),
-		linear-gradient(180deg, color-mix(in srgb, var(--ss-surface) 70%, var(--ss-canvas)) 0%, var(--ss-canvas) 45%, var(--ss-surface-2) 100%);
+		linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--ss-surface) 70%, var(--ss-canvas)) 0%,
+			var(--ss-canvas) 45%,
+			var(--ss-surface-2) 100%
+		);
 }
 
 /* Technical animated 40px grid drift with radial mask from website */
@@ -478,7 +483,12 @@
 	background:
 		radial-gradient(1000px 520px at 8% -8%, color-mix(in srgb, var(--ss-info-solid) 18%, transparent), transparent 55%),
 		radial-gradient(700px 400px at 100% 5%, color-mix(in srgb, var(--ss-success-solid) 8%, transparent), transparent 45%),
-		linear-gradient(180deg, color-mix(in srgb, var(--ss-surface) 70%, var(--ss-canvas)) 0%, var(--ss-canvas) 45%, var(--ss-surface-2) 100%);
+		linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--ss-surface) 70%, var(--ss-canvas)) 0%,
+			var(--ss-canvas) 45%,
+			var(--ss-surface-2) 100%
+		);
 }
 
 .grid-hard {

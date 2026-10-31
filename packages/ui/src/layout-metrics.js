@@ -126,7 +126,8 @@ export const PAGE = Object.freeze({
  */
 export const LIST = Object.freeze({
 	/** the side column: a panel like the inner navigation, 320 px wide beside the page, the whole width on phones */
-	column: 'flex min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface/90 backdrop-blur-md sm:w-80',
+	column:
+		'flex min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-panel border border-line bg-surface/90 backdrop-blur-md sm:w-80',
 	/** the search box and the filter chips above the rows (they stay put) */
 	head: 'flex shrink-0 flex-col gap-2 p-2 pb-0',
 	/** the box of the rows that scrolls; `group/list` and `data-ss-slide` tell a row that the highlight is drawn for it */

@@ -1,4 +1,4 @@
-# Single Solution — binding plan
+# Shelfway — binding plan
 
 **Status:** binding for the whole monorepo. Private product — anything may be deleted.  
 **This plan wins** over unit READMEs until they are updated.

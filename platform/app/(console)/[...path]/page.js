@@ -18,14 +18,7 @@ import {
 } from '../../../src/console/loaders.js';
 import { ACCOUNT_PARTS, routes } from '../../../src/console/paths.js';
 import { LEGACY_PEER_REDIRECTS, websitePartOf } from '../../../src/console/website-parts.js';
-import {
-	consoleApi,
-	consoleBranding,
-	firstAdminAvailable,
-	merchantContext,
-	one,
-	redirectIfSignedIn,
-} from '../_lib/server.js';
+import { consoleApi, consoleBranding, firstAdminAvailable, merchantContext, one, redirectIfSignedIn } from '../_lib/server.js';
 import { AccountView } from '../../../src/console/views/account.js';
 import { CreditsView } from '../../../src/console/views/credits.js';
 import { DocsHubView } from '../../../src/console/views/docs.js';
@@ -169,7 +162,7 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 		DocsPage,
 		{
 			title: 'Documentation Hub',
-			description: 'Public developer documentation and OpenAPI 3.0 specs for Single Solution products.',
+			description: 'Public developer documentation and OpenAPI 3.0 specs for Shelfway products.',
 			robots: { index: true, follow: true },
 		},
 		'public',

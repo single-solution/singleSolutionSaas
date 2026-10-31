@@ -24,7 +24,7 @@ describe('checkNote', () => {
 		expect(checkNote({ text: 'ok', email: 'ana..b@example.com' }, { maxLength: 500 })).toMatchObject({ error: 'bad_email' });
 	});
 
-	it('takes every address the other products take: the one email rule of the SaaS', () => {
+	it('takes every address the other products take: the one email rule of the suite', () => {
 		expect(checkNote({ text: 'ok', email: 'ana@example.xn--p1ai' }, { maxLength: 500 })).toMatchObject({
 			value: { email: 'ana@example.xn--p1ai' },
 		});

@@ -25,7 +25,7 @@ export const READS_AT_ONCE = 4;
 /** Time limit of an IndexNow submission. */
 const INDEXNOW_TIMEOUT_MS = 10_000;
 
-const USER_AGENT = 'SingleSolution-Growth-SEO/1 (SEO checklist on request of the site owner)';
+const USER_AGENT = 'Shelfway-Growth-SEO/1 (SEO checklist on request of the site owner)';
 
 /**
  * The text of a body: a gzipped file (a `sitemap.xml.gz`, which search engines read) unpacked, never past `maxBytes`

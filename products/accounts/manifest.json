@@ -53,116 +53,63 @@
 		"needs": [
 			{
 				"product": "chat",
-				"scopes": [
-					"permissions.read"
-				],
-				"features": [
-					"roles"
-				]
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
 			},
 			{
 				"product": "chat",
-				"scopes": [
-					"data_rights.export",
-					"data_rights.erase"
-				],
-				"features": [
-					"data_rights"
-				]
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
 			},
 			{
 				"product": "ecommerce",
-				"scopes": [
-					"orders.read.customer"
-				],
+				"scopes": ["orders.read.customer"],
 				"features": []
 			},
 			{
 				"product": "ecommerce",
-				"scopes": [
-					"permissions.read"
-				],
-				"features": [
-					"roles"
-				]
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
 			},
 			{
 				"product": "ecommerce",
-				"scopes": [
-					"data_rights.export",
-					"data_rights.erase"
-				],
-				"features": [
-					"data_rights"
-				]
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
 			},
 			{
 				"product": "growth",
-				"scopes": [
-					"permissions.read"
-				],
-				"features": [
-					"roles"
-				]
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
 			},
 			{
 				"product": "growth",
-				"scopes": [
-					"data_rights.export",
-					"data_rights.erase"
-				],
-				"features": [
-					"data_rights"
-				]
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
 			},
 			{
 				"product": "notifications",
-				"scopes": [
-					"messages.send"
-				],
-				"features": [
-					"sign_in",
-					"approval",
-					"role_requests"
-				]
+				"scopes": ["messages.send"],
+				"features": ["sign_in", "approval", "role_requests"]
 			},
 			{
 				"product": "notifications",
-				"scopes": [
-					"permissions.read"
-				],
-				"features": [
-					"roles"
-				]
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
 			},
 			{
 				"product": "notifications",
-				"scopes": [
-					"data_rights.export",
-					"data_rights.erase"
-				],
-				"features": [
-					"data_rights"
-				]
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
 			},
 			{
 				"product": "payments",
-				"scopes": [
-					"permissions.read"
-				],
-				"features": [
-					"roles"
-				]
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
 			},
 			{
 				"product": "payments",
-				"scopes": [
-					"data_rights.export",
-					"data_rights.erase"
-				],
-				"features": [
-					"data_rights"
-				]
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
 			}
 		]
 	},
@@ -172,9 +119,7 @@
 			"name": "Sign-in",
 			"description": "Sign-in methods (one-time code or password by phone, password or code by email, and Google, Apple and Facebook), password rules and phone delivery channels.",
 			"dependsOn": [],
-			"recommendFor": [
-				"signIn.*"
-			],
+			"recommendFor": ["signIn.*"],
 			"settings": {
 				"$ref": "schemas/sign_in.settings.json"
 			}
@@ -184,10 +129,7 @@
 			"name": "Roles and permissions",
 			"description": "One user list with roles: ready-made templates the merchant changes or deletes and the merchant's own, the role for new sign-ups, the permissions products supply plus the merchant's own names, session lengths per role, and the Users and Roles admin widgets.",
 			"dependsOn": [],
-			"recommendFor": [
-				"signIn.*",
-				"offers.member_prices"
-			],
+			"recommendFor": ["signIn.*", "offers.member_prices"],
 			"settings": {
 				"$ref": "schemas/roles.settings.json"
 			}
@@ -196,12 +138,8 @@
 			"key": "role_requests",
 			"name": "Role requests",
 			"description": "Visitors ask for a role (for example membership) with their name and phone number or email address; staff invite them with a setup link or decline.",
-			"dependsOn": [
-				"roles"
-			],
-			"recommendFor": [
-				"offers.member_prices"
-			],
+			"dependsOn": ["roles"],
+			"recommendFor": ["offers.member_prices"],
 			"settings": {
 				"$ref": "schemas/role_requests.settings.json"
 			}
@@ -238,9 +176,7 @@
 			"name": "Data rights",
 			"description": "Download my data at once; Delete my account after the merchant approves (or after N days), erased in every product on the website through the Portal's links.",
 			"dependsOn": [],
-			"recommendFor": [
-				"signIn.*"
-			],
+			"recommendFor": ["signIn.*"],
 			"settings": {
 				"$ref": "schemas/data_rights.settings.json"
 			}
@@ -250,9 +186,7 @@
 			"name": "Import",
 			"description": "Roles, custom fields, users (with their old password hashes), role requests and activity history moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
 			"dependsOn": [],
-			"recommendFor": [
-				"moving.yes"
-			],
+			"recommendFor": ["moving.yes"],
 			"settings": {
 				"$ref": "schemas/import.settings.json"
 			}

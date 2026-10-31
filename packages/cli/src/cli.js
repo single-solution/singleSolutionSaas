@@ -20,7 +20,7 @@ export const VERSION = pkg.version;
  * @property {string} [cwd]
  */
 
-export const USAGE = `ss — Single Solution developer CLI
+export const USAGE = `ss — Shelfway developer CLI
 
 Usage:
   ss app init <dir> --id <id> --name <name> [--base-url <url>] [--sdk-version <range>]

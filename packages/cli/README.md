@@ -1,6 +1,6 @@
 # @ss/cli (`ss`)
 
-Developer tooling for Single Solution products (PLAN.md Part 0: 0.4.13 product standard, 0.11 environment, 0.10
+Developer tooling for Shelfway products (PLAN.md Part 0: 0.4.13 product standard, 0.11 environment, 0.10
 splittable units). JavaScript ESM, functional; it depends on `@ss/contracts` (manifest checks), `@ss/app-kit` (the
 widget entry, bundled when a product has not installed it yet) and esbuild (the widget bundle).
 

@@ -100,7 +100,7 @@ describe('mail templates (PLAN 0.5.10)', () => {
 		expect(renderMail('merchant_setup', { link: LINK, merchantName: 'Shop' }, CONTEXT).subject).toBe(
 			'Your Shop account on Acme Portal',
 		);
-		expect(renderMail('admin_invite', { link: LINK, role: 'Support' }, DEFAULTS).text).toContain('Single Solution as Support');
+		expect(renderMail('admin_invite', { link: LINK, role: 'Support' }, DEFAULTS).text).toContain('Shelfway as Support');
 		expect(renderMail('email_change_notice', { newEmail: 'new@shop.test' }, DEFAULTS).text).toContain('new@shop.test');
 		// without a support contact there is no support line
 		expect(renderMail('two_step_off', {}, DEFAULTS).text).not.toContain('Support:');
@@ -183,7 +183,7 @@ describe('platform mailer', () => {
 			['Portal <no-reply@example.com>', 'a@example.com'],
 			['Portal <no-reply@example.com>', 'b@example.com'],
 		]);
-		expect(sent[0]).toMatchObject({ subject: 'Reset your Single Solution password' });
+		expect(sent[0]).toMatchObject({ subject: 'Reset your Shelfway password' });
 		expect(sent[0].text).toContain(LINK);
 		fail = true;
 		const error = await mailer.send({ to: 'a@example.com', template: 'admin_invite', data: { link: LINK } }).catch((e) => e);
@@ -216,7 +216,7 @@ describe('platform mailer', () => {
 		await mailer.send({ to: 'owner@example.com', template: 'admin_invite', data: { link: LINK, merchantName: 'Acme' } });
 		expect(smtp.messages).toHaveLength(1);
 		expect(smtp.messages[0]).toContain('To: owner@example.com');
-		expect(smtp.messages[0]).toContain('Subject: You are invited to Single Solution');
+		expect(smtp.messages[0]).toContain('Subject: You are invited to Shelfway');
 	});
 
 	it('chooses SMTP, logging or unavailable from the configuration', async () => {

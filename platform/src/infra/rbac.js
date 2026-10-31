@@ -189,4 +189,3 @@ export const can = (actor, permission, resource = {}) => {
  */
 export const adminCan = (admin, permission) =>
 	Boolean(admin) && can({ type: 'admin', id: String(admin.adminId ?? 'admin'), role: admin.role ?? null }, permission);
-

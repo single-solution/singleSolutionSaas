@@ -38,29 +38,9 @@
 	},
 	"messages": "Messages to shoppers go through Notifications: have Notifications on the same website (the Portal links the products by itself, nothing to paste). Every message below goes out with Ecommerce's default words (US English) by email and SMS until you write your own template in Notifications (Settings \u2192 Templates, where you can also switch a message off on a channel); WhatsApp has no default words, so it needs your WhatsApp template approved at Meta. Order messages are optional: choose the channels (messageChannels) in Settings \u2192 Orders and messages, and which statuses send a message in your order flow (each status's notify). A failed or unconnected send never stops an order. Order and claim messages and staff alerts are sent as required (a shopper's opt-out does not stop them) and saved in your database first: when Notifications does not take one, it is tried again on your shop's next uses (1, 5, 15 and 60 minutes later, then every 3 hours) for up to a day, and a message that got through is never sent twice. The order templates:",
 	"templates": {
-		"ecommerce.return_status": [
-			"number",
-			"claim",
-			"kind",
-			"status",
-			"reason",
-			"amount",
-			"credit",
-			"creditCode",
-			"name"
-		],
-		"ecommerce.back_in_stock": [
-			"name",
-			"price",
-			"url",
-			"stopUrl"
-		],
-		"ecommerce.price_drop": [
-			"name",
-			"price",
-			"url",
-			"stopUrl"
-		]
+		"ecommerce.return_status": ["number", "claim", "kind", "status", "reason", "amount", "credit", "creditCode", "name"],
+		"ecommerce.back_in_stock": ["name", "price", "url", "stopUrl"],
+		"ecommerce.price_drop": ["name", "price", "url", "stopUrl"]
 	},
 	"couriers": "Couriers are a list in Settings \u2192 Couriers: a name, a tracking link template in which {tracking} is replaced by the tracking number (for example https://track.courier.example/?id={tracking}) and, with Courier APIs, the booking connection of that courier (courier_1 \u2026 courier_5, or none: shipped by hand). Staff pick the courier and enter the tracking number when an order ships, or book it with the courier's own API, and the shopper gets the link. You can book with several couriers, each with its own keys.",
 	"courierApi": "With Courier APIs on, Ecommerce books the shipment with each courier's own API and reads its latest status, using that courier's keys: Connections \u2192 Courier API keys 1 to 5, one per courier, each named by its entry of the couriers list (connection). A booking goes to the courier staff pick, else the courier_apis setting courier, else the first courier of the list with a connection; its status is read through the connection of the courier it was booked with. The connection is one generic adapter for any courier: the booking address (Ecommerce posts the JSON body built from your template), the tracking address with {tracking}, your API key, optional extra headers as a JSON object of text values (they may hold {apiKey}; without them the key goes as Authorization: Bearer <key>), the booking body template, and where the tracking number (default trackingNumber) and the status (default status) are in the courier's JSON answers, as dotted paths. In the body template, {number}, {name}, {phone}, {email}, {line1}, {line2}, {city}, {area}, {postalCode}, {country}, {items}, {amount} (decimal), {total} (minor units), {cod} (the decimal to collect, 0 when prepaid), {currency}, {weightG} (the package's grams from the items' packages, empty when one is not known) and {note} are filled in, JSON-escaped. There is nothing to register at the courier: Ecommerce calls the courier, never the other way round.",
@@ -108,26 +88,11 @@
 					"Categories also carry an icon (a name of at most 40 characters your website maps to its own icon), content { summary, bullets: [{ text, icon }] } with at most 12 bullets, at most 20 FAQs, a size chart, typeKey (the item type its products have unless they name their own; null: its parent's) and the SEO fields; brands carry the SEO fields and a size chart. Earlier slugs are kept in previousSlugs (read-only). The fields shoppers meet (names, units, choices and where each one shows) are read from GET /v1/shop/attributes, open to the browser and to your server with no staff sign-in; it never carries the staff rules, order or customer fields, or fields of unlisted categories (the staff list is GET /v1/attributes)."
 				],
 				"routes": [
-					[
-						"GET /v1/shop/categories?include=coming_soon",
-						"catalog"
-					],
-					[
-						"GET /v1/shop/brands?category=<id or slug>",
-						"catalog"
-					],
-					[
-						"GET /v1/shop/attributes",
-						"catalog"
-					],
-					[
-						"PATCH /v1/categories/:id",
-						"catalog"
-					],
-					[
-						"PATCH /v1/brands/:id",
-						"catalog"
-					]
+					["GET /v1/shop/categories?include=coming_soon", "catalog"],
+					["GET /v1/shop/brands?category=<id or slug>", "catalog"],
+					["GET /v1/shop/attributes", "catalog"],
+					["PATCH /v1/categories/:id", "catalog"],
+					["PATCH /v1/brands/:id", "catalog"]
 				]
 			},
 			{
@@ -137,18 +102,9 @@
 					"Products have a featured flag; shop listings take featured=1. The staff product list filters by q, status, kind, category, brand (several, comma-separated), lowStock, featured (1 or 0), stockState (none, out, partial or full; several), hasMedia (1 or 0) and grade (several), and its rows add featured, stockState, grades and mediaCount. lowStock=1 keeps products that track stock and are not archived with a variant low on stock: still for sale (offered, not marked sold out) with 1 to the catalog setting lowStock units. Counts take the same filters: /v1/products/count, and /v1/products/counts?by=status, brand, stockState, featured or grade; by=variantStock counts the variants instead, as out, low and in (for a dashboard or a bell)."
 				],
 				"routes": [
-					[
-						"GET /v1/products",
-						"catalog"
-					],
-					[
-						"GET /v1/products/count",
-						"catalog"
-					],
-					[
-						"GET /v1/products/counts?by=stockState",
-						"catalog"
-					]
+					["GET /v1/products", "catalog"],
+					["GET /v1/products/count", "catalog"],
+					["GET /v1/products/counts?by=stockState", "catalog"]
 				]
 			},
 			{
@@ -159,14 +115,8 @@
 					"Policies are a list in Settings \u2192 Policies (lists/policies: each { key, title, text }; delivery, returns, warranty, privacy and terms to start with, and any you add, up to 20; the key names its page) as rich text (HTML cleaned by Ecommerce). {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver} (one or two braces) are filled in when they are read; other text in braces stays as written, and empty policies are left out."
 				],
 				"routes": [
-					[
-						"GET /v1/policies",
-						"checkout"
-					],
-					[
-						"GET /v1/shop/policies",
-						"checkout"
-					]
+					["GET /v1/policies", "checkout"],
+					["GET /v1/shop/policies", "checkout"]
 				]
 			},
 			{
@@ -176,14 +126,8 @@
 					"A product's video is { kind: 'file', key } (an MP4 or WebM uploaded to your storage like a photo, up to 64 MB), { kind: 'youtube', id } (a YouTube id or address), { kind: 'url', url } (https) or null. The shop's product answer gives the file's address and type, or the YouTube embed address, and the product page widget plays it."
 				],
 				"routes": [
-					[
-						"POST /v1/catalog/uploads",
-						"catalog"
-					],
-					[
-						"PATCH /v1/products/:id",
-						"catalog"
-					]
+					["POST /v1/catalog/uploads", "catalog"],
+					["PATCH /v1/products/:id", "catalog"]
 				]
 			},
 			{
@@ -193,22 +137,10 @@
 					"With Size charts on, a chart is a measurement table: a name, a unit (mm, cm, m, in, ft, yd, g, kg, lb, oz, ml or l, an own label such as EU or years, or none: there is no default), at most 12 columns { key, label, unit } (a column's own unit, or '' for the table's), at most 40 rows { size, label, values }, convertTo, advice, notes and active. convertTo ('' by default) is the unit shoppers can switch the table to: only a unit of the length, weight or volume one of its columns is in (422 otherwise), converted with the exact factors (1 in = 25.4 mm, 1 ft = 304.8 mm, 1 lb = 453.59237 g, 1 oz = 28.349523125 g); numbers and ranges convert, other text and the columns of another dimension or an own label stay as written. Products, brands and categories take a sizeChartId: a product page shows the product's chart, else its brand's, else its category's, else the size_charts setting defaultChartId (empty by default: none). A product's size chart choice is one of three: from its brand or category (no sizeChartId), a chart of its own (sizeChartId) or none (hideSizeGuide true, which shows no size guide at all; the shop product answer carries hideSizeGuide beside a null sizeChart). A chart in use or set as the default cannot be deleted (409); its answer says where it is used."
 				],
 				"routes": [
-					[
-						"GET /v1/size-charts",
-						"size_charts"
-					],
-					[
-						"POST /v1/size-charts",
-						"size_charts"
-					],
-					[
-						"PATCH /v1/size-charts/:id",
-						"size_charts"
-					],
-					[
-						"DELETE /v1/size-charts/:id",
-						"size_charts"
-					]
+					["GET /v1/size-charts", "size_charts"],
+					["POST /v1/size-charts", "size_charts"],
+					["PATCH /v1/size-charts/:id", "size_charts"],
+					["DELETE /v1/size-charts/:id", "size_charts"]
 				]
 			},
 			{
@@ -219,18 +151,9 @@
 					"Variants have their own photos (media: at most 24 per variant and 200 per product, keys of the product's uploads); removing a photo from the product removes it from its variants too. Shop answers give each photo's sizes and each variant's photos, and product cards carry cardImages: the first photo of up to 4 variants that look different (a 2\u00d72 grid)."
 				],
 				"routes": [
-					[
-						"POST /v1/catalog/uploads",
-						"catalog"
-					],
-					[
-						"POST /v1/products/:id/media",
-						"catalog"
-					],
-					[
-						"PUT /v1/products/:id/media",
-						"catalog"
-					]
+					["POST /v1/catalog/uploads", "catalog"],
+					["POST /v1/products/:id/media", "catalog"],
+					["PUT /v1/products/:id/media", "catalog"]
 				]
 			},
 			{
@@ -242,22 +165,10 @@
 					"Variants hold attributes { <attributeId>: value or [values] }, and the product's options are made from those shown on the page (up to 6 axes; two variants may share options when their grades differ). A product's attribute setup (at most 20 { attributeId, values, customValues, defaultValue }) lists the values it is sold in; Generate adds every missing combination as a variant (at most 250) with the price and stock you give, for one product or up to 100 at once (Variants)."
 				],
 				"routes": [
-					[
-						"POST /v1/attributes",
-						"catalog"
-					],
-					[
-						"PATCH /v1/attributes/:id",
-						"catalog"
-					],
-					[
-						"POST /v1/products/:id/variants/generate",
-						"variants"
-					],
-					[
-						"POST /v1/products/variants/generate",
-						"variants"
-					]
+					["POST /v1/attributes", "catalog"],
+					["PATCH /v1/attributes/:id", "catalog"],
+					["POST /v1/products/:id/variants/generate", "variants"],
+					["POST /v1/products/variants/generate", "variants"]
 				]
 			},
 			{
@@ -266,12 +177,7 @@
 				"paragraphs": [
 					"GET /v1/shop/products filters by q, category, brand and grade (several values, comma-separated), attr.<slug>=a,b (every field with that slug that shoppers filter by, show.filter; any other matches nothing, so a staff-only value is never told), minPrice, maxPrice, inStock, featured=1 and deal=<id or slug>; one active variant must match the price, attributes, grade and stock together. minPrice and maxPrice compare each variant's own price, not its price after an automatic deal (a card on sale can show a price below minPrice): the filter stays one database match the grid, the counts and the listing head share. Sorts are newest, price_asc, price_desc, top, sold_asc, rating, name and updated (price ties go to the newest); top and sold_asc count units sold (delivered orders), which Chat's top products and llms.txt follow too. It pages like every list, with cursor and the answer's nextCursor and hasMore; page (1 to 500) works beside the cursor, and count=1 adds total (exact up to 10,000, else capped is true). Facets carry counts and labels (one facet per slug, each product counted once per value), cards carry priceMax for price ranges, their brand { id, name, slug } and their main category { id, slug, name } (the first of its categories that exists, else null) so a website can build its own product address, and variants=1 adds each card's active variants { id, options, attributes [{ slug, name, label }], price, compareAtPrice, inStock, grade, url } for websites that draw their own cards (never stock counts). The catalog setting pageSize goes up to 60."
 				],
-				"routes": [
-					[
-						"GET /v1/shop/products?page=2&count=1",
-						"catalog"
-					]
-				]
+				"routes": [["GET /v1/shop/products?page=2&count=1", "catalog"]]
 			},
 			{
 				"id": "stock-display",
@@ -279,12 +185,7 @@
 				"paragraphs": [
 					"The catalog setting showStock (none, low or always) and lowStockShown (5) decide what shoppers are told: shop answers and Chat lookups carry stockLeft per variant (a number, or null when it is not shown), so the product page can say Only 3 left or 12 in stock. A variant marked soldOut is shown as sold out without changing its stock; POST /v1/products/:id/stock takes soldOut alone or with a stock change."
 				],
-				"routes": [
-					[
-						"POST /v1/products/:id/stock",
-						"catalog"
-					]
-				]
+				"routes": [["POST /v1/products/:id/stock", "catalog"]]
 			},
 			{
 				"id": "grades",
@@ -293,14 +194,8 @@
 					"Condition grades (Settings \u2192 Condition grades and unit numbers, or PUT /v1/lists/grades) have a key (lower-case letters, digits, _ and -), a name, a description of up to 1,200 characters, return and warranty days, the categories they are for (none = all), the item types whose items take them (typeKeys, a grade set per item type: none = every type with grades; a variant's grade must be one of its type's), a color, a condition video (a file key or a YouTube id), content (summary and bullets), whether they are offered, its standard condition (new, refurbished or used; used when not given), which structured data and feeds give its items and a glossary page's SEO; up to 100 grades. A grade may be one category's definition of its key (categoryId): the same key then exists once per category, with its own name, texts, days and glossary, and once without a category for every other one; a product's variants take the entry of their category or the nearest category above it first. Shop answers give each variant's grade with these details."
 				],
 				"routes": [
-					[
-						"PUT /v1/lists/grades",
-						"grades_serials"
-					],
-					[
-						"GET /v1/seo/grades/:key",
-						"landing_pages"
-					]
+					["PUT /v1/lists/grades", "grades_serials"],
+					["GET /v1/seo/grades/:key", "landing_pages"]
 				]
 			},
 			{
@@ -312,18 +207,9 @@
 					"Examples \u2014 an appliance store: a unit field Serial number and the type { key: appliance, name: Appliance, kind: physical, elements: { variants: true, parcel: true, warranty: true, units: { fieldIds: [<Serial number id>], capture: packing, requiredBefore: shipped } } } named by its Appliances category (a store of used goods adds grades: true); an E-book type { kind: digital, elements: { downloads: true } }; a repair { kind: service, elements: { warranty: true } } sold without booked times."
 				],
 				"routes": [
-					[
-						"PUT /v1/lists/item_types",
-						"catalog"
-					],
-					[
-						"PATCH /v1/products/:id",
-						"catalog"
-					],
-					[
-						"PATCH /v1/categories/:id",
-						"catalog"
-					]
+					["PUT /v1/lists/item_types", "catalog"],
+					["PATCH /v1/products/:id", "catalog"],
+					["PATCH /v1/categories/:id", "catalog"]
 				]
 			},
 			{
@@ -335,14 +221,8 @@
 					"Examples \u2014 a serial number: a unit field \"Serial number\" on units, text, required, format { chars: letters_digits, minLength: 6, maxLength: 20, ignoreSpaces: true, upperCase: true }, shown to the shopper and on invoices and packing slips, named by the item type Appliance with units { capture: packing, requiredBefore: shipped }: staff type each unit's number at packing or before dispatch, and a number of the wrong form is refused at once. A bicycle's frame number, a car's VIN (checkDigit: vin) or a watch's case number works the same way; a unit with several numbers of one kind (such as a device with two network identities, format { chars: digits, minLength: 15, maxLength: 15, checkDigit: luhn }) takes several values, as many as its field allows."
 				],
 				"routes": [
-					[
-						"PATCH /v1/orders/:id",
-						"checkout"
-					],
-					[
-						"GET /v1/serials",
-						"grades_serials"
-					]
+					["PATCH /v1/orders/:id", "checkout"],
+					["GET /v1/serials", "grades_serials"]
 				]
 			},
 			{
@@ -351,12 +231,7 @@
 				"paragraphs": [
 					"Return and warranty times are a number and its unit ({ amount, unit: days, months or years }, shown as typed: 1 year stays 1 year; months and years count on the calendar; the returns settings returnTime and warrantyTime with returnTimeUnit and warrantyTimeUnit). A variant's warrantyTime (null = the product's, then its grade's, then the returns setting) is kept on the order line when the order is placed; warranty claims use it, and shop answers and invoices show it."
 				],
-				"routes": [
-					[
-						"PATCH /v1/products/:id",
-						"catalog"
-					]
-				]
+				"routes": [["PATCH /v1/products/:id", "catalog"]]
 			},
 			{
 				"id": "addresses",
@@ -366,18 +241,9 @@
 					"When a product's or category's slug changes, the old one is kept (at most 20 in previousSlugs). Lookups by slug ignore letter case and match old slugs; an old slug answers { moved: { slug, url } }: your site turns it into a 308 to url (see the product page below). A product you retire for another (a new model) names it in replacedBy (Replaced by in the product editor): once archived, its address answers moved to that product (an archived replacement passes on to its own, so shoppers and search engines take one hop). Otherwise, with retiredUrl set to category, an archived product answers moved to its category's page instead of not found; use that with care: search engines treat many old addresses sent to one broad page as soft 404s, and a plain 404 (or a replacement) is better for a product with no near match."
 				],
 				"routes": [
-					[
-						"GET /v1/seo/products/:ref",
-						"catalog"
-					],
-					[
-						"GET /v1/seo/categories/:ref",
-						"catalog"
-					],
-					[
-						"GET /v1/shop/products/:ref",
-						"catalog"
-					]
+					["GET /v1/seo/products/:ref", "catalog"],
+					["GET /v1/seo/categories/:ref", "catalog"],
+					["GET /v1/shop/products/:ref", "catalog"]
 				]
 			},
 			{
@@ -391,12 +257,7 @@
 					},
 					"A new index is built first: wait until Atlas shows it ready (Status: Active / Queryable) before you switch search to atlas, for example when you move a shop's catalog. If the search fails, or finds nothing while the index finds none of your active products (Atlas answers nothing, without an error, for an index that is missing, named differently or still building), basic search answers instead, and the dashboard's Overview lists the missing index under Needs you until a search works again."
 				],
-				"routes": [
-					[
-						"GET /v1/shop/products?q=<words>",
-						"catalog"
-					]
-				]
+				"routes": [["GET /v1/shop/products?q=<words>", "catalog"]]
 			},
 			{
 				"id": "landing-pages",
@@ -409,42 +270,15 @@
 					"A glossary page can list its products: add products=1 to a glossary read and the answer carries products, one page of the cards GET /v1/shop/products answers (so a website draws the page and its products from one answer; facets is always null). A field's page lists the active products that carry the field, narrowed to one value with value=<value> (several, comma-separated), a grade's page the products with a variant of the grade, and a page for a category only the products of that category and the categories below it. It pages and sorts as the listing does: limit, cursor, page, count=1 (total and capped), sort and variants=1, and takes its other filters (brand, minPrice, maxPrice, inStock, featured, attr.<slug>). A field shoppers do not filter by (show.filter off) lists no products, so a staff-only value is never told. Without products=1 the answer is as before."
 				],
 				"routes": [
-					[
-						"GET /v1/landings",
-						"landing_pages"
-					],
-					[
-						"POST /v1/landings",
-						"landing_pages"
-					],
-					[
-						"PATCH /v1/landings/:id",
-						"landing_pages"
-					],
-					[
-						"POST /v1/landings/:id/ai-copy",
-						"ai_copy"
-					],
-					[
-						"GET /v1/seo/listing",
-						"catalog"
-					],
-					[
-						"GET /v1/seo/attributes/:slug",
-						"landing_pages"
-					],
-					[
-						"GET /v1/seo/attributes/:category/:slug",
-						"landing_pages"
-					],
-					[
-						"GET /v1/seo/grades/:key",
-						"landing_pages"
-					],
-					[
-						"GET /v1/seo/grades/:category/:key",
-						"landing_pages"
-					]
+					["GET /v1/landings", "landing_pages"],
+					["POST /v1/landings", "landing_pages"],
+					["PATCH /v1/landings/:id", "landing_pages"],
+					["POST /v1/landings/:id/ai-copy", "ai_copy"],
+					["GET /v1/seo/listing", "catalog"],
+					["GET /v1/seo/attributes/:slug", "landing_pages"],
+					["GET /v1/seo/attributes/:category/:slug", "landing_pages"],
+					["GET /v1/seo/grades/:key", "landing_pages"],
+					["GET /v1/seo/grades/:category/:key", "landing_pages"]
 				]
 			},
 			{
@@ -460,22 +294,10 @@
 					"With the seo setting indexNowOnSave on and Growth on the same website, the pages a save changes are sent to search engines through Growth's IndexNow right after it: a product whose page changed (its content, photos, variants or prices, whether it can be bought, its address or status; never its stock while it stays on sale, from any save: the editor, bulk changes, CSV and photos), its earlier address after a new slug, and the listings of its categories and those above them; a saved category's page, with its earlier address after a new slug. With the seo setting autoSeo at on_save, saving a product (or, with Landing pages on, an attribute) has your AI provider write its empty SEO title, description and FAQs once, when AI copy is on and the website's AI key is set in the Portal (Website settings \u203a Data and files); the copy is kept with source ai. Without AI, or when the provider does not answer, nothing is written: the patterns fill the pages on every read."
 				],
 				"routes": [
-					[
-						"GET /v1/seo/site",
-						"catalog"
-					],
-					[
-						"GET /v1/seo/sitemap.xml",
-						"catalog"
-					],
-					[
-						"GET /v1/seo/sitemaps/:file",
-						"catalog"
-					],
-					[
-						"GET /v1/llms-full.txt",
-						"llms_txt"
-					]
+					["GET /v1/seo/site", "catalog"],
+					["GET /v1/seo/sitemap.xml", "catalog"],
+					["GET /v1/seo/sitemaps/:file", "catalog"],
+					["GET /v1/llms-full.txt", "llms_txt"]
 				]
 			},
 			{
@@ -485,14 +307,8 @@
 					"Item ids: each variant's own id, or the feedId an import kept from the earlier shop's feed (and the product's imported feedGroupId as item_group_id on every item), so Merchant Center keeps the items it already lists. The feeds settings: googleCategory (sent with every item whose category names none: a category's own Google product category, in the catalog admin widget or googleCategory on the category, goes to its products and the categories below it), gradeLabel (each item's grade name as custom_label_0), itemTitle ({name} - {variant} by default, with {name}, {brand}, {variant} for the options on products with several variants, {options} for the options always, {grade} for its grade and {attr.<slug>} for a field's value, the variant's else the product's; a field shoppers never see is empty), itemDescription (body: the description, else the summary; seo: the SEO description first; pattern: descriptionPattern with the title's placeholders, {description} and {summary}), identifierExists (auto: nothing sent; no: identifier_exists no on items without GTIN and MPN, in both feeds) and shipping (on: the delivery fee and, once both are set, the handling and transit days of Delivery zones go with every physical item, never with a digital item or a service; off when you set shipping in the catalog's own account). gtin and mpn are each variant's own (give them in the product editor, the products CSV or the API); skuAs sends the SKU as one of them for variants without their own. Each item's condition follows its grade's standard condition, shipping comes from the default delivery fee (0 at or above the free-delivery amount), prices follow your Format with whole units, and variants priced 0 are left out (the catalogs refuse free items). Besides its own photo, an item sends up to 10 more (the variant's others, then the product's) as additional_image_link (in the Meta CSV, one cell separated by commas). Fields fill more of an item where their Feeds choice says: a custom label, color, material, size or pattern; gender, age_group and size_system for clothing, sent only with the catalogs' own values (male, female or unisex; newborn, infant, toddler, kids or adult; US, UK, EU, DE, FR, JP, CN, IT, BR, MEX or AU), taken from a choice's value or label in any case, so a choice Men with the value male works; product highlights (each value one highlight of up to 150 characters); and product details (the field's name and value). The Meta CSV has gender and age_group too. On sale, price is the regular price and sale_price the price shown (after a deal that holds all day, or below a \"was\" price), with sale_price_effective_date (start/end, ISO 8601) while the deal has an end; the Meta CSV has the same sale_price and sale_price_effective_date columns. A deal limited to weekdays or hours is left out of the feeds (they are read at the catalogs' own pace)."
 				],
 				"routes": [
-					[
-						"GET /v1/feeds/products.xml",
-						"feeds"
-					],
-					[
-						"GET /v1/feeds/products.csv",
-						"feeds"
-					]
+					["GET /v1/feeds/products.xml", "feeds"],
+					["GET /v1/feeds/products.csv", "feeds"]
 				]
 			}
 		]
@@ -526,9 +342,7 @@
 		"loyalty": [
 			"Shoppers earn points, credited when the order is delivered, and redeem them at checkout. Set the earn and redeem rates, who takes part (roles and guests), what points are earned on and when they are worked out, and the expiry in Settings \u2192 Loyalty; staff adjust points in the promotions admin widget (see Loyalty options)."
 		],
-		"bundles": [
-			"Bundles and buy X get Y offers, applied in the cart."
-		],
+		"bundles": ["Bundles and buy X get Y offers, applied in the cart."],
 		"reviews": [
 			"Ratings and reviews from shoppers whose order was delivered, per product or per item bought (guests too, with the order key), moderated in the customers admin widget (see Reviews per item, alerts and wishlists)."
 		],
@@ -550,9 +364,7 @@
 		"ai_copy": [
 			"Product descriptions and meta text suggested with your own AI key (OpenAI, Anthropic, Google Gemini or an OpenAI-compatible service), entered once in the Portal (Website settings \u203a Data and files). Suggestions are shown to staff in the catalog admin widget and never saved automatically."
 		],
-		"import": [
-			"For a migration only: see Import."
-		]
+		"import": ["For a migration only: see Import."]
 	},
 	"orderRoles": "A move works only when your flow lists it for who makes it and the roles allow it (else 409 move_not_allowed). Into awaiting_payment only from open or packed: the order waits for its payment again (with the move's window option restart, the default, it gets a new time to pay; with none it waits until staff move it). Nothing moves into awaiting_confirmation. open and packed come from waiting, open or packed statuses (packed back to open frees the serial numbers captured when packing); shipped from open, packed or shipped; delivered from waiting, open, packed or shipped; canceled from waiting, open or packed (a dispatched package is never canceled: it comes back as returned_to_origin first, and money paid can be refunded meanwhile with POST /v1/orders/<id>/refunds); returned_to_origin only from shipped; returned only from delivered; refunded from waiting, open, packed, delivered, returned_to_origin or returned. Extra moves (E40), only when you list them: canceled from delivered or any closed status, refunded from canceled, and between two closed statuses; what each does follows what the order still holds, so nothing is given back or taken twice. The default flow has none of the extra moves (back to waiting, packed back to open, refunded before delivery, the E40 moves) and no returned status: add the ones you use. The roles:",
 	"orderTemplates": {
@@ -636,22 +448,10 @@
 					"A guest is one customer record per guest key (a customer id cus_\u2026 with guest true, and guestKey p:<phone as E.164> or e:<email address>), listed and opened in the customers admin widget like a member. The checkout setting guestIdentity says what a guest gives and is known by: phone (the default), email, or either (the phone when given, else the email address); phoneRequired (on by default) also asks every guest and delivery address for a phone. The blocklist, the open-order cap (at most 3 orders waiting for payment or confirmation) and the burst limit (at most 10 orders placed within 15 minutes, 429 too_many_orders) apply per guest, and a phone or email address that a member's record has links the order to the member's record; it moves into the member's account at their sign-in with that phone or email address verified (Accounts' phone_verified or email_verified)."
 				],
 				"routes": [
-					[
-						"POST /v1/shop/orders",
-						"checkout"
-					],
-					[
-						"GET /v1/shop/orders/by-number/:number",
-						"checkout"
-					],
-					[
-						"GET /v1/shop/orders/:id",
-						"checkout"
-					],
-					[
-						"POST /v1/shop/orders/:id/cancel",
-						"checkout"
-					]
+					["POST /v1/shop/orders", "checkout"],
+					["GET /v1/shop/orders/by-number/:number", "checkout"],
+					["GET /v1/shop/orders/:id", "checkout"],
+					["POST /v1/shop/orders/:id/cancel", "checkout"]
 				]
 			},
 			{
@@ -662,36 +462,18 @@
 					"Quotes answer paymentMethods (each with its method key, name, kind, note, advance and fee, and available, with a reason when it is not), payDetails (what each method paid first offered tells shoppers: { ready, name, instructions, accounts }), notes, deliveryOptions and the pickup point; orders answer their payment's name and kind, their notes, the pickup point, and payDetails while they wait for a payment made first. POST /v1/shop/orders takes expectedTotal, the total the shopper saw: a different total answers 409 price_changed with the new quote, so an offer that ended between the cart and the order never charges more. With wholeUnits on in your Format every amount Ecommerce works out is whole: the points value rounds down, percentage fees, role discounts and tax round half up, and deal discounts as the deals setting rounding says."
 				],
 				"routes": [
-					[
-						"POST /v1/shop/cart/quote",
-						"checkout"
-					],
-					[
-						"POST /v1/shop/orders",
-						"checkout"
-					]
+					["POST /v1/shop/cart/quote", "checkout"],
+					["POST /v1/shop/orders", "checkout"]
 				]
 			},
 			{
 				"id": "pay-later-options",
 				"title": "Methods paid on delivery or at pickup",
 				"routes": [
-					[
-						"PUT /v1/lists/:list",
-						"checkout"
-					],
-					[
-						"POST /v1/shop/cart/quote",
-						"checkout"
-					],
-					[
-						"POST /v1/shop/orders",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/:id/payments",
-						"checkout"
-					]
+					["PUT /v1/lists/:list", "checkout"],
+					["POST /v1/shop/cart/quote", "checkout"],
+					["POST /v1/shop/orders", "checkout"],
+					["POST /v1/orders/:id/payments", "checkout"]
 				],
 				"paragraphs": [
 					"A method of kind on_delivery or at_pickup may ask an advance (advanceAmount, else advancePercent rounded up; paid through Payments, or with advanceVia manual a payment your staff record), add a fee (feePercent with feeBase: order_total, or goods_after_discounts: the goods after deals and the role discount; added as totals.fee), stop at a largest order (maxOrderValue, with the fee) and flag customers with returned packages (rtoThreshold; with rtoRequireAdvance flagged customers must pay the advance). Delivering such an order records its balance as a payment of its own method, unless the move into delivered says paidOnDelivery no (your staff record the money). Neither is offered for orders of digital items.",
@@ -706,18 +488,9 @@
 					"The shopper sends the proof in two steps: POST /v1/shop/orders/<id>/proof/upload { type, size } (JPEG, PNG, WebP or PDF, up to 10 MB) answers { upload, key, expiresAt }, a presigned PUT to your storage valid 15 minutes; then POST /v1/shop/orders/<id>/proof { key, reference? } attaches it (it may be sent again: the last one counts) and raises order.proof_uploaded and the proof_uploaded staff alert. An order that does not wait for a payment made by hand answers 409 nothing_to_pay. Your staff then record the payment (see The payments log)."
 				],
 				"routes": [
-					[
-						"POST /v1/shop/orders/:id/proof/upload",
-						"checkout"
-					],
-					[
-						"POST /v1/shop/orders/:id/proof",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/:id/payments",
-						"checkout"
-					]
+					["POST /v1/shop/orders/:id/proof/upload", "checkout"],
+					["POST /v1/shop/orders/:id/proof", "checkout"],
+					["POST /v1/orders/:id/payments", "checkout"]
 				]
 			},
 			{
@@ -729,18 +502,9 @@
 					"POST /v1/orders/<id>/refunds { amount, reason, method?, reference?, claimId? } (orders.refund) refunds up to what was paid less refunds. Without method the share paid through Payments goes back through Payments first and the rest is recorded as other; with payments only through Payments; a payment method key or other only records it. When Payments can only record a refund, the answer's warnings tell you to return the money by hand. The part through Payments goes through the order's refund lock: it is written on the order first, so of two refunds at once one wins (409 conflict) and every refund Payments made is recorded; when Payments does not answer, the refund is kept (refund.pending, warning refund_pending) and sent again with the same Idempotency-Key when the order is next used \u2014 do not refund it again. With the flow's refundsCover trigger, an order whose refunds reach what was paid moves to that refunded status when the flow lists the move, also when Payments finishes a refund later; a staff refund or claim refund that would trigger it needs that move's permission first (403 before any money moves), and once the money is recorded the move never undoes it. A claim's refund that Payments refuses later gives the claim back what it reserved."
 				],
 				"routes": [
-					[
-						"GET /v1/orders/:id",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/:id/payments",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/:id/refunds",
-						"checkout"
-					]
+					["GET /v1/orders/:id", "checkout"],
+					["POST /v1/orders/:id/payments", "checkout"],
+					["POST /v1/orders/:id/refunds", "checkout"]
 				]
 			},
 			{
@@ -751,18 +515,9 @@
 					"Shoppers cancel their own order with POST /v1/shop/orders/<id>/cancel along a move of your flow whose who includes shopper (by default out of awaiting payment and awaiting confirmation; any move into a canceled status before dispatch may allow it). A paid order follows that move's shopperPaid: refuse (the default out of open or packed), flag (canceled, the refund shown as due; the default out of waiting) or refund (canceled and refunded through Payments)."
 				],
 				"routes": [
-					[
-						"POST /v1/orders/:id/move",
-						"checkout"
-					],
-					[
-						"PUT /v1/lists/order_flow",
-						"checkout"
-					],
-					[
-						"POST /v1/shop/orders/:id/cancel",
-						"checkout"
-					]
+					["POST /v1/orders/:id/move", "checkout"],
+					["PUT /v1/lists/order_flow", "checkout"],
+					["POST /v1/shop/orders/:id/cancel", "checkout"]
 				]
 			},
 			{
@@ -775,22 +530,10 @@
 					"Two checkout settings belong with the flow: editPricing (reprice, the default: a staff edit of a waiting order is priced again; keep_placed: it keeps the offer discount, delivery fee and payment fee it was placed with, the discount at most what the items come to) and deleteGivesBack (held, the default: deleting an order gives back what an order not delivered yet holds; all: a delivered or closed order also gives back the items still with the customer, its offer uses and its points)."
 				],
 				"routes": [
-					[
-						"PUT /v1/lists/order_flow",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/:id/move",
-						"checkout"
-					],
-					[
-						"POST /v1/shop/orders/:id/cancel",
-						"checkout"
-					],
-					[
-						"PATCH /v1/orders/:id",
-						"checkout"
-					]
+					["PUT /v1/lists/order_flow", "checkout"],
+					["POST /v1/orders/:id/move", "checkout"],
+					["POST /v1/shop/orders/:id/cancel", "checkout"],
+					["PATCH /v1/orders/:id", "checkout"]
 				]
 			},
 			{
@@ -802,22 +545,10 @@
 					"The refund through Payments of a staff cancel (when its move's refund option is auto), of a shopper's cancel whose move refunds, or of a move into a refunded status runs right after the move. When Payments cannot be reached, the move is still made, the warning says so, and the refund waits in the order's effects (pending, shown as Refund waiting for Payments): it is sent again with the same Idempotency-Key when the order is opened and on use, until done; one Payments refuses is failed and refunded from the order. A refund staff make from the order first settles a waiting one (409 conflict while it runs at Payments, 503 payments_unavailable while Payments cannot tell whether it went through), so the money never goes back twice."
 				],
 				"routes": [
-					[
-						"GET /v1/orders/:id",
-						"checkout"
-					],
-					[
-						"PUT /v1/lists/order_flow",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/restatus",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/:id/refunds",
-						"checkout"
-					]
+					["GET /v1/orders/:id", "checkout"],
+					["PUT /v1/lists/order_flow", "checkout"],
+					["POST /v1/orders/restatus", "checkout"],
+					["POST /v1/orders/:id/refunds", "checkout"]
 				]
 			},
 			{
@@ -828,18 +559,9 @@
 					"Order attachments are photos, videos and files of your own kinds (Settings \u2192 Orders and messages \u2192 Order attachments, or the attachment_kinds list [{ key, label, type: photo | video | file, requiredAt, shoppers }], seeded with an optional Packing video shoppers see): requiredAt names a status of your flow whose moves need one of that kind (422 at /attachments without it), shoppers whether shoppers see it in their order and Chat's order lookups. A move takes attachments [{ kind, key or url }] (an upload key in your storage, or an https address; YouTube is kept as its youtube-nocookie embed address); PATCH /v1/orders/<id> { attachments } adds and { removeAttachments: [ids] } removes them at any time (the history notes it; at most 30 per order). The order's detail lists them with their kind's name and address, and each next status the attachments it needs. POST /v1/orders/bulk-move { to, note?, shopperNote?, restock?, ids or items: [{ id, shipment?, serials?, attachments? }] } moves up to 200 orders and answers each one's result."
 				],
 				"routes": [
-					[
-						"POST /v1/orders/:id/move",
-						"checkout"
-					],
-					[
-						"PATCH /v1/orders/:id",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/bulk-move",
-						"bulk_actions"
-					]
+					["POST /v1/orders/:id/move", "checkout"],
+					["PATCH /v1/orders/:id", "checkout"],
+					["POST /v1/orders/bulk-move", "bulk_actions"]
 				]
 			},
 			{
@@ -848,12 +570,7 @@
 				"paragraphs": [
 					"While an order waits for payment or confirmation, has nothing paid and holds only physical items, PATCH /v1/orders/<id> also takes lines [{ variantId, quantity, unitPrice? }] (1\u201350), paymentMethod and delivery { method, city, area, country, locationId }. The order is priced again with the deals, bundles and coupon it was placed with (even when they have ended since), its role price and the points it used; its stock holds are swapped in one step (409 out_of_stock when there is not enough), and a Payments payment started for the old total is canceled, so the shopper pays the new one. The other PATCH fields work in more statuses: staffNote, address (while waiting, open or packed), shipment and serials."
 				],
-				"routes": [
-					[
-						"PATCH /v1/orders/:id",
-						"checkout"
-					]
-				]
+				"routes": [["PATCH /v1/orders/:id", "checkout"]]
 			},
 			{
 				"id": "order-numbers",
@@ -861,12 +578,7 @@
 				"paragraphs": [
 					"Order numbers follow your checkout setting numberPattern, built from {prefix} (numberPrefix), {year}, {month}, {number} and {suffix} (numberSuffix) with letters, digits, - and _ between them: {number} once, {month} only with {year}. {prefix}{number} (the default) is one running number, for example SH-001043; {prefix}{year}-{number} starts again each year (SH-2026-0043) and {year}{month}-{number} each month (202603-0043), by your business time zone. A pattern that breaks these rules reads as {prefix}{number}. The number has at least numberDigits digits (6; 1\u201310), with zeros in front. A counter that does not exist yet (the running one, or a new year's or month's) starts after the highest number already used in that form. POST /v1/orders/counter { next } (server token only; { year, next } with {year}, { year, month, next } with {month}) sets the next number of today's pattern; a number already used answers 422."
 				],
-				"routes": [
-					[
-						"POST /v1/orders/counter",
-						"checkout"
-					]
-				]
+				"routes": [["POST /v1/orders/counter", "checkout"]]
 			},
 			{
 				"id": "customers-seen",
@@ -878,54 +590,18 @@
 					"DELETE /v1/orders/<id> (orders.delete) gives back what a cancel would while the order is waiting, open or packed (a delivered or closed one too with deleteGivesBack all; a shipped one is refused with 409 until it is marked delivered or returned to origin, as its parcel is still out) and cancels its open Payments payment first (409 when it was paid meanwhile, 503 while Payments cannot be reached). The shopper's money is never deleted with it: 409 while a refund through Payments is pending for it or while an order that is not delivered still holds money (refund it first); the activity log keeps the order's number and total. POST /v1/data/delete-all { scope: catalog | orders | customers, confirm: '<your domain>' } (server token only, Bulk actions) deletes a whole scope: orders with their booked slots, coupon uses and claims (after canceling every open Payments payment and giving held stock back), customers with their loyalty accounts, or the catalog (products, categories, brands, attributes, serials, size charts and landing pages)."
 				],
 				"routes": [
-					[
-						"GET /v1/customers?segment=guest",
-						"checkout"
-					],
-					[
-						"GET /v1/customers/counts?by=segment",
-						"checkout"
-					],
-					[
-						"GET /v1/orders/tags",
-						"checkout"
-					],
-					[
-						"GET /v1/customers/segments",
-						"checkout"
-					],
-					[
-						"POST /v1/customers/tags/apply",
-						"checkout"
-					],
-					[
-						"GET /v1/customers/tags",
-						"checkout"
-					],
-					[
-						"PATCH /v1/customers/:userId",
-						"checkout"
-					],
-					[
-						"GET /v1/orders?unseen=1",
-						"checkout"
-					],
-					[
-						"POST /v1/orders/:id/seen",
-						"checkout"
-					],
-					[
-						"POST /v1/customers/:id/seen",
-						"checkout"
-					],
-					[
-						"DELETE /v1/orders/:id",
-						"checkout"
-					],
-					[
-						"POST /v1/data/delete-all",
-						"bulk_actions"
-					]
+					["GET /v1/customers?segment=guest", "checkout"],
+					["GET /v1/customers/counts?by=segment", "checkout"],
+					["GET /v1/orders/tags", "checkout"],
+					["GET /v1/customers/segments", "checkout"],
+					["POST /v1/customers/tags/apply", "checkout"],
+					["GET /v1/customers/tags", "checkout"],
+					["PATCH /v1/customers/:userId", "checkout"],
+					["GET /v1/orders?unseen=1", "checkout"],
+					["POST /v1/orders/:id/seen", "checkout"],
+					["POST /v1/customers/:id/seen", "checkout"],
+					["DELETE /v1/orders/:id", "checkout"],
+					["POST /v1/data/delete-all", "bulk_actions"]
 				]
 			},
 			{
@@ -937,30 +613,12 @@
 					"With the deals setting lockMinutes (0 = off), each quote line with an item deal carries a signed lock: send it back as the cart line's lock and the price is kept for that long, also when the order is placed, even if the deal ends or changes (not when it is deleted or used up). With shopperChoice, quote lines list eligibleDeals and a cart line may name its dealId. The deals settings rounding, lineChoice, cartOffer, cartThresholdBase and pointsBlockedBy choose how deals round and combine."
 				],
 				"routes": [
-					[
-						"POST /v1/deals",
-						"deals"
-					],
-					[
-						"POST /v1/deals/:id/banner/upload",
-						"deals"
-					],
-					[
-						"GET /v1/shop/deals",
-						"deals"
-					],
-					[
-						"GET /v1/shop/deals/:ref",
-						"deals"
-					],
-					[
-						"GET /v1/shop/products?deal=<id or slug>",
-						"catalog"
-					],
-					[
-						"POST /v1/shop/cart/quote",
-						"checkout"
-					]
+					["POST /v1/deals", "deals"],
+					["POST /v1/deals/:id/banner/upload", "deals"],
+					["GET /v1/shop/deals", "deals"],
+					["GET /v1/shop/deals/:ref", "deals"],
+					["GET /v1/shop/products?deal=<id or slug>", "catalog"],
+					["POST /v1/shop/cart/quote", "checkout"]
 				]
 			},
 			{
@@ -970,14 +628,8 @@
 					"With Role pricing on (it needs the Accounts token), the list role_prices (Settings \u2192 Role prices, or PUT /v1/lists/role_prices; up to 20 roles) gives a signed-in shopper whose Accounts role is listed its own prices: { role, kind: percent, percent (0\u201390), label } takes that percent off the goods, and (E31) { role, kind: prices, prices: [{ productId, variantId | null, price }], label } (up to 500 prices; a variant's price beats its product's) charges those prices instead of the items' own, never more than them; items not listed keep their price. Either comes off after deals, bundles and coupons, before points, delivery, tax and the cash handling fee. Quotes and orders show it as totals.roleDiscount (also counted in discount) with the role's key, kind, label and percent (0 for a price list); an order keeps the prices of its products, so an edit prices it the same way. Invoices show it as its own line with your label; the product markup gives each member tier its member price. Guests never get it."
 				],
 				"routes": [
-					[
-						"PUT /v1/lists/role_prices",
-						"role_pricing"
-					],
-					[
-						"POST /v1/shop/cart/quote",
-						"checkout"
-					]
+					["PUT /v1/lists/role_prices", "role_pricing"],
+					["POST /v1/shop/cart/quote", "checkout"]
 				]
 			},
 			{
@@ -988,18 +640,9 @@
 					"Quotes answer pointsToEarn. GET /v1/shop/loyalty?limit=&offset= answers balance, value, lifetimeEarned, pending (points of orders not delivered yet), history (newest first, with hasMore) and expiringSoon (points ending within 30 days). Staff read and adjust an account at /v1/loyalty/accounts/<customer id or Accounts user id>."
 				],
 				"routes": [
-					[
-						"GET /v1/shop/loyalty",
-						"loyalty"
-					],
-					[
-						"GET /v1/loyalty/accounts/:id",
-						"loyalty"
-					],
-					[
-						"POST /v1/loyalty/accounts/:id/adjust",
-						"loyalty"
-					]
+					["GET /v1/shop/loyalty", "loyalty"],
+					["GET /v1/loyalty/accounts/:id", "loyalty"],
+					["POST /v1/loyalty/accounts/:id/adjust", "loyalty"]
 				]
 			},
 			{
@@ -1010,46 +653,16 @@
 					"Claim statuses are yours too (the claim_statuses list [{ key, label, role }], seeded one per role): each has a fixed role \u2014 requested, approved, rejected, received, refunded, credited, replaced, repaired, closed (rejected, replaced, repaired and closed are final) \u2014 every role needs one, a role may have more (Return label sent beside Approved), and a status that has claims keeps its key and role. A claim keeps its kind's window and outcomes and its status's role, so editing the lists never changes what it may do; claims carry kindLabel, statusLabel and role, and GET /v1/returns/lists answers both lists. Staff approve, reject (with a note), receive { lines: [{ lineId, restock }] } (lines marked true go back to stock at once, false never), restock, refund { amount, method?, reference?, note? }, credit { amount, note? } (store_credit: a one-use code of the amount, a fixed coupon the shopper spends at checkout, so Coupons must be on; what an order does not use of it is not kept), replace, repair (each only when the kind has that outcome), close, move between statuses of one role (POST /v1/returns/<id>/status { status }; any action may also name the status of its role it leads to), and add notes { text } that only staff see. A claim's refund is an order refund, at most what the claimed lines were paid (with the delivery fee under refundDelivery) and what is left on the order; points come back as pointsBack says (proportional, or full_refund_only). The shopper gets ecommerce.return_status at each step; a new claim raises return.requested and the return_requested staff alert."
 				],
 				"routes": [
-					[
-						"GET /v1/shop/orders/:id/returnable",
-						"returns"
-					],
-					[
-						"POST /v1/shop/returns",
-						"returns"
-					],
-					[
-						"POST /v1/returns/:id/receive",
-						"returns"
-					],
-					[
-						"POST /v1/returns/:id/refund",
-						"returns"
-					],
-					[
-						"POST /v1/returns/:id/replace",
-						"returns"
-					],
-					[
-						"POST /v1/returns/:id/repair",
-						"returns"
-					],
-					[
-						"POST /v1/returns/:id/credit",
-						"returns"
-					],
-					[
-						"POST /v1/returns/:id/status",
-						"returns"
-					],
-					[
-						"GET /v1/returns/lists",
-						"returns"
-					],
-					[
-						"POST /v1/returns/:id/notes",
-						"returns"
-					]
+					["GET /v1/shop/orders/:id/returnable", "returns"],
+					["POST /v1/shop/returns", "returns"],
+					["POST /v1/returns/:id/receive", "returns"],
+					["POST /v1/returns/:id/refund", "returns"],
+					["POST /v1/returns/:id/replace", "returns"],
+					["POST /v1/returns/:id/repair", "returns"],
+					["POST /v1/returns/:id/credit", "returns"],
+					["POST /v1/returns/:id/status", "returns"],
+					["GET /v1/returns/lists", "returns"],
+					["POST /v1/returns/:id/notes", "returns"]
 				]
 			},
 			{
@@ -1060,26 +673,11 @@
 					"Alerts are per product or variant: POST /v1/shop/alerts { kind: back_in_stock | price_drop, productId, variantId?, targetPrice? }. A price-drop alert may name a price below today's (the product page asks for it with the alerts setting targetPrice); with the setting guests a guest gives phone instead of signing in. Each alert message's {stopUrl} opens your stop page, which calls POST /v1/shop/alerts/unsubscribe/<token>: it removes every alert of that email or phone and answers { removed } (0 for an unknown token). Alerts are also sent when stock comes back from an order (a cancel, a refund before delivery, a returned package or a claim's restock). POST /v1/shop/wishlist/merge { productIds } adds a list your page kept for a guest to the signed-in shopper's wishlist (up to 200)."
 				],
 				"routes": [
-					[
-						"POST /v1/shop/reviews",
-						"reviews"
-					],
-					[
-						"POST /v1/reviews/:id/pending",
-						"reviews"
-					],
-					[
-						"POST /v1/shop/alerts",
-						"alerts"
-					],
-					[
-						"POST /v1/shop/alerts/unsubscribe/:token",
-						"alerts"
-					],
-					[
-						"POST /v1/shop/wishlist/merge",
-						"wishlist"
-					]
+					["POST /v1/shop/reviews", "reviews"],
+					["POST /v1/reviews/:id/pending", "reviews"],
+					["POST /v1/shop/alerts", "alerts"],
+					["POST /v1/shop/alerts/unsubscribe/:token", "alerts"],
+					["POST /v1/shop/wishlist/merge", "wishlist"]
 				]
 			},
 			{
@@ -1089,22 +687,10 @@
 					"Invoices show each line's grade, serial numbers and warranty days, the offer discount, member discount, points, delivery, cash handling fee and tax apart, the payment method and each payment and refund entry by the names of your payment methods (other shows its reference only), and Cash due on delivery for unpaid orders paid on delivery, in the words of your texts (invoice.*, edited in Texts); the invoice's title, packing slip and pick list titles, footer and seller details are the invoices settings; the payment state is your texts too (orders.payment.*), so each word lives in one place. You choose the invoice's line columns and their order (the invoices setting columns: item, sku, quantity, unitPrice, discount, tax, amount, and field.<slug> for any product or variant field, such as an HS code or a country of origin), and write seller details under your business (your tax or company number) and a footer, both with {business}, {email}, {phone}, {address}, {number}, {date} and {field.<slug>} of the order's and its customer's fields. GET /v1/orders/packing-slips?ids=<up to 50, comma-separated> gives one printable HTML page with a slip per order (with the cash to collect and empty serial slots), and GET /v1/orders/pick-list?ids=<up to 100> the units to pick per variant with their order numbers; an unknown id refuses the whole request (404). Shoppers get their invoice from GET /v1/shop/orders/<id>/invoice, with the shopper's sign-in or a guest order's key (SS-Order-Key); with the invoices setting shopperFrom confirmed, only once the order is confirmed. The order's invoice field says whether it can be read now."
 				],
 				"routes": [
-					[
-						"GET /v1/orders/:id/invoice",
-						"invoices"
-					],
-					[
-						"GET /v1/orders/packing-slips",
-						"invoices"
-					],
-					[
-						"GET /v1/orders/pick-list",
-						"invoices"
-					],
-					[
-						"GET /v1/shop/orders/:id/invoice",
-						"invoices"
-					]
+					["GET /v1/orders/:id/invoice", "invoices"],
+					["GET /v1/orders/packing-slips", "invoices"],
+					["GET /v1/orders/pick-list", "invoices"],
+					["GET /v1/shop/orders/:id/invoice", "invoices"]
 				]
 			},
 			{
@@ -1117,42 +703,15 @@
 					"Your fields have a column each, named field:<slug>: product and variant fields in the products file (a product field's value on each of its variant rows, a variant field's on its own row), order fields in both orders files and customer fields in the customers file, inactive fields too. Several values are joined with |, yes/no is true or false, numbers are plain numbers and choices are their stored value. An import reads field:<slug> columns of product and variant fields: the slug names the field defined for the product's category (nearest first), else the one for every category; an empty cell clears that one value and a column left out keeps the values. An unknown slug refuses the file (unknown_field) and a value that does not fit the field is a problem of its row (field_value)."
 				],
 				"routes": [
-					[
-						"GET /v1/reports/summary",
-						"reports"
-					],
-					[
-						"GET /v1/reports/groupings",
-						"reports"
-					],
-					[
-						"GET /v1/reports/health",
-						"reports"
-					],
-					[
-						"GET /v1/reports/sales?by=grade",
-						"reports"
-					],
-					[
-						"GET /v1/reports/sell-through",
-						"reports"
-					],
-					[
-						"GET /v1/reports/oldest-stock",
-						"reports"
-					],
-					[
-						"GET /v1/csv/orders?per=order",
-						"csv"
-					],
-					[
-						"GET /v1/csv/customers",
-						"csv"
-					],
-					[
-						"POST /v1/csv/products?mode=update",
-						"csv"
-					]
+					["GET /v1/reports/summary", "reports"],
+					["GET /v1/reports/groupings", "reports"],
+					["GET /v1/reports/health", "reports"],
+					["GET /v1/reports/sales?by=grade", "reports"],
+					["GET /v1/reports/sell-through", "reports"],
+					["GET /v1/reports/oldest-stock", "reports"],
+					["GET /v1/csv/orders?per=order", "csv"],
+					["GET /v1/csv/customers", "csv"],
+					["POST /v1/csv/products?mode=update", "csv"]
 				]
 			}
 		]
@@ -1169,18 +728,9 @@
 					"POST /v1/import/<collection>/prune { keep: [keys], after?, through? } removes the records an import wrote whose keys are not kept (records made in Ecommerce stay), at most 1,000 per call (more: true: call again). GET /v1/import/status answers { collections, imported, totals }: the counts and sums ss-import verify compares."
 				],
 				"routes": [
-					[
-						"POST /v1/import/:collection",
-						"import"
-					],
-					[
-						"POST /v1/import/:collection/prune",
-						"import"
-					],
-					[
-						"GET /v1/import/status",
-						"import"
-					]
+					["POST /v1/import/:collection", "import"],
+					["POST /v1/import/:collection/prune", "import"],
+					["GET /v1/import/status", "import"]
 				]
 			},
 			{
@@ -1191,14 +741,8 @@
 					"Taken as given: ids, numbers, createdAt, publishedAt, used, sold, rating, previousSlugs, stock and past times. A product may carry feedGroupId and a variant feedId: the item group and item ids the earlier shop's product feed used (1 to 50 letters, digits, dots, dashes or underscores), so shopping catalogs keep listing the same items; only an import sets them. An order keeps its number (in your numberPattern's form, for example <numberPrefix><digits> or <numberPrefix><year>-<digits>), status (a key of your order flow, with that status's role) and history (an entry's shopperNote, the note the shopper was shown, stays in their timeline), its payments and refunds (paid and refunded must be their sums, so an order paid through a gateway you no longer use comes in with an other entry that names it in reference or note), stockHeld and pointsCredited, and its totals must add up as checkout adds them. A guest customer has a name and an E.164 phone (one guest per phone); a loyalty account gives its lots and history (its balance is worked out). Imported alerts are never due."
 				],
 				"routes": [
-					[
-						"POST /v1/import/products?dryRun=1",
-						"import"
-					],
-					[
-						"POST /v1/import/orders",
-						"import"
-					]
+					["POST /v1/import/products?dryRun=1", "import"],
+					["POST /v1/import/orders", "import"]
 				]
 			},
 			{
@@ -1207,12 +751,7 @@
 				"paragraphs": [
 					"After the records, POST /v1/import/finish works out what the shop derives, in batches, writing only what changed, so a second run changes nothing: each category's path (orphans, cycles and too-deep ones are listed), each product's price, highest price, stock state and grades; each customer's order count, returned packages (orders whose package came back for a reason that counts \u2014 none given counts, customer_return never \u2014 or canceled for a cancel reason that counts) and last order; loyalty balances and lifetime points; products' sold (units of delivered orders) and rating (approved reviews) where they have order lines or reviews; the serials sold on the order lines that still hold them; and each order-number counter, so the next order gets the number after the highest. One call works on at most 200 records and answers what it checked and changed: while it answers more, call again with ?after=<next> (ss-import send does)."
 				],
-				"routes": [
-					[
-						"POST /v1/import/finish",
-						"import"
-					]
-				]
+				"routes": [["POST /v1/import/finish", "import"]]
 			}
 		]
 	},

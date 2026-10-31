@@ -1,7 +1,7 @@
 {
 	"name": "@ss/platform",
 	"version": "0.1.0",
-	"description": "Single Solution Portal — admins, merchants, websites, connected products, products on websites with their tokens, credits and billing, consoles.",
+	"description": "Shelfway Portal — admins, merchants, websites, connected products, products on websites with their tokens, credits and billing, consoles.",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",

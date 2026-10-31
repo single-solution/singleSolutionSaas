@@ -216,7 +216,7 @@ describe('admin console interactions (jsdom)', () => {
 
 		// ---------------------------------------------------------------- shell and Overview
 		render(
-			<AdminShell admin={me} branding={{ name: 'Single Solution', accent: '#0f766e' }}>
+			<AdminShell admin={me} branding={{ name: 'Shelfway', accent: '#0f766e' }}>
 				<p>child</p>
 			</AdminShell>,
 		);
@@ -647,7 +647,7 @@ describe('admin console interactions (jsdom)', () => {
 		signInAgain('/admin/x');
 		ownerBrowser.use();
 		render(
-			<AdminShell admin={me} branding={{ name: 'Single Solution', accent: '#0f766e' }}>
+			<AdminShell admin={me} branding={{ name: 'Shelfway', accent: '#0f766e' }}>
 				<p>x</p>
 			</AdminShell>,
 		);

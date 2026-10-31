@@ -283,4 +283,3 @@ export function ConfirmChange({
 export function ConfirmOtp(props) {
 	return <ConfirmChange {...props} otpOnly />;
 }
-

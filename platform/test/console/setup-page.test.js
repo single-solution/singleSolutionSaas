@@ -293,7 +293,7 @@ describe('Setup page (jsdom)', () => {
 			const revokeObjectURL = vi.fn();
 			Object.assign(URL, { createObjectURL, revokeObjectURL });
 			window.history.replaceState(null, '', `/shared-setup#key=${key}`);
-			render(<SharedSetupView brand="Single Solution" />);
+			render(<SharedSetupView brand="Shelfway" />);
 			await until(() => shows('Setup of shop.example.com'));
 			expect(window.location.hash).toBe('');
 			expect(shows('Settings values are not part of this copy.')).toBe(true);
@@ -309,19 +309,19 @@ describe('Setup page (jsdom)', () => {
 
 			// a reload of the same tab opens it again (the key never returns to the address bar)
 			window.history.replaceState(null, '', '/shared-setup');
-			render(<SharedSetupView brand="Single Solution" />);
+			render(<SharedSetupView brand="Shelfway" />);
 			await until(() => shows('Setup of shop.example.com'));
 			expect(window.location.hash).toBe('');
 			cleanup();
 
 			// no key in this tab, and a revoked link (forgotten by the tab)
 			window.sessionStorage.clear();
-			render(<SharedSetupView brand="Single Solution" />);
+			render(<SharedSetupView brand="Shelfway" />);
 			await until(() => shows('This share link does not work'));
 			cleanup();
 			await b.api.request('DELETE', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links/${made.data.link.linkId}`);
 			window.history.replaceState(null, '', `/shared-setup#key=${key}`);
-			render(<SharedSetupView brand="Single Solution" />);
+			render(<SharedSetupView brand="Shelfway" />);
 			await until(() => shows('It may have expired or been revoked.'));
 			await settle();
 			expect(window.sessionStorage.getItem('ss-shared-setup-key')).toBeNull();

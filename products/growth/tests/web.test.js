@@ -32,7 +32,7 @@ describe('reading the site', () => {
 			error: null,
 		});
 		expect(asked[0].init).toMatchObject({ redirect: 'manual', timeoutMs: READ_TIMEOUT_MS, maxBytes: PAGE_MAX_BYTES });
-		expect(asked[0].init.headers['user-agent']).toMatch(/^SingleSolution-Growth-SEO\//);
+		expect(asked[0].init.headers['user-agent']).toMatch(/^Shelfway-Growth-SEO\//);
 		// near the run's deadline: the read gets the time left, and none is asked once less than half a second is left
 		await web.read('https://shop.example.com/sitemap.xml', { maxBytes: SITEMAP_MAX_BYTES, until: t + 3000 });
 		expect(asked[1].init).toMatchObject({ timeoutMs: 3000, maxBytes: SITEMAP_MAX_BYTES });
