@@ -34,7 +34,7 @@ import { api, routes } from '../paths.js';
 import { DaysLeft, ProductStatusBadge, creditDayBars, formatChartCredits, productStatusLabel, productTone } from './billing.js';
 import { FrameBilling } from './shell.js';
 import { PageProblem, openDashboard } from './common.js';
-import { ConfirmOtp } from './confirm-change.js';
+import { ConfirmOtp } from './common.js';
 import { ActivityTimeline } from './login-settings.js';
 import { contactLine } from './sign-in.js';
 import { dailyCostOf, websiteDot } from './website.js';

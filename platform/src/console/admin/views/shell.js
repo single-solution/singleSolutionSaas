@@ -8,16 +8,42 @@
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { AppShell, Callout, Card, Icon, Page, ToastProvider, cx } from '@ss/ui';
+import { AppShell, Badge, Callout, Card, Icon, Page, ToastProvider, cx } from '@ss/ui';
 import { useRouter } from 'next/navigation.js';
-import { ADMIN, TWO_STEP, WEBSITE } from '../../../texts/console.js';
+import { ADMIN, CONSOLE, TWO_STEP, WEBSITE } from '../../../texts/console.js';
 import { Link, NavLink } from '../../link.js';
 import { routes } from '../../paths.js';
-import { accentStyle } from '../../views/common.js';
+import { PageProblem, accentStyle } from '../../views/common.js';
 import { TwoStepSetup } from '../../views/login-settings.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { RoleBadge, adminCan } from './common.js';
+import { adminCan } from '../../../infra/rbac.js';
+
+export { adminCan };
+
+/**
+ * Page-level error of the Admin Console (back to Merchants unless `back` says otherwise).
+ * @param {{ problem: any, title?: string, back?: { href: string, label: string } }} props
+ */
+export function AdminProblem({ problem, title, back }) {
+	return (
+		<PageProblem
+			problem={problem}
+			{...(title ? { title } : {})}
+			back={back ?? { href: adminRoutes.merchants(), label: CONSOLE.backToMerchants }}
+			admin
+		/>
+	);
+}
+
+/**
+ * An admin's role badge.
+ * @param {{ role: string | null | undefined }} props
+ */
+export function RoleBadge({ role }) {
+	if (!role) return null;
+	return <Badge kind="admin">{ADMIN.roles[/** @type {'owner'} */ (role)] ?? role}</Badge>;
+}
 
 /**
  * The admin menu, the group of each entry and the permission it needs (PLAN 0.6 Admin menu, 0.2 rights table).

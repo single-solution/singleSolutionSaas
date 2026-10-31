@@ -13,7 +13,7 @@ import { productBlueprint } from '@ss/contracts/testing';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
-import { AdminWebsiteView } from '../../src/console/admin/views/website.js';
+import { AdminWebsiteView } from '../../src/console/admin/views/merchants.js';
 import * as loaders from '../../src/console/loaders.js';
 import { SharedSetupView, neededOff, profileLines, valueText } from '../../src/console/views/setup.js';
 import { WebsiteView } from '../../src/console/views/websites.js';

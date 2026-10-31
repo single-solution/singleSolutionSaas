@@ -66,8 +66,7 @@ export { Row } from './Row.js';
 export { NextStep, NEXT_STEP_TEXTS } from './blocks.js';
 export { ListColumn, LIST_COLUMN_TEXTS } from './ListColumn.js';
 export { useListSelection, useRowSelection } from './list-selection.js';
-export { Page, PAGE_TEXTS } from './Page.js';
-export { useNarrow } from './page-parts.js';
+export { Page, PAGE_TEXTS, useNarrow } from './Page.js';
 export { SECTION_JUMPS_FROM } from './page-sections.js';
 export {
 	InnerNavSkeleton,
@@ -145,11 +144,11 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./layout-metrics.js').ColumnKind} ColumnKind */
 /** @typedef {import('./overlay.js').DrawerProps} DrawerProps */
 /** @typedef {import('./page-sections.js').PageSection} PageSection */
-/** @typedef {import('./page-parts.js').PageCrumb} PageCrumb */
-/** @typedef {import('./page-parts.js').PageFact} PageFact */
-/** @typedef {import('./page-parts.js').PageAction} PageAction */
-/** @typedef {import('./page-parts.js').PageActions} PageActions */
-/** @typedef {import('./page-parts.js').PageStatus} PageStatus */
+/** @typedef {import('./Page.js').PageCrumb} PageCrumb */
+/** @typedef {import('./Page.js').PageFact} PageFact */
+/** @typedef {import('./Page.js').PageAction} PageAction */
+/** @typedef {import('./Page.js').PageActions} PageActions */
+/** @typedef {import('./Page.js').PageStatus} PageStatus */
 /** @typedef {import('./Toolbar.js').ToolbarFilter} ToolbarFilter */
 /** @typedef {import('./Toolbar.js').ToolbarSearch} ToolbarSearch */
 /** @typedef {import('./Toolbar.js').ToolbarBulk} ToolbarBulk */

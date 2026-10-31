@@ -14,7 +14,7 @@ import { DateFields, periodFilter } from '../../views/range.js';
 import { useNavigation } from '../../navigation.js';
 import { usePagedList } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem } from './common.js';
+import { AdminProblem } from './shell.js';
 
 /**
  * @param {any} props loader result of `loadActivity`

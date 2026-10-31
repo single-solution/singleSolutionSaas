@@ -526,7 +526,7 @@ const urgentFirst = (needs) => [
  * @param {{ data: DashboardOverview, who: { kind: 'merchant' | 'admin', name: string }, product: string,
  *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, namesOf: (keys: string[], max?: number) => string,
  *   open: (tab: OverviewTab, section?: string) => void, recheck: () => Promise<unknown>, needs?: Need[], steps?: SetupStep[],
- *   numbers?: ReactNode, crumbs?: import('./page-parts.js').PageCrumb[], children?: ReactNode }} props
+ *   numbers?: ReactNode, crumbs?: import('./Page.js').PageCrumb[], children?: ReactNode }} props
  *   `product`: the product's name; `crumbs`: the page's breadcrumbs (Product › Overview by default); `support`: the support contact (merchants are told to contact it for credits; the
  *   button opens its first channel);
  *   `portal`: the Portal's address; `namesOf`: feature names of keys, at most `max`; `open`: shows a dashboard section, at a section of its inner sidebar when given;

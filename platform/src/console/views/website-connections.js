@@ -33,7 +33,7 @@ import { AI_PROVIDERS } from '@ss/contracts';
 import { WEBSITE_SETTINGS as T } from '../../texts/console.js';
 import { apiConfirm } from '../client.js';
 import { api } from '../paths.js';
-import { ConfirmOtp, confirmationErrors } from './confirm-change.js';
+import { ConfirmOtp, confirmationErrors } from './common.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**

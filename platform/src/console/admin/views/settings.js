@@ -36,7 +36,7 @@ import { ADMIN, LOGIN } from '../../../texts/console.js';
 import { apiFetch } from '../../client.js';
 import { Link } from '../../link.js';
 import { adminApi } from '../paths.js';
-import { AdminProblem } from './common.js';
+import { AdminProblem } from './shell.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 

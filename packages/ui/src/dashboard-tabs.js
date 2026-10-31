@@ -15,21 +15,23 @@
  * @module
  */
 import { useRef, useState } from 'react';
+import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Card, EmptyState } from './display.js';
+import { Card, EmptyState, ManagedNote } from './display.js';
 import { NextStep, SaveBar, SettingList, SettingsCard } from './blocks.js';
 import { Input } from './fields.js';
+import { ConfirmDialog } from './overlay.js';
 import { ChangesTable, OverviewSkeleton, ProductOverview } from './overview.js';
 import { Pagination, usePaged } from './paged.js';
 import { Row } from './Row.js';
 import { Toolbar } from './Toolbar.js';
 import { formatCreditsPerHour, parseCredits } from './format.js';
 import { useDisplayLocale } from './time.js';
-import { call, useLoad } from './dashboard-api.js';
-import { useConnections } from './dashboard-connections.js';
+import { call, fill, useLoad } from './dashboard-api.js';
 import { featureLooks, useFeatureSwitches } from './dashboard-features.js';
 import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
-import { Outcome, ResealCard, useDashboard, useHeld, websiteSettingsUrl } from './dashboard-parts.js';
+import { Outcome, ResealCard, toneOf, useDashboard, useHeld, websiteSettingsUrl } from './dashboard-parts.js';
+import { describeProblem } from './problems.js';
 import {
 	SettingsBar,
 	TextFields,
@@ -40,11 +42,180 @@ import {
 } from './dashboard-settings.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
+/** @typedef {import('./dashboard-page.js').Section} Section */
+/**
+ * One connection of a website (`GET …/connections`).
+ * @typedef {{ name: string, label: string, kind?: string, neededBy: string[], status: string, message?: string,
+ *   managed?: boolean, last4?: string | null }} Connection `managed`: the Portal owns it (the database, the storage, the AI provider key, the links)
+ */
+/**
+ * What a product adds to its connections: `form(item, save)` is the product's own form for a connection (null: the one
+ * value field) and `hint(name)` its help line under the status.
+ * @typedef {{ form?: (item: Connection, save: (value: unknown) => Promise<void>) => ReactNode,
+ *   hint?: (name: string) => ReactNode }} ConnectionParts
+ */
+
+/**
+ * Loads the connections and draws them as views. `parts` is the product's forms and hints; `null` leaves the connections
+ * out altogether (a product whose connections are all the Portal's).
+ * @param {{ websiteId: string | null, merchantId?: string | null, who: { kind: string }, portal: string,
+ *   parts?: ConnectionParts | null }} options
+ * @returns {{ answer: Answer | null | undefined, result: Answer | null, dialog: ReactNode,
+ *   sections: (list: Connection[]) => Section[] }}
+ */
+export function useConnections({ websiteId, merchantId, who, portal, parts }) {
+	const { texts, namesOf } = useDashboard();
+	const C = texts.connections;
+	const wanted = parts !== null;
+	const base = `/v1/dashboard/websites/${websiteId}/connections`;
+	const { answer, reload } = useLoad(wanted ? base : null);
+	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
+	const [refused, setRefused] = useState(/** @type {Record<string, string>} */ ({}));
+	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
+	const [removing, setRemoving] = useState(/** @type {{ name: string, label: string } | null} */ (null));
+	/** @param {Promise<Answer>} pending */
+	const act = async (pending) => {
+		const answered = await pending;
+		setResult(answered);
+		reload();
+		return answered;
+	};
+	/**
+	 * @param {string} name
+	 * @param {string} value
+	 */
+	const typeInto = (name, value) => setValues((all) => ({ ...all, [name]: value }));
+	/**
+	 * @param {string} name
+	 * @param {(val: unknown) => Promise<Answer>} send
+	 * @param {string} sent
+	 */
+	const saveTyped = async (name, send, sent) => {
+		setRefused((all) => ({ ...all, [name]: '' }));
+		const answered = await send(sent.trim());
+		if (answered.ok) setValues((all) => (all[name] === sent ? { ...all, [name]: '' } : all));
+		else setRefused((all) => ({ ...all, [name]: describeProblem(answered.problem) }));
+	};
+	/** @param {Connection[]} list */
+	const sections = (list) =>
+		list.map((item) => {
+			/** @param {unknown} value */
+			const send = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
+			/** @param {unknown} value */
+			const save = async (value) => {
+				await send(value);
+			};
+			const managed = item.managed === true;
+			const own = parts?.form && !managed ? parts.form(item, save) : null;
+			const help = parts?.hint ? parts.hint(item.name) : null;
+			const tone = toneOf(item.status);
+			const state = String(C[/** @type {'connected'} */ (item.status)]);
+			const needed = item.neededBy.length > 0 ? fill(C.neededBy, { features: namesOf(item.neededBy, 4) }) : C.neededByNone;
+			const typed = values[item.name] ?? '';
+			const field = !managed && !own;
+			return {
+				id: `connection-${item.name}`,
+				label: item.label,
+				icon: /** @type {const} */ ('plug'),
+				status: tone,
+				statusLabel: state,
+				meta: needed,
+				group: texts.developers.groups.connections,
+				info: needed,
+				actions: {
+					...(item.kind === 'link'
+						? {}
+						: { secondary: [{ label: C.test, onClick: () => act(call('POST', `${base}/${item.name}/test`)) }] }),
+					...(item.status === 'not_connected' || managed
+						? {}
+						: {
+								more: [
+									{
+										label: C.remove,
+										danger: true,
+										onSelect: () => setRemoving({ name: item.name, label: item.label }),
+									},
+								],
+							}),
+				},
+				content: (
+					<Card
+						lead={{ icon: 'plug', tone }}
+						title={item.label}
+						status={{ tone, label: state }}
+						{...(help && !managed ? { help } : {})}
+						{...(field
+							? {
+									action: (
+										<Button size="sm" disabled={!typed.trim()} onClick={() => saveTyped(item.name, send, typed)}>
+											{C.save}
+										</Button>
+									),
+								}
+							: {})}>
+						{item.last4 || item.message ? (
+							<p className="flex flex-wrap items-center gap-2 text-sm">
+								{item.last4 ? <code>••••{item.last4}</code> : null}
+								{item.message ? <span className="text-muted">{item.message}</span> : null}
+							</p>
+						) : null}
+						{managed ? (
+							<ManagedNote
+								title={texts.managed.title}
+								href={websiteSettingsUrl({
+									portal,
+									admin: who.kind === 'admin',
+									websiteId,
+									merchantId,
+									section: item.kind === 'link' ? 'links' : 'connections',
+								})}
+								linkLabel={C.managed.open}>
+								{C.managed[/** @type {'database'} */ (item.kind ?? 'database')] ?? C.managed.link}
+							</ManagedNote>
+						) : own ? (
+							own
+						) : (
+							<SettingList>
+								<Input
+									label={C.value}
+									type="password"
+									autoComplete="off"
+									value={typed}
+									{...(refused[item.name] ? { error: refused[item.name] } : {})}
+									onChange={(event) => {
+										typeInto(item.name, event.target.value);
+										setRefused((all) => (all[item.name] ? { ...all, [item.name]: '' } : all));
+									}}
+								/>
+							</SettingList>
+						)}
+					</Card>
+				),
+			};
+		});
+	const dialog = wanted ? (
+		<ConfirmDialog
+			open={removing !== null}
+			title={fill(C.removeTitle, { name: removing?.label ?? '' })}
+			confirmLabel={C.remove}
+			cancelLabel={texts.cancel}
+			danger
+			onClose={() => setRemoving(null)}
+			onConfirm={async () => {
+				const name = removing?.name ?? '';
+				setRemoving(null);
+				await act(call('DELETE', `${base}/${name}`));
+			}}>
+			<p>{C.removeHelp}</p>
+		</ConfirmDialog>
+	) : null;
+	return { answer: wanted ? answer : undefined, result, dialog, sections };
+}
+
 /** @typedef {import('./dashboard-parts.js').FeatureSettings} FeatureSettings */
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
 /** @typedef {import('./dashboard-settings.js').FeatureExtra} FeatureExtra */
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
-/** @typedef {import('./dashboard-page.js').Section} Section */
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'portal_owner' | 'portal_support' }} Who */
 /**
@@ -56,8 +227,6 @@ import {
  *   open: (tab: string, section?: string) => void }} TabProps
  */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
-/** @typedef {import('./dashboard-connections.js').Connection} Connection */
-/** @typedef {import('./dashboard-connections.js').ConnectionParts} ConnectionParts */
 /**
  * What a product adds to its Overview: its own "Needs you" items, setup steps, number tiles and sections.
  * @typedef {{ needs?: import('./overview.js').Need[], steps?: import('./overview.js').SetupStep[], numbers?: ReactNode,
@@ -399,7 +568,7 @@ const joined = (first, second) => {
  * tokens, the Setup sheet); the docs link is in the header. `connections` is the product's way of drawing the
  * connections (`form(item, save)` for a connection's own form, `hint(name)`); `null` leaves them out.
  * @param {TabProps & { sections?: SectionSpec[], children?: ReactNode,
- *   connections?: import('./dashboard-connections.js').ConnectionParts | null }} props
+ *   connections?: ConnectionParts | null }} props
  */
 export function DevelopersTab({ websiteId, merchantId, who, portal, sections, children, connections }) {
 	const features = useLoad(`/v1/dashboard/websites/${websiteId}/features`);

@@ -1131,8 +1131,8 @@ describe('standard tabs', () => {
 				<DevelopersTab
 					{...tabProps(id)}
 					connections={{
-						hint: (name) => (name === 'database' ? 'Your MongoDB address.' : null),
-						form: (item, save) =>
+						hint: (/** @type {string} */ name) => (name === 'database' ? 'Your MongoDB address.' : null),
+						form: (/** @type {any} */ item, /** @type {any} */ save) =>
 							item.name === 'storage' ? (
 								<button type="button" onClick={() => void save({ bucket: 'b' })}>
 									Save storage

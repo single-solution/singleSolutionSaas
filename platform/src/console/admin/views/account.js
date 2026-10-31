@@ -12,7 +12,7 @@ import { apiFetch, useResource } from '../../client.js';
 import { AccountPage } from '../../views/account.js';
 import { EmailPanel, PasswordPanel, TwoStepPanel } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, RoleBadge } from './common.js';
+import { AdminProblem, RoleBadge } from './shell.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 

@@ -37,10 +37,10 @@ import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { creditDayBars, formatChartCredits, productPill } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
-import { ConfirmOtp } from '../../views/confirm-change.js';
+import { ConfirmOtp } from '../../views/common.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, adminCan } from './common.js';
+import { AdminProblem, adminCan } from './shell.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 

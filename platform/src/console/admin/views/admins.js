@@ -31,10 +31,10 @@ import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { apiConfirm, apiFetch, useResource } from '../../client.js';
-import { ConfirmChange, confirmationErrors } from '../../views/confirm-change.js';
+import { ConfirmChange, confirmationErrors } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, adminCan } from './common.js';
+import { AdminProblem, adminCan } from './shell.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 

@@ -20,7 +20,7 @@ import {
 	PAGE,
 	pageBody,
 } from './layout-metrics.js';
-import { Crumbs, ShellMenuButton } from './page-parts.js';
+import { Crumbs, ShellMenuButton } from './Page.js';
 import { PaginationSkeleton } from './paged.js';
 
 /** Widths of the placeholder lines, repeated so a list does not look like a ruler. */
@@ -220,7 +220,7 @@ export function StatGridSkeleton({ tiles = 4, className }) {
  * header (the breadcrumbs when they are known, blocks for the numbers and the actions), the same inner navigation, toolbar,
  * body and footer areas as the page, the same sizes. `children` is the body's own skeleton (a `RowListSkeleton`, an
  * `OverviewSkeleton`); a few settings cards by default.
- * @param {{ crumbs?: import('./page-parts.js').PageCrumb[], linkAs?: import('react').ElementType, nav?: boolean,
+ * @param {{ crumbs?: import('./Page.js').PageCrumb[], linkAs?: import('react').ElementType, nav?: boolean,
  *   list?: boolean, toolbar?: boolean, footer?: boolean, flush?: boolean, label?: string, children?: import('react').ReactNode,
  *   className?: string }} props
  */

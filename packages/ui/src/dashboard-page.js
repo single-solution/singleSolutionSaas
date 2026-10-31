@@ -18,18 +18,17 @@ import { Icon } from './icons.js';
 import { INNER_NAV_TEXTS } from './InnerNav.js';
 import { PAGE } from './layout-metrics.js';
 import { ListColumn } from './ListColumn.js';
-import { Page } from './Page.js';
-import { useNarrow } from './page-parts.js';
+import { Page, useNarrow } from './Page.js';
 import { describeProblem } from './problems.js';
 import { TOOLBAR_TEXTS } from './Toolbar.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./blocks.js').SectionSpec} BaseSpec */
 /** @typedef {Omit<Parameters<typeof import('./Row.js').Row>[0], 'selected' | 'onSelect'>} RowLook */
-/** @typedef {import('./page-parts.js').PageCrumb} PageCrumb */
-/** @typedef {import('./page-parts.js').PageFact} PageFact */
-/** @typedef {import('./page-parts.js').PageActions} PageActions */
-/** @typedef {import('./page-parts.js').PageStatus} PageStatus */
+/** @typedef {import('./Page.js').PageCrumb} PageCrumb */
+/** @typedef {import('./Page.js').PageFact} PageFact */
+/** @typedef {import('./Page.js').PageActions} PageActions */
+/** @typedef {import('./Page.js').PageStatus} PageStatus */
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /**
  * The frame around the tabs: the address of every tab (it keeps the picked website) and the address of the product's

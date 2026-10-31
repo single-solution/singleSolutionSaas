@@ -16,7 +16,7 @@ import { StatusPill } from './display.js';
 import { Icon } from './icons.js';
 import { DRAWER, DRAWER_WIDTH } from './layout-metrics.js';
 import { usePresence } from './motion.js';
-import { HeaderActions, useNarrow } from './page-parts.js';
+import { HeaderActions, useNarrow } from './Page.js';
 import { DrawerBodySkeleton } from './skeletons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
@@ -122,8 +122,8 @@ export const useFocusTrap = (ref, open, onClose) => {
 
 /**
  * @typedef {{ open: boolean, onClose: () => void, title: ReactNode, description?: ReactNode, children?: ReactNode,
- *   footer?: ReactNode, size?: 'md' | 'lg', status?: import('./page-parts.js').PageStatus[],
- *   actions?: import('./page-parts.js').PageActions, loading?: boolean, skeleton?: ReactNode, closeLabel?: string,
+ *   footer?: ReactNode, size?: 'md' | 'lg', status?: import('./Page.js').PageStatus[],
+ *   actions?: import('./Page.js').PageActions, loading?: boolean, skeleton?: ReactNode, closeLabel?: string,
  *   dismissible?: boolean }} DrawerProps
  */
 

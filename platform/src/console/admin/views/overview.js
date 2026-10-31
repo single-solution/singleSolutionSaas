@@ -32,11 +32,11 @@ import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { DaysLeft, creditDayBars, formatChartCredits, merchantPill } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
-import { ConfirmOtp } from '../../views/confirm-change.js';
+import { ConfirmOtp } from '../../views/common.js';
 import { ActivityTimeline } from '../../views/login-settings.js';
 import { WEBSITE } from '../../../texts/console.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, adminCan } from './common.js';
+import { AdminProblem, adminCan } from './shell.js';
 import { AddCreditsDialog } from './finance.js';
 import { AddMerchantDialog } from './merchants.js';
 

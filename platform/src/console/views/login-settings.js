@@ -37,7 +37,7 @@ import { apiConfirm, usePagedList } from '../client.js';
 import { Link } from '../link.js';
 import { withCursor } from '../paths.js';
 import { factorOf } from './common.js';
-import { ConfirmChange } from './confirm-change.js';
+import { ConfirmChange } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 

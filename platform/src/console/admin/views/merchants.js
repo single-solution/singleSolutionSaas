@@ -37,20 +37,71 @@ import {
 	useToast,
 } from '@ss/ui';
 import { ADMIN, BILLING, MERCHANT_FIELDS, MORE, TWO_STEP, WEBSITE } from '../../../texts/console.js';
-import { withCursor } from '../../paths.js';
+import { Link } from '../../link.js';
+import { api, withCursor } from '../../paths.js';
 import { DaysLeft } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
-import { Link } from '../../link.js';
-import { ConfirmChange } from '../../views/confirm-change.js';
+import { ConfirmChange } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { AddWebsiteDialog, MerchantUsageDialog, dailyCostOf, websiteDot } from '../../views/website.js';
+import { WebsitePageView } from '../../views/website-page.js';
 import { useNavigation } from '../../navigation.js';
 import { apiConfirm, apiFetch, usePagedList } from '../../client.js';
 import { adminApi, adminRoutes, merchantFilter } from '../paths.js';
-import { AdminProblem, adminCan } from './common.js';
-import { SITE_PILLS } from './website.js';
+import { AdminProblem, adminCan } from './shell.js';
 import { AddCreditsDialog, MerchantCredits } from './finance.js';
+
+/** How a website's worst product status reads in the tables and the header. */
+export const SITE_PILLS = /** @type {const} */ ({
+	success: { status: 'active', label: ADMIN.status.active },
+	warning: { status: 'warning', label: ADMIN.status.grace },
+	danger: { status: 'error', label: ADMIN.status.stopped },
+	neutral: { status: 'off', label: ADMIN.noFeaturesOn },
+});
+
+/**
+ * The website page of the Admin Console.
+ * @param {{ detail: any, admin: any }} props `detail` is the result of `loadAdminWebsite`
+ */
+export function AdminWebsiteView({ detail, admin }) {
+	if (!detail.ok) return <AdminProblem problem={detail.problem} />;
+	const merchantId = String(detail.merchant.merchantId);
+	const websiteId = String(detail.websiteId);
+	const rows = /** @type {Array<{ website: any, cards: any[] }>} */ (detail.rows);
+	const selected = rows.find((r) => String(r.website.websiteId) === websiteId) ?? null;
+	const crumbs = [
+		{ label: ADMIN.merchantsTitle, href: adminRoutes.merchants() },
+		{ label: String(detail.merchant.name), href: adminRoutes.merchant(merchantId) },
+	];
+	if (!selected) return <Page linkAs={Link} crumbs={[...crumbs, { label: websiteId }]} error={ADMIN.noSuchWebsite} />;
+	const can = (/** @type {string} */ p) => adminCan(admin, p);
+	return (
+		<WebsitePageView
+			key={websiteId}
+			website={selected.website}
+			cards={selected.cards}
+			part={detail.part}
+			crumbs={crumbs}
+			hrefOf={(part) => adminRoutes.websitePart(merchantId, websiteId, part)}
+			can={{
+				manage: can('products_on_websites.write'),
+				removeWebsite: can('websites.write'),
+				tokens: can('tokens.manage'),
+				open: can('dashboards.open'),
+				settings: can('website_settings.read'),
+			}}
+			pills={SITE_PILLS}
+			addable={detail.addable}
+			launch={(productId) => ({ path: api.adminLaunch(productId), body: { websiteId } })}
+			afterRemoved={adminRoutes.merchant(merchantId)}
+			settings={detail.settings}
+			setup={detail.setup}
+			canSwitch
+			twoStepOn={Boolean(admin?.twoStep?.enabled)}
+		/>
+	);
+}
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 

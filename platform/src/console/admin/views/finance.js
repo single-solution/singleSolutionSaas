@@ -42,7 +42,7 @@ import { BillingStats, DaysLeft, formatChartCredits, merchantPill } from '../../
 import { DateFields, periodFilter } from '../../views/range.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, adminCan } from './common.js';
+import { AdminProblem, adminCan } from './shell.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 

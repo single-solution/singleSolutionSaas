@@ -32,7 +32,7 @@ import { apiConfirm, apiFetch } from '../client.js';
 import { api } from '../paths.js';
 import { productTone, UsageView } from './billing.js';
 import { factorOf } from './common.js';
-import { confirmationErrors } from './confirm-change.js';
+import { confirmationErrors } from './common.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**

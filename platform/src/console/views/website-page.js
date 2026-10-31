@@ -33,7 +33,7 @@ import { api, routes } from '../paths.js';
 import { parseWebsitePart, SETTINGS_SECTIONS } from '../website-parts.js';
 import { productStatusLabel, productTone } from './billing.js';
 import { openDashboard } from './common.js';
-import { ConfirmOtp } from './confirm-change.js';
+import { ConfirmOtp } from './common.js';
 import { SetupView, useSetupSheet } from './setup.js';
 import { SettingsSectionBody, contextOf, readinessLines, useWebsiteSettings } from './website-settings.js';
 import { AddProductDrawer, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from './website.js';

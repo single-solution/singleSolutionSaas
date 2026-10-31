@@ -34,11 +34,10 @@ import { MyAccountView } from '../../../../src/console/admin/views/account.js';
 import { ActivityView } from '../../../../src/console/admin/views/activity.js';
 import { AdminsView } from '../../../../src/console/admin/views/admins.js';
 import { FinanceView } from '../../../../src/console/admin/views/finance.js';
-import { MerchantsView } from '../../../../src/console/admin/views/merchants.js';
+import { AdminWebsiteView, MerchantsView } from '../../../../src/console/admin/views/merchants.js';
 import { OverviewView } from '../../../../src/console/admin/views/overview.js';
 import { ProductsView } from '../../../../src/console/admin/views/products.js';
 import { SettingsView } from '../../../../src/console/admin/views/settings.js';
-import { AdminWebsiteView } from '../../../../src/console/admin/views/website.js';
 
 export const dynamic = 'force-dynamic';
 
